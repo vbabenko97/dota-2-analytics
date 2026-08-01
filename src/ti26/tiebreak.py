@@ -31,6 +31,11 @@ class DurationResolver:
                 f"team {team_id!r} has no maps; cannot compute average duration"
             )
         samples = self._samples.setdefault(team_id, [])
+        if maps_played < len(samples):
+            raise DurationUnavailableError(
+                f"team {team_id!r} has {len(samples)} cached duration samples but was "
+                f"asked for maps_played={maps_played}; map counts must not decrease"
+            )
         while len(samples) < maps_played:
             samples.append(self._rng.lognormvariate(self._log_mean, self._log_sigma))
         return sum(samples) / len(samples)
@@ -48,7 +53,14 @@ def game_win_pct(team: TeamState) -> float:
 
 
 def _primary_key(team: TeamState, by_id: dict[str, TeamState]) -> tuple:
-    known = [by_id[o] for o in team.opponents if o in by_id]
+    known = []
+    for opponent_id in team.opponents:
+        if opponent_id not in by_id:
+            raise ValueError(
+                f"team {team.team_id!r} references opponent {opponent_id!r} "
+                "which is not in the ranked team list"
+            )
+        known.append(by_id[opponent_id])
     opp_series_wins = sum(o.series_wins for o in known)
     opp_gwp = sum(game_win_pct(o) for o in known) / len(known) if known else 0.0
     return (

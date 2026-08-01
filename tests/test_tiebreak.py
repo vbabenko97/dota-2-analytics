@@ -115,6 +115,19 @@ def test_resolver_raises_when_no_maps_have_been_played():
         resolver.average_for("a", maps_played=0)
 
 
+def test_unknown_opponent_raises_instead_of_silently_dropping():
+    a = make("a", 1, 1, 2, 2, opponents=["ghost"])
+    with pytest.raises(ValueError, match="ghost"):
+        rank_teams([a], random.Random(0))
+
+
+def test_average_for_rejects_a_smaller_maps_played_than_cached():
+    resolver = DurationResolver(random.Random(0), log_mean=7.65, log_sigma=0.25)
+    resolver.average_for("a", maps_played=5)
+    with pytest.raises(DurationUnavailableError, match="5"):
+        resolver.average_for("a", maps_played=2)
+
+
 def test_ranking_is_a_permutation_of_input():
     states = [make(f"t{i}", i % 3, 2 - i % 3, i, 5 - i % 5) for i in range(8)]
     resolver = DurationResolver(random.Random(1), log_mean=7.65, log_sigma=0.25)
