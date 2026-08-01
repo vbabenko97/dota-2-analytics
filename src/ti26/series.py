@@ -21,7 +21,14 @@ def simulate_series(
 
     Maps are conditionally independent given strengths: the spec defaults the
     series shock to zero until historical residual dependence supports one.
+
+    Unlike `series_win_prob`, which is Bo3-only because its closed form
+    `p**2 * (3 - 2*p)` exists only for Bo3, this function simulates map by
+    map and so generalises to any positive odd best-of (Bo1, Bo5, ...); even
+    or non-positive values have no "first to N" reading and are rejected.
     """
+    if best_of <= 0 or best_of % 2 == 0:
+        raise ValueError(f"best_of must be a positive odd integer, got {best_of}")
     need = best_of // 2 + 1
     p = map_win_prob(s_a, s_b)
     wins_a = wins_b = 0
