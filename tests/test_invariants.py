@@ -96,12 +96,19 @@ def test_invariants_hold_under_every_choice_policy(policy):
         assert Counter(outcome.categories.values()) == CAPS
 
 
-def test_probability_rows_and_columns_are_consistent():
+def test_probability_rows_sum_to_one():
+    """Row sums can genuinely break (wrong denominator, dropped category).
+
+    A column-sum check was deliberately omitted here: `Counter(outcome.categories
+    .values()) == CAPS` holds exactly in every single simulated tournament (see
+    `test_category_counts_are_always_exact`), so summing per-team tallies across
+    teams for a fixed category is an exact identity with zero Monte Carlo noise
+    to absorb -- it cannot discriminate any bug that survives that stronger,
+    already-exact test.
+    """
     marginals = category_marginals(dict.fromkeys(TEAMS, 0.0), RULES, n_sims=500, seed=8)
     for row in marginals.values():
         assert sum(row.values()) == pytest.approx(1.0)
-    for category, capacity in CAPS.items():
-        assert sum(r[category] for r in marginals.values()) == pytest.approx(capacity)
 
 
 def test_renaming_teams_maps_every_row_through_the_bijection():

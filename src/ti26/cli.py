@@ -30,6 +30,10 @@ def main(argv: list[str] | None = None) -> int:
 
     rules = load_rules(args.rules)
     strengths = _load_strengths(args.strengths, rules.n_teams)
+    if len(strengths) != rules.n_teams:
+        raise ValueError(
+            f"loaded {len(strengths)} strengths but rules.n_teams requires {rules.n_teams}"
+        )
     marginals = category_marginals(
         strengths,
         rules,
