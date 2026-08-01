@@ -56,6 +56,7 @@
 ```python
 # tests/test_rules.py
 import pytest
+import yaml
 
 from ti26.rules import (
     category_for_terminal_record,
@@ -124,11 +125,16 @@ def test_random_baseline_is_derived():
     assert rules.random_baseline == pytest.approx(3.75)
 
 
-def test_config_contains_no_capacity_literals():
-    """Capacities must be derived, never configured — no divergent sources."""
-    raw = open(RULES_PATH).read()
+def test_config_declares_no_capacity_values():
+    """Capacities must be derived, never configured — no divergent sources.
+
+    The provenance block may *name* capacities; it must mark them derived.
+    """
+    raw = yaml.safe_load(open(RULES_PATH))
     assert "capacities" not in raw
-    assert "elim_win" not in raw
+    assert "category_capacities" not in raw
+    assert raw["provenance"]["record_capacities"] == "logically_forced"
+    assert raw["provenance"]["category_capacities"] == "logically_forced"
 
 
 def test_tiebreak_order_is_the_official_seven():
