@@ -760,7 +760,19 @@ git commit -m "feat: official ranking with mandatory lazy duration resolution"
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `NoLegalPairingError(ValueError)`; `PairingChoice(matching, repeat_count, min_possible_repeats, candidates_considered)`; `perfect_matchings(items) -> Iterator[list[tuple[str,str]]]`; `choose_pairing(team_ids, rank_index, prior_opponents, rng, *, group_of=None, cross_group=False, maximize_distance=False) -> PairingChoice`.
+- Produces: `NoLegalPairingError(ValueError)`; `PairingChoice(matching, repeat_count, min_possible_repeats, total_matchings)`; `perfect_matchings(items) -> Iterator[list[tuple[str,str]]]` — raises `NoLegalPairingError` on odd-length input; `choose_pairing(team_ids, rank_index, prior_opponents, rng, *, group_of=None, cross_group=False, maximize_distance=False) -> PairingChoice`.
+
+> **Post-implementation note.** `total_matchings` counts matchings *before* the
+> cross-group filter, so it is the raw `(2n-1)!!` search-space size. It was
+> originally named `candidates_considered`, which implied a post-filter count it
+> never held. A second post-filter count was considered and declined as
+> speculative — nothing consumes it.
+>
+> Fix round 1 also replaced two vacuous forced-repeat tests (every matching in
+> each fixture tied at the same repeat count, so both passed with repeat-filtering
+> deleted) and a determinism test that exercised no randomness (its
+> minimum-distance matching was unique, so `rng.choice` ran on a one-element
+> list). See `task-3-report.md` for the mutation evidence.
 
 - [ ] **Step 1: Write the failing test**
 
