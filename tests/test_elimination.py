@@ -6,7 +6,7 @@ import pytest
 from ti26.elimination import ChoicePolicy, run_elimination
 from ti26.rules import load_rules
 from ti26.swiss import run_swiss
-from ti26.types import Category
+from ti26.types import Category, SwissRun, TeamState
 
 RULES = load_rules("config/ti2026_rules.yaml")
 TEAMS = [f"t{i:02d}" for i in range(16)]
@@ -116,3 +116,36 @@ def test_policies_are_seed_reproducible():
     b = run_elimination(run, flat(), RULES, random.Random(6))
     assert a.categories == b.categories
     assert [m.opponent for m in a.matches] == [m.opponent for m in b.matches]
+
+
+def test_three_undecided_record_groups_raise():
+    """A future rules config that leaves a third record group undecided must
+    not be silently swept into the elimination pool."""
+    states = {
+        "a1": TeamState(team_id="a1", initial_group="A", series_wins=3, series_losses=2),
+        "a2": TeamState(team_id="a2", initial_group="A", series_wins=3, series_losses=2),
+        "b1": TeamState(team_id="b1", initial_group="A", series_wins=2, series_losses=3),
+        "b2": TeamState(team_id="b2", initial_group="A", series_wins=2, series_losses=3),
+        "c1": TeamState(team_id="c1", initial_group="A", series_wins=2, series_losses=2),
+        "c2": TeamState(team_id="c2", initial_group="A", series_wins=2, series_losses=2),
+    }
+    run = SwissRun(states=states, groups={}, rounds=[])
+    strengths = dict.fromkeys(states, 0.0)
+    with pytest.raises(ValueError):
+        run_elimination(run, strengths, RULES, random.Random(0))
+
+
+def test_softmax_temp_zero_raises():
+    run = run_swiss(flat(), RULES, random.Random(5))
+    with pytest.raises(ValueError):
+        run_elimination(
+            run, flat(), RULES, random.Random(5), policy=ChoicePolicy.NOISY, softmax_temp=0.0
+        )
+
+
+def test_softmax_temp_negative_raises():
+    run = run_swiss(flat(), RULES, random.Random(5))
+    with pytest.raises(ValueError):
+        run_elimination(
+            run, flat(), RULES, random.Random(5), policy=ChoicePolicy.NOISY, softmax_temp=-1.0
+        )
