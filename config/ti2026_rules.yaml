@@ -1,0 +1,50 @@
+# Single source of truth for rules that could differ from our reading of
+# Valve's published text. Anything logically forced by these parameters
+# (record counts, category counts, the random baseline) is DERIVED in
+# rules.py and deliberately absent here.
+
+format:
+  n_teams: 16
+  total_rounds: 5
+  advance_at_wins: 4
+  eliminate_at_losses: 4
+
+tiebreak_order:
+  - series_wins
+  - series_losses
+  - opponent_series_wins
+  - game_win_pct
+  - opponent_game_win_pct
+  - avg_duration
+  - coin_toss
+
+rounds:
+  within_group: [2, 3]
+  cross_group: [4]
+  max_distance_when_loser_eliminated: [5]
+
+duration_model:
+  log_mean: 7.65      # exp(7.65) ~ 2100s ~ 35 min
+  log_sigma: 0.25
+
+provenance:
+  n_teams: official
+  total_rounds: official
+  advance_at_wins: official
+  eliminate_at_losses: official
+  tiebreak_order: official
+  within_group_rounds: official
+  cross_group_rounds: official
+  max_distance_when_loser_eliminated: official
+  record_capacities: logically_forced
+  category_capacities: logically_forced
+  # Round 4's 0-3 group also eliminates its loser, but the published rule
+  # names Round 5 only. Applying max-distance at R4 would be an inference
+  # and is deliberately NOT enabled.
+  max_distance_at_round_4: inferred
+  # No published rule orders teams still exactly tied after duration.
+  coin_toss_resolution: arbitrary
+  # Repeat avoidance is "where possible" per the official text.
+  repeat_avoidance_is_soft: official
+  # Duration distribution is our own placeholder, not a Valve statement.
+  duration_model: arbitrary
