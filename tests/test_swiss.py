@@ -1,10 +1,15 @@
 import random
-from collections import Counter, defaultdict
+from collections import Counter
+
+from swiss_replay import (
+    assert_rounds_hit_independent_repeat_minimum,
+    opponents_before_round,
+    records_before_round,
+)
 
 from ti26.pairing import perfect_matchings
 from ti26.rules import load_rules
 from ti26.swiss import random_initial_groups, random_round_one_schedule, run_swiss
-from ti26.types import TeamState
 
 RULES = load_rules("config/ti2026_rules.yaml")
 TEAMS = [f"t{i:02d}" for i in range(16)]
@@ -52,35 +57,6 @@ def test_round_log_pairings_match_recorded_results():
             assert max(result.wins_a, result.wins_b) == 2
 
 
-def opponents_before_round(run, round_no):
-    """Replay the log to recover each team's opponent set entering a round."""
-    seen: dict[str, set[str]] = {t: set() for t in run.states}
-    for round_log in run.rounds:
-        if round_log.round_no >= round_no:
-            break
-        for result in round_log.results:
-            seen[result.team_a].add(result.team_b)
-            seen[result.team_b].add(result.team_a)
-    return seen
-
-
-def independent_min_repeats_for_bucket(members, prior, cross_group, group_of):
-    """Brute-force the minimum achievable repeat count for a record bucket.
-
-    Uses only `perfect_matchings` (pure enumeration) and the replayed prior-
-    opponent sets — never reads `PairingChoice.repeat_count` or
-    `.min_possible_repeats`, so it is independent of the code under test.
-    """
-    candidates = list(perfect_matchings(sorted(members)))
-    if cross_group:
-        candidates = [m for m in candidates if all(group_of[a] != group_of[b] for a, b in m)]
-
-    def repeats(matching):
-        return sum(1 for a, b in matching if b in prior[a])
-
-    return min(repeats(m) for m in candidates)
-
-
 def test_every_round_achieves_the_minimum_possible_repeat_count():
     """Repeats are minimised, not assumed to be zero.
 
@@ -90,35 +66,7 @@ def test_every_round_achieves_the_minimum_possible_repeat_count():
     """
     for seed in range(20):
         run = run_swiss(flat(), RULES, random.Random(seed))
-        for round_log in run.rounds[1:]:  # round 1 has no prior history
-            round_no = round_log.round_no
-            records = records_before_round(run, round_no)
-            prior = opponents_before_round(run, round_no)
-            active_teams = [
-                t
-                for t, rec in records.items()
-                if RULES.is_active(
-                    TeamState(
-                        team_id=t,
-                        initial_group=run.groups[t],
-                        series_wins=rec[0],
-                        series_losses=rec[1],
-                    )
-                )
-            ]
-            buckets: dict[tuple, list[str]] = defaultdict(list)
-            for t in active_teams:
-                rec = records[t]
-                key = (rec, run.groups[t]) if round_no in RULES.within_group_rounds else (rec,)
-                buckets[key].append(t)
-
-            for members in buckets.values():
-                min_repeats = independent_min_repeats_for_bucket(
-                    members, prior, round_no in RULES.cross_group_rounds, run.groups
-                )
-                actual_pairs = [p for p in round_log.pairings if set(p) <= set(members)]
-                actual_repeats = sum(1 for a, b in actual_pairs if b in prior[a])
-                assert actual_repeats == min_repeats
+        assert_rounds_hit_independent_repeat_minimum(run, RULES)
 
 
 def test_repeat_flags_agree_with_prior_opponents():
@@ -135,23 +83,6 @@ def test_rankings_are_logged_and_cover_every_team():
     run = run_swiss(flat(), RULES, random.Random(6))
     for round_log in run.rounds[1:]:  # round 1 uses the organiser schedule
         assert sorted(round_log.ranking) == sorted(TEAMS)
-
-
-def records_before_round(run, round_no):
-    """Replay the log to recover each team's (wins, losses) entering a round."""
-    tally = {t: [0, 0] for t in run.states}
-    for round_log in run.rounds:
-        if round_log.round_no >= round_no:
-            break
-        for result in round_log.results:
-            winner, loser = (
-                (result.team_a, result.team_b)
-                if result.wins_a > result.wins_b
-                else (result.team_b, result.team_a)
-            )
-            tally[winner][0] += 1
-            tally[loser][1] += 1
-    return {t: tuple(v) for t, v in tally.items()}
 
 
 def test_round_two_pairs_within_record_and_initial_group():
