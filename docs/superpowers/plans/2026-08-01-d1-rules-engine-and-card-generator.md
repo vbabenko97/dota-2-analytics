@@ -75,11 +75,18 @@ def test_record_capacities_are_derived_not_configured():
 
 
 def test_record_capacities_generalise_to_a_smaller_bracket():
-    # 8 teams, 3 wins advance / 3 losses out, 5 rounds.
-    caps = derive_record_capacities(n_teams=8, advance_at=3, eliminate_at=3, total_rounds=5)
+    """8 teams, 3 wins advance / 3 losses out, 3 rounds.
+
+    Round count matters: at 5 rounds this format reaches a (2,1) group of
+    size 3 and correctly raises, because an odd record group cannot be
+    paired without a bye. Three rounds keeps every interior group even.
+    """
+    caps = derive_record_capacities(n_teams=8, advance_at=3, eliminate_at=3, total_rounds=3)
     assert sum(caps.values()) == 8
     assert caps[(3, 0)] == 1
     assert caps[(0, 3)] == 1
+    assert caps[(2, 1)] == 3
+    assert caps[(1, 2)] == 3
 
 
 def test_odd_record_group_is_rejected():

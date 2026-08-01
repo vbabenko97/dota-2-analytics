@@ -18,6 +18,7 @@ __pycache__/
 *.egg-info/
 
 # Agent harness local state
+.superpowers/
 .claude/settings.local.json
 .claude/receipts/
 .claude/maintenance-uses.jsonl
