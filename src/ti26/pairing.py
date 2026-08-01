@@ -12,7 +12,7 @@ class PairingChoice:
     matching: list[tuple[str, str]]
     repeat_count: int
     min_possible_repeats: int
-    candidates_considered: int
+    total_matchings: int
 
 
 def perfect_matchings(items: list[str]) -> Iterator[list[tuple[str, str]]]:
@@ -21,6 +21,10 @@ def perfect_matchings(items: list[str]) -> Iterator[list[tuple[str, str]]]:
     Record groups hold at most 8 teams, giving 105 matchings — small enough
     that brute force is both exhaustive and auditable.
     """
+    if len(items) % 2 != 0:
+        raise NoLegalPairingError(
+            f"cannot enumerate matchings for an odd number of items: {len(items)}"
+        )
     if not items:
         yield []
         return
@@ -56,7 +60,7 @@ def choose_pairing(
         raise NoLegalPairingError(f"cannot pair an odd number of teams: {len(team_ids)}")
 
     candidates = list(perfect_matchings(list(team_ids)))
-    considered = len(candidates)
+    total = len(candidates)
 
     if cross_group:
         if group_of is None:
@@ -85,5 +89,5 @@ def choose_pairing(
         matching=chosen,
         repeat_count=repeats(chosen),
         min_possible_repeats=fewest,
-        candidates_considered=considered,
+        total_matchings=total,
     )

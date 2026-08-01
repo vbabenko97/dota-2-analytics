@@ -9,12 +9,25 @@ def pairs_of(choice):
     return {frozenset(p) for p in choice.matching}
 
 
+def _distinct_matching_count(matchings):
+    return len({frozenset(map(frozenset, m)) for m in matchings})
+
+
 def test_perfect_matchings_count_for_four_items():
-    assert len(list(perfect_matchings(["a", "b", "c", "d"]))) == 3
+    matchings = list(perfect_matchings(["a", "b", "c", "d"]))
+    assert len(matchings) == 3
+    assert _distinct_matching_count(matchings) == 3
 
 
 def test_perfect_matchings_count_for_eight_items():
-    assert len(list(perfect_matchings(list("abcdefgh")))) == 105
+    matchings = list(perfect_matchings(list("abcdefgh")))
+    assert len(matchings) == 105
+    assert _distinct_matching_count(matchings) == 105
+
+
+def test_perfect_matchings_raises_on_odd_length_input():
+    with pytest.raises(NoLegalPairingError, match="odd"):
+        list(perfect_matchings(["a", "b", "c"]))
 
 
 def test_every_matching_covers_every_item_exactly_once():
@@ -70,6 +83,29 @@ def test_complete_prior_history_yields_two_forced_repeats():
     choice = choose_pairing(teams, rank_index, prior, random.Random(0))
     assert choice.min_possible_repeats == 2
     assert choice.repeat_count == 2
+
+
+def test_forced_repeat_picks_the_cheaper_of_unequal_options():
+    """Among matchings with genuinely different repeat counts, take the minimum.
+
+    {ab, cd} and {ac, bd} each contain exactly one repeat pairing; {ad, bc}
+    contains two (both 'ad' and 'bc' are prior opponents). Rank indices are
+    chosen so {ad, bc} has the smallest ranking distance of the three -- if
+    repeat-count filtering were skipped, distance alone would select it,
+    which is exactly what this test must catch.
+    """
+    teams = ["a", "b", "c", "d"]
+    rank_index = {"a": 0, "d": 1, "b": 2, "c": 3}
+    prior = {
+        "a": {"b", "c", "d"},
+        "b": {"a", "c"},
+        "c": {"a", "b"},
+        "d": {"a"},
+    }
+    choice = choose_pairing(teams, rank_index, prior, random.Random(0))
+    assert choice.min_possible_repeats == 1
+    assert choice.repeat_count == 1
+    assert pairs_of(choice) != {frozenset({"a", "d"}), frozenset({"b", "c"})}
 
 
 def test_minimum_ranking_distance_is_preferred():
@@ -135,3 +171,27 @@ def test_selection_is_deterministic_under_a_fixed_seed():
     first = choose_pairing(teams, rank_index, prior, random.Random(11))
     second = choose_pairing(teams, rank_index, prior, random.Random(11))
     assert first.matching == second.matching
+
+
+def test_rng_argument_governs_a_genuine_multi_way_tie():
+    """Equal ranks and no prior history leave all three matchings tied.
+
+    All three matchings survive both the repeat-count and distance filters,
+    so the final pick depends entirely on the passed-in `rng`. The same seed
+    must reproduce the same pick every time, and at least two seeds among a
+    handful must disagree -- otherwise the RNG argument could be ignored (or
+    replaced by a module-level `random.choice`) without the test noticing.
+    """
+    teams = ["a", "b", "c", "d"]
+    rank_index = dict.fromkeys(teams, 0)
+    prior = {t: set() for t in teams}
+
+    first = choose_pairing(teams, rank_index, prior, random.Random(0))
+    second = choose_pairing(teams, rank_index, prior, random.Random(0))
+    assert first.matching == second.matching
+
+    outcomes = {
+        tuple(choose_pairing(teams, rank_index, prior, random.Random(seed)).matching)
+        for seed in range(8)
+    }
+    assert len(outcomes) >= 2
