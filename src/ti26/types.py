@@ -1,5 +1,11 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ti26.tiebreak import DurationResolver
 
 
 class Category(str, Enum):
@@ -55,6 +61,7 @@ class SwissRun:
     states: dict[str, TeamState]
     groups: dict[str, str]
     rounds: list[RoundLog]
+    resolver: DurationResolver
 
 
 @dataclass(frozen=True)

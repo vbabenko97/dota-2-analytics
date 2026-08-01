@@ -136,6 +136,37 @@ def test_repeat_minimisation_outranks_ranking_distance():
     assert frozenset({"r0", "r1"}) not in pairs_of(choice)
 
 
+def test_repeat_minimisation_outranks_maximised_distance_too():
+    """The Round 5 mirror of `test_forced_repeat_picks_the_cheaper_of_unequal_options`.
+
+    A 40000-sample sweep of real Round 5 (1,3)/(3,1) buckets (seeds 0-19999,
+    both buckets each seed) never produced a tournament where the CHOSEN
+    matching itself conflicted with a naive distance-only choice: exhaustive
+    enumeration over all 2**6 prior-edge subsets for 4 items shows a genuine
+    conflict needs at least 4 of the 6 possible intra-bucket pairs to already
+    be repeats (see the final-fix-wave report), a density five rounds of
+    repeat-avoidant Swiss pairing never produces in practice (observed max
+    was 3 of 6 edges in a 3000-seed x 2-bucket sample). So the conflict is
+    constructed directly here instead of searched for.
+
+    {a,c}/{b,d} and {a,d}/{b,c} always tie for maximum ranking distance (an
+    algebraic identity for any four ranks), so both are the "naturally
+    preferred" matchings when maximize_distance=True. Both are made to carry
+    2 repeats each, while the ADJACENT (normally least-preferred) {a,b}/{c,d}
+    carries only 1 -- the true, non-zero minimum. The engine must still take
+    the close pairing, not the far one distance would otherwise prefer.
+    """
+    teams = ["a", "b", "c", "d"]
+    rank_index = {"a": 0, "b": 1, "c": 2, "d": 3}
+    prior = {"a": {"c", "d"}, "b": {"c", "d"}, "c": {"a", "b", "d"}, "d": {"a", "b", "c"}}
+    choice = choose_pairing(
+        teams, rank_index, prior, random.Random(0), maximize_distance=True
+    )
+    assert choice.min_possible_repeats == 1, "precondition: repeats are genuinely unavoidable"
+    assert choice.repeat_count == 1
+    assert pairs_of(choice) == {frozenset({"a", "b"}), frozenset({"c", "d"})}
+
+
 def test_cross_group_constraint_pairs_only_across_groups():
     teams = ["a1", "a2", "b1", "b2"]
     group_of = {"a1": "A", "a2": "A", "b1": "B", "b2": "B"}

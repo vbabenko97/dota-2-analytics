@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import yaml
 
+from ti26.tiebreak import TIEBREAK_ORDER
 from ti26.types import Category, TeamState
 
 
@@ -47,7 +48,8 @@ def category_for_terminal_record(
 def derive_category_capacities(
     record_capacities: dict[tuple[int, int], int], advance_at: int, eliminate_at: int
 ) -> dict[Category, int]:
-    caps: Counter[Category] = Counter()
+    """Every Category member is present, 0 for any format that produces none."""
+    caps: Counter[Category] = Counter({c: 0 for c in Category})
     undecided = 0
     for record, n in record_capacities.items():
         category = category_for_terminal_record(record, advance_at, eliminate_at)
@@ -93,6 +95,12 @@ def load_rules(path: str) -> Rules:
     with open(path) as fh:
         raw = yaml.safe_load(fh)
     fmt, rounds, duration = raw["format"], raw["rounds"], raw["duration_model"]
+    configured_order = list(raw["tiebreak_order"])
+    if configured_order != TIEBREAK_ORDER:
+        raise ValueError(
+            f"config tiebreak_order {configured_order} does not match the order "
+            f"tiebreak.py actually implements: {TIEBREAK_ORDER}"
+        )
     records = derive_record_capacities(
         n_teams=fmt["n_teams"],
         advance_at=fmt["advance_at_wins"],
@@ -104,7 +112,7 @@ def load_rules(path: str) -> Rules:
         total_rounds=fmt["total_rounds"],
         advance_at_wins=fmt["advance_at_wins"],
         eliminate_at_losses=fmt["eliminate_at_losses"],
-        tiebreak_order=list(raw["tiebreak_order"]),
+        tiebreak_order=configured_order,
         within_group_rounds=list(rounds["within_group"]),
         cross_group_rounds=list(rounds["cross_group"]),
         max_distance_elimination_rounds=list(rounds["max_distance_when_loser_eliminated"]),
