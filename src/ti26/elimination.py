@@ -45,6 +45,9 @@ def run_elimination(
     softmax_temp: float = 1.0,
 ) -> EliminationRun:
     """Resolve the elimination matches and assign every team a category."""
+    if softmax_temp <= 0:
+        raise ValueError(f"softmax_temp must be positive, got {softmax_temp}")
+
     categories: dict[str, Category] = {}
     undecided: list[str] = []
     for tid, state in run.states.items():
@@ -55,6 +58,17 @@ def run_elimination(
             undecided.append(tid)
         else:
             categories[tid] = fixed
+
+    undecided_records = sorted({run.states[t].record for t in undecided})
+    if len(undecided_records) != 2:
+        counts = {
+            record: sum(1 for t in undecided if run.states[t].record == record)
+            for record in undecided_records
+        }
+        raise ValueError(
+            "expected exactly two undecided record groups (choosers and pool), "
+            f"found {len(undecided_records)}: {counts}"
+        )
 
     resolver = DurationResolver(rng, rules.duration_log_mean, rules.duration_log_sigma)
     ranking = rank_teams(
@@ -71,6 +85,11 @@ def run_elimination(
         (t for t in undecided if run.states[t].record != top_record),
         key=lambda t: order[t],
     )
+    if len(choosers) != len(available):
+        raise ValueError(
+            f"chooser count {len(choosers)} for record {top_record} != "
+            f"pool count {len(available)} for the other undecided record"
+        )
 
     matches: list[EliminationMatch] = []
     for chooser in choosers:
