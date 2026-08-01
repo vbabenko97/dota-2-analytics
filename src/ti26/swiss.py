@@ -143,4 +143,4 @@ def run_swiss(
             )
         )
 
-    return SwissRun(states=states, groups=groups, rounds=logs)
+    return SwissRun(states=states, groups=groups, rounds=logs, resolver=resolver)

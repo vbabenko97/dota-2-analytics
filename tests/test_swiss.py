@@ -182,6 +182,46 @@ def test_round_five_minimises_distance_when_the_loser_survives():
     assert spread(chosen, rank_index) == smallest
 
 
+def test_round_five_repeat_minimisation_wins_over_distance_when_they_conflict():
+    """Seed 12 (used above) happens to give repeat_count == 0 in every Round 5
+    bucket, so repeat-minimisation and distance preference never conflict
+    there. Seed 250 was found by a 500-seed sweep (seeds 0-499; 28 of them had
+    at least one Round 5 bucket with a genuine non-zero minimum repeat count)
+    and gives a genuine conflict in BOTH buckets: the minimum achievable
+    repeat count is 1, not 0. This proves choose_pairing applies repeat
+    minimisation FIRST and only then breaks ties by distance -- not the
+    other way around, which seed 12 alone could never show.
+    """
+    run = run_swiss(flat(), RULES, random.Random(250))
+    round_five = run.rounds[4]
+    before = records_before_round(run, 5)
+    prior = opponents_before_round(run, 5)
+    rank_index = {t: i for i, t in enumerate(round_five.ranking)}
+
+    for record, sign in [((1, 3), -1), ((3, 1), 1)]:
+        group = sorted(t for t, rec in before.items() if rec == record)
+        assert len(group) == 4
+        chosen = [p for p in round_five.pairings if set(p) <= set(group)]
+        assert len(chosen) == 2
+
+        def repeat_count(matching):
+            return sum(1 for a, b in matching if b in prior[a])
+
+        matchings = list(perfect_matchings(group))
+        fewest = min(repeat_count(m) for m in matchings)
+        assert fewest > 0, (
+            f"precondition: seed 250's {record} bucket must have a genuine "
+            "repeat conflict, not a vacuous zero-repeat case like seed 12"
+        )
+        assert repeat_count(chosen) == fewest, "repeats must be minimised first"
+
+        tied_on_repeat = [m for m in matchings if repeat_count(m) == fewest]
+        best = (max if sign == -1 else min)(spread(m, rank_index) for m in tied_on_repeat)
+        assert spread(chosen, rank_index) == best, (
+            "distance preference must apply only among matchings tied on repeats"
+        )
+
+
 def test_stronger_teams_finish_higher_on_average():
     strengths = {t: (i - 7.5) * 0.4 for i, t in enumerate(TEAMS)}
     totals = Counter()

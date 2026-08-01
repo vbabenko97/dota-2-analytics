@@ -3,6 +3,19 @@ from collections.abc import Callable
 
 from ti26.types import TeamState
 
+# The order `_primary_key` plus the duration/coin-toss fallback below actually
+# implement. `rules.load_rules` checks the config's tiebreak_order against
+# this so a divergent YAML raises instead of silently doing nothing.
+TIEBREAK_ORDER = [
+    "series_wins",
+    "series_losses",
+    "opponent_series_wins",
+    "game_win_pct",
+    "opponent_game_win_pct",
+    "avg_duration",
+    "coin_toss",
+]
+
 
 class DurationUnavailableError(RuntimeError):
     """Raised when criterion 6 is required but no duration source exists."""

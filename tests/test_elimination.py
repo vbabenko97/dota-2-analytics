@@ -6,6 +6,7 @@ import pytest
 from ti26.elimination import ChoicePolicy, run_elimination
 from ti26.rules import load_rules
 from ti26.swiss import run_swiss
+from ti26.tiebreak import DurationResolver
 from ti26.types import Category, SwissRun, TeamState
 
 RULES = load_rules("config/ti2026_rules.yaml")
@@ -129,7 +130,8 @@ def test_three_undecided_record_groups_raise():
         "c1": TeamState(team_id="c1", initial_group="A", series_wins=2, series_losses=2),
         "c2": TeamState(team_id="c2", initial_group="A", series_wins=2, series_losses=2),
     }
-    run = SwissRun(states=states, groups={}, rounds=[])
+    resolver = DurationResolver(random.Random(0), RULES.duration_log_mean, RULES.duration_log_sigma)
+    run = SwissRun(states=states, groups={}, rounds=[], resolver=resolver)
     strengths = dict.fromkeys(states, 0.0)
     with pytest.raises(ValueError):
         run_elimination(run, strengths, RULES, random.Random(0))
@@ -149,3 +151,56 @@ def test_softmax_temp_negative_raises():
         run_elimination(
             run, flat(), RULES, random.Random(5), policy=ChoicePolicy.NOISY, softmax_temp=-1.0
         )
+
+
+def test_resolver_is_shared_across_the_swiss_to_elimination_boundary():
+    """The elimination ranking must consult the SAME DurationResolver that
+    accumulated samples during the Swiss stage, not a fresh independent one.
+
+    Builds a minimal SwissRun where two duration ties are forced by
+    construction (a1/a2 tie at (3,2), b1/b2 tie at (2,3)), so the elimination
+    ranking is guaranteed to consult durations. A resolver that is genuinely
+    shared: (1) has its `.consultations` counter advanced by the elimination
+    ranking, and (2) still returns the SAME cached average for a team probed
+    before and after, because maps_played has not changed by ranking time. A
+    fresh, independent resolver (the pre-fix bug) would leave the original
+    instance's `.consultations` untouched and would never share its samples.
+    """
+    states = {
+        "a1": TeamState(
+            team_id="a1", initial_group="A", series_wins=3, series_losses=2,
+            map_wins=8, map_losses=6,
+        ),
+        "a2": TeamState(
+            team_id="a2", initial_group="A", series_wins=3, series_losses=2,
+            map_wins=8, map_losses=6,
+        ),
+        "b1": TeamState(
+            team_id="b1", initial_group="A", series_wins=2, series_losses=3,
+            map_wins=6, map_losses=8,
+        ),
+        "b2": TeamState(
+            team_id="b2", initial_group="A", series_wins=2, series_losses=3,
+            map_wins=6, map_losses=8,
+        ),
+    }
+    resolver = DurationResolver(random.Random(0), RULES.duration_log_mean, RULES.duration_log_sigma)
+    run = SwissRun(
+        states=states, groups=dict.fromkeys(states, "A"), rounds=[], resolver=resolver
+    )
+
+    # Consult the resolver ourselves the way group-stage ranking would.
+    baseline = resolver.average_for("a1", states["a1"].maps_played)
+    consultations_before = resolver.consultations
+
+    strengths = dict.fromkeys(states, 0.0)
+    run_elimination(run, strengths, RULES, random.Random(1))
+
+    assert resolver.consultations > consultations_before, (
+        "elimination ranking must consult the SAME resolver instance carried "
+        "on SwissRun, not a fresh independent one"
+    )
+    assert resolver.average_for("a1", states["a1"].maps_played) == baseline, (
+        "a1's average must reuse the memoised group-stage samples, not a "
+        "fresh draw from an independent resolver"
+    )

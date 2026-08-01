@@ -1,12 +1,14 @@
 import pytest
 import yaml
 
+from ti26.optimize import solve_card
 from ti26.rules import (
     category_for_terminal_record,
     derive_category_capacities,
     derive_record_capacities,
     load_rules,
 )
+from ti26.tiebreak import TIEBREAK_ORDER
 from ti26.types import Category, TeamState
 
 RULES_PATH = "config/ti2026_rules.yaml"
@@ -61,6 +63,27 @@ def test_category_capacities_are_derived():
     assert sum(caps.values()) == 16
 
 
+def test_category_capacities_include_zero_count_categories():
+    """The 8/3/3/3 fixture genuinely produces zero W4_1 and zero L1_4 (every
+    undecided team reaches (3,0)/(0,3) or stays undecided at (2,1)/(1,2), no
+    record maps to W4_1/L1_4), so this exercises the real omission bug rather
+    than a synthetic capacities dict."""
+    records = derive_record_capacities(n_teams=8, advance_at=3, eliminate_at=3, total_rounds=3)
+    caps = derive_category_capacities(records, advance_at=3, eliminate_at=3)
+    assert set(caps) == set(Category)
+    assert caps[Category.W4_1] == 0
+    assert caps[Category.L1_4] == 0
+
+
+def test_solve_card_handles_a_zero_count_category_without_a_key_error():
+    records = derive_record_capacities(n_teams=8, advance_at=3, eliminate_at=3, total_rounds=3)
+    caps = derive_category_capacities(records, advance_at=3, eliminate_at=3)
+    teams = [f"z{i}" for i in range(8)]
+    marginals = {t: {c: 1.0 / len(Category) for c in Category} for t in teams}
+    card, _ = solve_card(marginals, caps)
+    assert sorted(card) == sorted(teams)
+
+
 def test_advancing_teams_equal_eight():
     rules = load_rules(RULES_PATH)
     caps = rules.category_capacities
@@ -99,6 +122,24 @@ def test_tiebreak_order_is_the_official_seven():
         "avg_duration",
         "coin_toss",
     ]
+
+
+def test_tiebreak_order_matches_what_tiebreak_py_implements():
+    """Guards against the config and the implementation silently diverging --
+    `rules.tiebreak_order` is otherwise loaded, tested, and never consumed."""
+    rules = load_rules(RULES_PATH)
+    assert rules.tiebreak_order == TIEBREAK_ORDER
+
+
+def test_mutated_tiebreak_order_raises(tmp_path):
+    with open(RULES_PATH) as fh:
+        raw = yaml.safe_load(fh)
+    raw["tiebreak_order"] = list(reversed(raw["tiebreak_order"]))
+    mutated = tmp_path / "mutated_rules.yaml"
+    with open(mutated, "w") as fh:
+        yaml.safe_dump(raw, fh)
+    with pytest.raises(ValueError, match="tiebreak_order"):
+        load_rules(str(mutated))
 
 
 def test_round_constraints():

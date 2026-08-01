@@ -4,7 +4,7 @@ from enum import Enum
 
 from ti26.rules import Rules, category_for_terminal_record
 from ti26.series import map_win_prob, series_win_prob, simulate_series
-from ti26.tiebreak import DurationResolver, rank_teams
+from ti26.tiebreak import rank_teams
 from ti26.types import Category, EliminationMatch, EliminationRun, SwissRun
 
 
@@ -70,9 +70,8 @@ def run_elimination(
             f"found {len(undecided_records)}: {counts}"
         )
 
-    resolver = DurationResolver(rng, rules.duration_log_mean, rules.duration_log_sigma)
     ranking = rank_teams(
-        list(run.states.values()), rng, duration_fn=resolver.bind(run.states)
+        list(run.states.values()), rng, duration_fn=run.resolver.bind(run.states)
     )
     order = {tid: i for i, tid in enumerate(ranking)}
 
