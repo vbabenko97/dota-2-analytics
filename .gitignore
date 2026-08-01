@@ -17,6 +17,9 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
+# CLI output — generated, not tracked
+reports/
+
 # Agent harness local state
 .superpowers/
 .claude/settings.local.json
