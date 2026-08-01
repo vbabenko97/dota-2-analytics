@@ -48,10 +48,15 @@ def test_different_seeds_produce_different_marginals():
 
 
 def test_policy_choice_is_plumbed_through():
-    marginals = category_marginals(
-        dict.fromkeys(TEAMS, 0.0), RULES, n_sims=100, seed=3, policy=ChoicePolicy.RANDOM
-    )
-    assert sum(marginals["t00"].values()) == pytest.approx(1.0)
+    """A rational chooser always picks its weakest available opponent; a
+    random chooser does not. With the same seed and differentiated
+    strengths, that mechanical difference must show up as a difference in
+    the resulting marginals -- a row-sums-to-one check alone cannot tell
+    the two policies apart."""
+    strengths = {t: (i - 7.5) * 0.3 for i, t in enumerate(TEAMS)}
+    rational = category_marginals(strengths, RULES, n_sims=300, seed=3, policy=ChoicePolicy.RATIONAL)
+    randomised = category_marginals(strengths, RULES, n_sims=300, seed=3, policy=ChoicePolicy.RANDOM)
+    assert rational != randomised
 
 
 @pytest.mark.slow
