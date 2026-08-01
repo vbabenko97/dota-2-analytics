@@ -61,3 +61,23 @@ def test_different_seeds_produce_different_sequences():
 def test_unsupported_best_of_raises():
     with pytest.raises(ValueError, match="best-of-3"):
         series_win_prob(0.5, best_of=5)
+
+
+def test_simulate_series_rejects_even_best_of():
+    rng = random.Random(0)
+    with pytest.raises(ValueError, match="4"):
+        simulate_series(0.0, 0.0, rng, best_of=4)
+
+
+def test_simulate_series_rejects_non_positive_best_of():
+    rng = random.Random(0)
+    with pytest.raises(ValueError, match="0"):
+        simulate_series(0.0, 0.0, rng, best_of=0)
+
+
+def test_simulate_series_supports_best_of_five():
+    rng = random.Random(0)
+    for _ in range(500):
+        wa, wb = simulate_series(0.3, -0.2, rng, best_of=5)
+        assert max(wa, wb) == 3
+        assert wa + wb in (3, 4, 5)
