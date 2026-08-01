@@ -2111,15 +2111,24 @@ def test_no_self_pairing(seed):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_repeats_are_minimised_not_assumed_absent(seed):
+def test_repeats_are_minimised_against_an_independent_recomputation(seed):
     """The engine must achieve the minimum repeat count every round.
 
-    Whether that minimum is ever above zero in a real 16-team five-round
-    Swiss is unproven; this asserts optimality, not absence.
+    Do NOT assert `round_log.repeat_count == round_log.min_possible_repeats`.
+    That is a tautology: `choose_pairing` filters candidates to those scoring
+    `fewest` repeats and then reports both numbers from that same filtered
+    set, so the equality holds for any input regardless of whether bucketing,
+    the group constraint, or the distance ordering are correct.
+
+    Instead reuse the independent recomputation helper from
+    `tests/test_swiss.py`: replay the log to rebuild each round's entering
+    records and prior-opponent sets, rebuild the buckets from the rules
+    config, brute-force `perfect_matchings` over each bucket, and compare the
+    minimum found that way against the repeat count of the pairings the
+    engine actually logged. Nothing in that path reads `PairingChoice`.
     """
     run = run_swiss(varied_strengths(seed), RULES, random.Random(seed))
-    for round_log in run.rounds:
-        assert round_log.repeat_count == round_log.min_possible_repeats
+    assert_rounds_hit_independent_repeat_minimum(run, RULES)
 
 
 @pytest.mark.parametrize("seed", SEEDS)

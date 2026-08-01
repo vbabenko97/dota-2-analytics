@@ -410,15 +410,27 @@ ingest → roster canonicalization → ratings fit → market shrinkage
 
 If categories carry unequal point values, multiply `P_{i,c}` by the category weight before solving. Verify on D1.
 
-**Lazy duration evaluation.** Average game duration is the sixth tiebreak criterion, after opponents' wins, game-win percentage, and opponents' game-win percentage. Within a record group the first two criteria cannot separate anyone, and criteria 3–5 take enough distinct values that survival to criterion 6 is rare. Simulating duration for every map injects noise and compute for almost no influence on the card.
+**Lazy duration evaluation — and a corrected claim about how often it fires.**
+
+Average game duration is the sixth tiebreak criterion. Lazy evaluation is still correct: compute it only for ties surviving the first five criteria, and skip it entirely where no plausible duration could change a pairing or an elimination-choice order.
 
 ```
 Duration is evaluated lazily. The simulator computes it only for standings
-ties surviving the first five criteria. If changing plausible durations
-cannot change a pairing or elimination-choice order, duration is omitted
-from that simulation path. A simple conditional duration distribution
-suffices; no D1–D4 time is spent fitting a duration model.
+ties surviving the first five criteria, memoised per team and extended as
+maps accumulate.
 ```
+
+**The rationale originally given for that design was wrong, and the D1 build measured it.** This section previously asserted that ties reaching criterion 6 are "rare" and that duration therefore has "almost no influence on the card". Instrumented runs say otherwise: across 300 simulated tournaments, **every single run consulted the duration resolver, at an average of 4.79 lookups per ranking call — roughly 30% of the 16 teams, in every round from 2 onward.** Independently reproduced by a reviewer.
+
+The cause is structural, not a modelling artefact. Criteria 1–5 are coarse integers and small-denominator rationals computed over four or five games. In a 16-team bracket that resolution simply cannot separate the field, so near-ties are the norm. **Real TI standings have the same property**, which means Valve's published order genuinely reaches the duration criterion often.
+
+Three consequences:
+
+1. **The duration model is load-bearing, not decorative.** It is currently a placeholder log-normal carrying `arbitrary` provenance in `ti2026_rules.yaml` — our invention, not a Valve statement. It is steering ~30% of every ranking, and ranking drives pairing distance and elimination pick order.
+2. **Durations persist within a tournament.** Samples are memoised per team and extended as maps accumulate, so a team that draws short durations early keeps that ranking edge in later ties. That is more realistic than an independent per-round coin toss — fast teams do keep playing fast — but the strength of the persistence is set by an invented `log_sigma`.
+3. **D2 must fit the duration model from real data.** `duration` is already in the D2 raw schema (§III), so the data is arriving regardless. Fit the distribution, conditioned at minimum on rating gap, and re-run. If fitting proves impractical, run a sensitivity check across plausible `log_sigma` values and report how much the card moves.
+
+This does not bias the forecast in an obvious direction — teams are exchangeable a priori, so an invented tiebreak behaves like a persistent random one. But it does mean a meaningful share of simulated standings is decided by a fabricated parameter, and that must not be reported as skill-driven.
 
 **Pairing implementation.** Record groups hold at most 8 teams, so enumerate all legal perfect matchings by brute force and select lexicographically: group and record constraints → fewest repeat opponents → minimum ranking distance → maximum ranking distance for Round 5 matches where the loser is eliminated → random among exact ties. Transparent and testable; burying this in an optimization library trades auditability for nothing.
 
