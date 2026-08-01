@@ -1,9 +1,10 @@
 import random
-from collections import Counter
+from collections import Counter, defaultdict
 
 from ti26.pairing import perfect_matchings
 from ti26.rules import load_rules
 from ti26.swiss import random_initial_groups, random_round_one_schedule, run_swiss
+from ti26.types import TeamState
 
 RULES = load_rules("config/ti2026_rules.yaml")
 TEAMS = [f"t{i:02d}" for i in range(16)]
@@ -51,12 +52,73 @@ def test_round_log_pairings_match_recorded_results():
             assert max(result.wins_a, result.wins_b) == 2
 
 
+def opponents_before_round(run, round_no):
+    """Replay the log to recover each team's opponent set entering a round."""
+    seen: dict[str, set[str]] = {t: set() for t in run.states}
+    for round_log in run.rounds:
+        if round_log.round_no >= round_no:
+            break
+        for result in round_log.results:
+            seen[result.team_a].add(result.team_b)
+            seen[result.team_b].add(result.team_a)
+    return seen
+
+
+def independent_min_repeats_for_bucket(members, prior, cross_group, group_of):
+    """Brute-force the minimum achievable repeat count for a record bucket.
+
+    Uses only `perfect_matchings` (pure enumeration) and the replayed prior-
+    opponent sets — never reads `PairingChoice.repeat_count` or
+    `.min_possible_repeats`, so it is independent of the code under test.
+    """
+    candidates = list(perfect_matchings(sorted(members)))
+    if cross_group:
+        candidates = [m for m in candidates if all(group_of[a] != group_of[b] for a, b in m)]
+
+    def repeats(matching):
+        return sum(1 for a, b in matching if b in prior[a])
+
+    return min(repeats(m) for m in candidates)
+
+
 def test_every_round_achieves_the_minimum_possible_repeat_count():
-    """Repeats are minimised, not assumed to be zero."""
-    for seed in range(30):
+    """Repeats are minimised, not assumed to be zero.
+
+    Rebuilds each round's buckets and the independently-minimal repeat count
+    from the replayed log, rather than trusting `PairingChoice`'s own
+    self-reported fields (which are equal by construction and prove nothing).
+    """
+    for seed in range(20):
         run = run_swiss(flat(), RULES, random.Random(seed))
-        for round_log in run.rounds:
-            assert round_log.repeat_count == round_log.min_possible_repeats
+        for round_log in run.rounds[1:]:  # round 1 has no prior history
+            round_no = round_log.round_no
+            records = records_before_round(run, round_no)
+            prior = opponents_before_round(run, round_no)
+            active_teams = [
+                t
+                for t, rec in records.items()
+                if RULES.is_active(
+                    TeamState(
+                        team_id=t,
+                        initial_group=run.groups[t],
+                        series_wins=rec[0],
+                        series_losses=rec[1],
+                    )
+                )
+            ]
+            buckets: dict[tuple, list[str]] = defaultdict(list)
+            for t in active_teams:
+                rec = records[t]
+                key = (rec, run.groups[t]) if round_no in RULES.within_group_rounds else (rec,)
+                buckets[key].append(t)
+
+            for members in buckets.values():
+                min_repeats = independent_min_repeats_for_bucket(
+                    members, prior, round_no in RULES.cross_group_rounds, run.groups
+                )
+                actual_pairs = [p for p in round_log.pairings if set(p) <= set(members)]
+                actual_repeats = sum(1 for a, b in actual_pairs if b in prior[a])
+                assert actual_repeats == min_repeats
 
 
 def test_repeat_flags_agree_with_prior_opponents():
@@ -134,32 +196,56 @@ def spread(matching, rank_index):
 
 
 def test_round_five_maximises_distance_when_the_loser_is_eliminated():
-    """The 1-3 group's Round 5 loser goes to 1-4 and is out, so pair furthest."""
+    """The 1-3 group's Round 5 loser goes to 1-4 and is out, so pair furthest.
+
+    Seed 12 is used because this bucket happens to have zero repeat
+    opponents entering round 5, so distance-maximisation is the only
+    preference in play; that precondition is asserted explicitly (rather
+    than silently relied on) so a future seed change or repeat-minimisation
+    conflict here would fail loudly instead of passing by coincidence.
+    """
     run = run_swiss(flat(), RULES, random.Random(12))
     round_five = run.rounds[4]
     before = records_before_round(run, 5)
+    prior = opponents_before_round(run, 5)
     rank_index = {t: i for i, t in enumerate(round_five.ranking)}
 
     group = sorted(t for t, rec in before.items() if rec == (1, 3))
     assert len(group) == 4
     chosen = [p for p in round_five.pairings if set(p) <= set(group)]
     assert len(chosen) == 2
+    assert sum(1 for a, b in chosen if b in prior[a]) == 0, (
+        "precondition: seed 12's (1,3) bucket has no repeat opponents to "
+        "conflict with distance maximisation"
+    )
 
     best = max(spread(m, rank_index) for m in perfect_matchings(group))
     assert spread(chosen, rank_index) == best
 
 
 def test_round_five_minimises_distance_when_the_loser_survives():
-    """The 3-1 group's Round 5 loser drops to 3-2 and plays on, so pair closest."""
+    """The 3-1 group's Round 5 loser drops to 3-2 and plays on, so pair closest.
+
+    Seed 12 is used because this bucket happens to have zero repeat
+    opponents entering round 5, so distance-minimisation is the only
+    preference in play; that precondition is asserted explicitly (rather
+    than silently relied on) so a future seed change or repeat-minimisation
+    conflict here would fail loudly instead of passing by coincidence.
+    """
     run = run_swiss(flat(), RULES, random.Random(12))
     round_five = run.rounds[4]
     before = records_before_round(run, 5)
+    prior = opponents_before_round(run, 5)
     rank_index = {t: i for i, t in enumerate(round_five.ranking)}
 
     group = sorted(t for t, rec in before.items() if rec == (3, 1))
     assert len(group) == 4
     chosen = [p for p in round_five.pairings if set(p) <= set(group)]
     assert len(chosen) == 2
+    assert sum(1 for a, b in chosen if b in prior[a]) == 0, (
+        "precondition: seed 12's (3,1) bucket has no repeat opponents to "
+        "conflict with distance minimisation"
+    )
 
     smallest = min(spread(m, rank_index) for m in perfect_matchings(group))
     assert spread(chosen, rank_index) == smallest
