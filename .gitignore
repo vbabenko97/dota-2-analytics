@@ -1,0 +1,26 @@
+# Data — raw snapshots are immutable but large; track manifests, not payloads
+data/raw/
+data/interim/
+data/processed/
+!data/**/manifest.json
+
+# Secrets — STRATZ / OpenDota keys, market API credentials
+.env
+*.key
+config/secrets.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Agent harness local state
+.claude/settings.local.json
+.claude/receipts/
+.claude/maintenance-uses.jsonl
+
+# macOS
+.DS_Store
