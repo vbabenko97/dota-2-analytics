@@ -15,7 +15,24 @@ def roster_version_id(accounts: Iterable[int]) -> str:
 
 
 def continuity(previous: Iterable[int], current: Iterable[int]) -> float:
-    return len(set(previous) & set(current)) / 5.0
+    """Shared-player fraction out of a fixed 5-a-side roster.
+
+    Both inputs must contain exactly 5 accounts: this weight feeds directly
+    into `rating = w*prior + (1-w)*initial` downstream, and an unvalidated
+    weight above 1.0 could hand `math.sqrt` a negative argument. Negative
+    account ids are `_split`'s missing-account sentinel (-1), not players,
+    and are excluded from the overlap so two rosters that are each missing a
+    different player don't get credited with sharing that missing slot.
+    """
+    previous_accounts = list(previous)
+    current_accounts = list(current)
+    if len(previous_accounts) != 5 or len(current_accounts) != 5:
+        raise ValueError(
+            f"continuity expects exactly 5 accounts per side, "
+            f"got {len(previous_accounts)} and {len(current_accounts)}"
+        )
+    shared = {a for a in previous_accounts if a >= 0} & {a for a in current_accounts if a >= 0}
+    return len(shared) / 5.0
 
 
 def load_aliases(path: str | Path) -> dict[int, int]:
@@ -34,6 +51,13 @@ class RosterIndex:
 
     Stores the account set per roster, not just the id, so continuity can be
     computed from actual player overlap rather than assumed.
+
+    `predecessor` is keyed by roster id (rvid) alone, not by (team, rvid).
+    This is deliberate: identity follows the roster, not the organization, so
+    if two different teams ever field the bit-for-bit identical five
+    accounts, that roster's predecessor is fixed by whichever team observed
+    it first and is shared by both — a per-team key would reintroduce the
+    org-based identity this module exists to replace.
     """
 
     def __init__(self, aliases: dict[int, int] | None = None) -> None:
@@ -45,6 +69,13 @@ class RosterIndex:
 
     def observe(self, row: MapRow, count: bool = True) -> tuple[str, str]:
         """Register both rosters. `count=False` registers without tallying maps.
+
+        Rows must be observed in chronological order. `count` only gates the
+        map tally: it does NOT gate the identity-state mutations
+        (`_latest_by_team` and `_predecessor`), which run identically either
+        way. Observing out of order silently changes what a later
+        `predecessor()` lookup returns — nothing in this class enforces or
+        checks ordering, so callers are responsible for it.
 
         Prediction needs a roster's predecessor resolved before the roster has
         played anything, so `predict` registers with `count=False`. Only team
@@ -87,7 +118,8 @@ class RosterIndex:
         previous = self.predecessor(rvid)
         if previous is None:
             return 0.0
-        return continuity(self._accounts.get(previous, ()), self._accounts.get(rvid, ()))
-
-    def history(self, rvid: str) -> int:
-        return self._maps.get(rvid, 0)
+        previous_accounts = self._accounts.get(previous, ())
+        current_accounts = self._accounts.get(rvid, ())
+        if not previous_accounts or not current_accounts:
+            return 0.0
+        return continuity(previous_accounts, current_accounts)

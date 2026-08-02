@@ -7,4 +7,35 @@
 #
 # Provenance for every entry: inferred (a reading of org identity, not an
 # official statement).
+#
+# Investigation ledger (2026-08-02), spec VI's four named orgs, checked
+# against the live OpenDota explorer API (team_id, name, date range, and
+# per-team_id top account_ids):
+#
+# - BoomBoys (8255888, 1218 maps, 1610118122-1785596952) vs a second
+#   "BoomBoys" (10163435, 7 maps, 1780234395-1780856017): date ranges
+#   overlap (the second id's whole window sits inside the first's much
+#   longer one), and the two ids share zero top account_ids. Not a rebrand;
+#   declined.
+# - Iron Wing (10150413, 1779187621-1780151101) vs HULIGANI (10149530,
+#   1780318808-1782653592): dates are non-overlapping and sequential
+#   (~46.6h gap), which looks like a rebrand signature, but the two rosters
+#   share zero account_ids. Coincidental temporal adjacency, not a rebrand;
+#   declined. (This was the one case where the date-range heuristic alone
+#   would have been misleading.)
+# - Night Vision (9005364, 1677168629-1781053181) vs TEAM VISION (9572001,
+#   1729605519-1782408313): date ranges overlap heavily and the two rosters
+#   share zero account_ids. Distinct orgs that happen to both contain
+#   "Vision" in the name; declined.
+# - TEAM VISION (9572001) vs PVISION (9824702, 1751999928-1784483341):
+#   settled, not just declined on date overlap. No head-to-head match
+#   between the two team_ids (0 rows). Boundary check: PVISION's earliest
+#   matches (from 1751999928) run concurrently with, not after, Team
+#   Vision's latest matches (up to 1782408313) — about 352 days of overlap,
+#   not a hand-off. Rosters across that overlap window are stable and share
+#   4 of 5 accounts (73401082, 106573901, 164199202, 1044002267), differing
+#   only in the 5th (Team Vision: 195108598; PVISION: 56351509). This is a
+#   concurrent-coexistence pattern with a shared stand-in, not a rebrand —
+#   exactly the case `test_predecessor_ignores_a_different_team_with_a_similar_roster`
+#   guards against. Declined; no alias.
 aliases: []
