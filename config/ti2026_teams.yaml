@@ -1,0 +1,57 @@
+# The 16 teams in the TI 2026 Swiss stage, with their OpenDota team_ids.
+#
+# Populated 2026-08-02 after the real ingest (snapshot 20260802T165535Z,
+# 41,140 maps). The 16-team field itself (7 direct invites + 9 regional
+# qualifier winners) is corroborated across multiple independent outlets
+# (dotesports, gosugamers, hotspawn — cross-checked 2026-08-02); team_ids
+# were resolved against our own store by matching org name to the most
+# active/most recent team_id fielding a 5-account roster, since several
+# orgs are recorded under more than one OpenDota team_id (see notes below).
+#
+# Ambiguous resolutions, evidence recorded here rather than assumed:
+# - Xtreme Gaming, HULIGANI, Team Resilience: each has 2-3 OpenDota
+#   team_ids in our store with IDENTICAL 5-account rosters (a data
+#   duplicate, not a roster change) -- confirmed by direct account
+#   comparison. Any of the duplicate ids resolves to the same
+#   roster_version_id, so the choice below (favoring the id whose own
+#   `name` field matches, or the one with the longest history) is cosmetic.
+# - HULIGANI: team_id 10149530 is OpenDota's own "HULIGANI"-named id
+#   (active 2026-06-01 to 2026-06-28, the EU qualifier window); the
+#   organization's much larger history (463 maps) sits under 9303383,
+#   labeled "L1GA TEAM" (their pre-rebrand name, per public reporting) --
+#   same 5 accounts throughout, confirmed by direct comparison.
+# - Nigma Galaxy: team_id 7554697 (356 maps, through 2026-05-08) and
+#   10136357 (58 maps, from 2026-05-09) are a genuine roster change, not a
+#   duplicate -- 3 of 5 accounts carry over, matching public reporting of
+#   two changes (SumaiL's return, Lorenof's addition). Same-day handoff
+#   (old id's last map 05-08, new id's first map 05-09). Aliased in
+#   config/team_aliases.yaml so Glicko-2 inherits the prior rating rather
+#   than starting the new roster from the 1500/350 default.
+# - HEROIC -> LGD Gaming (South America): full 5/5 roster continuity
+#   (confirmed), sequential non-overlapping dates (2026-04-24 -> 05-26).
+#   No alias needed: identical accounts already share one roster_version_id.
+# - Tundra Esports / "1win Team": public reporting says the roster moved
+#   to a new sponsor named "1win" after the invite, but no OpenDota
+#   team_id named anything like "1win" exists in the explorer `teams`
+#   table as of this ingest, and Tundra Esports' last recorded map here is
+#   2026-05-18 -- about 11 weeks stale relative to the snapshot end. Using
+#   the only real match: team_id 8291895 ("Tundra Esports"). If this
+#   roster played under a new team_id after 05-18, this entry misses it;
+#   record this gap in the ledger rather than guessing at an id.
+teams:
+  - {name: Aurora Gaming, team_id: 9467224}
+  - {name: Team Liquid, team_id: 2163}
+  - {name: BoomBoys, team_id: 8255888}
+  - {name: Xtreme Gaming, team_id: 8261500}
+  - {name: Team Falcons, team_id: 9247354}
+  - {name: Team Yandex, team_id: 9823272}
+  - {name: Tundra Esports, team_id: 8291895}
+  - {name: Team Spirit, team_id: 7119388}
+  - {name: Team Vision, team_id: 9572001}
+  - {name: HULIGANI, team_id: 10149530}
+  - {name: Nigma Galaxy, team_id: 10136357}
+  - {name: Team Resilience, team_id: 5017210}
+  - {name: Vici Gaming, team_id: 726228}
+  - {name: OG, team_id: 2586976}
+  - {name: LGD Gaming, team_id: 10150538}
+  - {name: GamerLegion, team_id: 9964962}

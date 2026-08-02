@@ -38,4 +38,37 @@
 #   concurrent-coexistence pattern with a shared stand-in, not a rebrand —
 #   exactly the case `test_predecessor_ignores_a_different_team_with_a_similar_roster`
 #   guards against. Declined; no alias.
-aliases: []
+#
+# Task 8 ledger (2026-08-02), resolving TI 2026's 16 Swiss-stage teams
+# (config/ti2026_teams.yaml) against the store from snapshot
+# 20260802T165535Z:
+#
+# - L1GA TEAM (9303383, 463 maps, ...-2026-05-09) vs HULIGANI (10149530,
+#   2026-06-01 to 2026-06-28) vs a third id also named "L1GA TEAM"
+#   (10208009, 2026-07-31 to 2026-08-01): all three share the IDENTICAL
+#   5-account roster (92487440, 123787715, 140251702, 145065875, 320017600).
+#   This is a duplicate-id case, not a rebrand needing an alias: every map
+#   under any of the three already hashes to the same roster_version_id, so
+#   Elo/Glicko already merge their history (ratings key off the account
+#   hash, never team_id). No alias added; `ti2026_teams.yaml` uses 10149530
+#   (OpenDota's own "HULIGANI"-named id) for display-name clarity only.
+# - HEROIC (9303484, 2025-02-16 to 2026-04-24) vs LGD Gaming (10150538,
+#   2026-05-26 to 2026-08-01): sequential, non-overlapping, and the last
+#   HEROIC roster (81306398, 105045291, 177203952, 292921272, 1026694469)
+#   is bit-for-bit the first LGD Gaming roster. Same conclusion as above —
+#   identical accounts already share one roster_version_id — no alias
+#   needed.
+# - Nigma Galaxy (7554697, 356 maps, ...-2026-05-08) vs a second "Nigma
+#   Galaxy" (10136357, 58 maps, 2026-05-09-...): NOT a duplicate — accounts
+#   differ (101356886, 138880576, 140297552, 152168157, 418942836 vs
+#   101356886, 111620041, 138880576, 152168157, 210053851), 3 of 5 shared.
+#   Same-day handoff (old id's last map 2026-05-08, new id's first map
+#   2026-05-09) plus a real roster change (2 of 5 accounts swapped) is
+#   exactly the rebrand/re-registration signature spec VI's methodology
+#   looks for, and independently corroborated: public reporting describes
+#   Nigma Galaxy's roster changing by exactly two players in this window
+#   (SumaiL's return, Lorenof's addition). Aliased below so Glicko-2's
+#   continuity-weighted inheritance (spec III) applies instead of the new
+#   roster starting cold at 1500/350.
+aliases:
+  - {from: 7554697, to: 10136357, note: "Nigma Galaxy: same-day team_id handoff 2026-05-08 -> 05-09, 3/5 roster continuity, matches public reporting of a 2-player change"}

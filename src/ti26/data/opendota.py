@@ -37,7 +37,11 @@ class ExplorerError(RuntimeError):
 
 
 def http_transport(url: str) -> bytes:
-    with urllib.request.urlopen(url, timeout=300) as response:
+    # Measured 2026-08-02: the endpoint returns 403 Forbidden to urllib's
+    # default `Python-urllib/x.y` User-Agent and 200 to any ordinary one.
+    # Confirmed with and without this header, same URL, same run.
+    request = urllib.request.Request(url, headers={"User-Agent": "ti26-ingest/1.0"})
+    with urllib.request.urlopen(request, timeout=300) as response:
         return response.read()
 
 

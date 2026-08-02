@@ -151,7 +151,9 @@ def test_round_constraints():
 
 def test_every_rule_carries_a_provenance_tag():
     rules = load_rules(RULES_PATH)
-    allowed = {"official", "logically_forced", "inferred", "arbitrary"}
+    # "empirical" added in D2: the duration model is now fitted from real
+    # match durations (reports/duration_fit.json) rather than guessed.
+    allowed = {"official", "logically_forced", "inferred", "arbitrary", "empirical"}
     assert rules.provenance
     assert set(rules.provenance.values()) <= allowed
 
