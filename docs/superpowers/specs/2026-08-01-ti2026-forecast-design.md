@@ -21,6 +21,8 @@ Claims fall into four provenance tiers. Treating them as equally solid is the fa
 - Random-assignment baseline: `Σ kc²/16 = (1+4+25+25+4+1)/16 = 3.75` expected correct entries.
 - **Consistency check:** teams advancing = `1 (4-0) + 2 (4-1) + 5 (elimination winners) = 8`. This independently corroborates the capacity structure against tier B's separately-sourced "eight teams survive to the main event" — the 8 was not used to derive the capacities.
 - `https://www.dota2.com/esports/ti15/tirules` and the Valve predictions news post are **JS-rendered**; plain HTTP fetch returns only the page title. Confirmed by two WebFetch calls returning no body content.
+- **Duration is not a rare tiebreak.** Instrumented D1 runs: 4.79 duration lookups per ranking call, in 300/300 simulated tournaments; 23.9% of ranking instances across 500 tournaments. Structural, not a modelling artefact — see §XII.
+- **OpenDota data availability, measured 2026-08-02** (queries and figures in §III): the `/explorer` SQL endpoint serves the full map-level schema including rosters, unkeyed; 41,627 maps over 18 months with 100% roster coverage; unkeyed REST cap is 3,000/day; recent monthly volume has fallen to ~1–15% of its 2025 level; league `tier` labels are unmaintained for 2026.
 
 **B. Reported verified by GPT-5.6 Pro against official Valve pages (2026-08-01), with citations this session could not open. Corroborated by the tier-A consistency check. Pending D1 confirmation:**
 - 16 teams; five-round Swiss group stage on August 13–16; five elimination matches; eight teams surviving to the main event.
@@ -93,7 +95,16 @@ Where reported, it carries the qualifier: *model-implied expected score under th
 
 **Engineering gate (blocking).** By end of D2 the pipeline produces a legal card from any strength vector, and the `as_of` leakage assertion passes.
 
-**Forecast-value gate (decides whether D3–D4 happen).** Proceed with custom Bradley-Terry development only if roster-aware Glicko beats Elo by a pre-registered paired out-of-sample log-loss margin, while remaining adequately calibrated.
+**Forecast-value gate (decides whether D3–D4 happen).** Proceed with custom Bradley-Terry development only if roster-aware Glicko beats Elo by the pre-registered paired out-of-sample log-loss margin below, while remaining adequately calibrated.
+
+**Pre-registered, 2026-08-02, before any backtest was run:**
+
+```
+mean(LL_elo − LL_glicko) ≥ 0.003 nats/map
+AND paired bootstrap 95% CI on that difference excludes 0
+```
+
+Both conditions, not either. With ~40k maps the significance test alone would pass on differences far too small to move a card, and an effect size alone can be sampling noise. The margin is registered here, in the spec, with a date — moving it after seeing a result voids the gate.
 
 **Diagnostic, not a gate:** whether the custom model materially changes at least one card slot relative to the public-rating fallback. A difference establishes that the custom model *matters*, not that it is *better*. If the log-loss gate fails and this diagnostic passes, investigate — but ship the fallback. A card that differs without demonstrated out-of-sample skill is noise with extra steps.
 
@@ -103,10 +114,38 @@ Where reported, it carries the qualifier: *model-implied expected score under th
 
 | Source | Content | Notes |
 |---|---|---|
-| OpenDota `/proMatches` | map-level results, 18 months | Documented server defaults: 60 req/min and 2,000/day without an API key, 300/min keyed. Treat as deployment defaults, not guarantees — inspect live rate-limit headers before bulk ingestion |
-| STRATZ GraphQL | reconciliation, league tiers, durations | Requires API key; query-cost limits apply |
-| Liquipedia | roster history, tournament brackets, alias resolution | Better than OpenDota for rosters. Requires descriptive User-Agent |
+| **OpenDota `/explorer`** (primary) | map-level results **and rosters**, 18 months, in ~19 monthly SQL queries | Public Postgres-backed SQL endpoint. No API key. Measured 2026-08-02: a full month (3,011 maps, 1.0 MB) returns in 0.44 s with no row cap |
+| OpenDota REST | spot checks, `picks_bans` backfill for D5 | Live headers measured 2026-08-02: `x-rate-limit-remaining-minute: 59`, `x-rate-limit-remaining-day: 2998` — the unkeyed daily cap is **3,000**, not the 2,000 previously recorded here |
+| Liquipedia | roster history, tournament brackets, alias resolution | Only where explorer rosters are insufficient. Requires descriptive User-Agent |
 | Betting markets | outright odds as external ranking prior; H2H odds post-schedule | See §VIII |
+
+**STRATZ is no longer on the critical path.** It was specified to supply rosters, league tiers, and durations. The explorer returns all three, unkeyed, in one query. Keeping a keyed dependency for data we already have would add a credential and a failure mode for nothing.
+
+**Ingestion is not the bottleneck it was designed around.** The original plan implied ~19,000 per-match REST calls to obtain rosters — six days against a 3,000/day cap, which would not fit inside D2. Measured alternative:
+
+```sql
+select m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,
+       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,
+       array_agg(pm.account_id order by pm.player_slot) as accounts,
+       array_agg(pm.hero_id    order by pm.player_slot) as heroes
+from matches m
+join match_patch    mp on mp.match_id = m.match_id
+join player_matches pm on pm.match_id = m.match_id
+left join leagues    l on l.leagueid  = m.leagueid
+where m.start_time >= :month_start and m.start_time < :month_end
+group by 1,2,3,4,5,6,7,8,9,10,11
+```
+
+Chunk by month to stay well under any timeout. Total ≈ 41,600 maps, ≈ 19 MB, under a minute.
+
+**Measured data-quality facts (2026-08-02), superseding assumptions:**
+
+- **Roster coverage is complete.** 41,627 of 41,627 maps over 18 months have player rows. Roster hashing needs no fallback path.
+- **Recent pro volume has collapsed.** Monthly counts hold ~2,200–3,000 through 2026-05, then 1,113 (Jun), 435 (Jul), 44 (Aug 1–2). A 90-day half-life window contains roughly 1,600 maps *in total*, of which TI contenders are a fraction. The §VI "few tier-1 maps → overconfident rating" corner case is therefore the **default condition, not an edge case** — uncertainty inflation must be on by default, and the report must name which teams are prior-driven.
+- **League tier metadata rots.** `tier in ('premium','professional')` selects 2,152/3,011 maps in 2025-09 but 455/2,480 in 2026-05. Recent leagues are unlabeled, not downgraded.
+- **≈6.7% of maps carry a null team ID** (203/3,011 in the sampled month). Handle explicitly; never drop silently.
+
+**League scope decision:** fit on **all** ingested maps, carrying `tier` and `league_id` as covariates/weights rather than filtering. A tier filter would discard ~80% of 2026 maps for a metadata-maintenance reason unrelated to match quality, putting the filter in direct conflict with recency weighting.
 
 **Unit of observation:** one map (not one series). Game-win percentage and average duration are official tiebreakers, so a series-only simulator cannot reproduce standings.
 
@@ -456,7 +495,7 @@ Provenance matters more than pretending every branch has textual authority. `inf
 | | Work | Gate |
 |---|---|---|
 | **D1** (Aug 1–2) | Browser-verify rules and point values → `ti2026_rules.yaml` + archival snapshot (regression check, not blocker). Swiss engine + tiebreakers + Hungarian optimizer on **synthetic** ratings. Property tests incl. forced-repeat and MC-tolerance cases. | Card generator works end-to-end from any strength vector; all §IX invariants hold |
-| **D2** (Aug 3) | Ingestion: 18mo pro maps, roster-hash canonicalization, alias table, immutable snapshots. Glicko-2 and Elo baselines. Rolling backtest harness. | **Engineering:** leakage test passes, legal card produced. **Forecast-value:** Glicko beats Elo by the pre-registered paired OOS log-loss margin — else ship the public-rating fallback and stop |
+| **D2** (Aug 3) | Ingestion via OpenDota `/explorer`: 18mo maps + rosters, immutable monthly snapshots. Roster-hash canonicalization, alias table. Elo and Glicko-2 baselines. Rolling backtest harness. **Fit the duration model from real data** (§XII). | **Engineering:** leakage test passes, legal card produced from fitted ratings. **Forecast-value:** `mean(LL_elo − LL_glicko) ≥ 0.003` nats/map AND paired bootstrap 95% CI excludes 0 — else ship the public-rating fallback and stop |
 | **D3** (Aug 4) | Dynamic BT + time decay. Rolling backtest vs Elo/Glicko. Calibration. Outright odds as ranking prior. `w` sweep scaffolding. | Calibration slope ∈ [0.9, 1.1]; beats Elo on paired log loss |
 | **D4** (Aug 5) | Within-series dependence analysis (§VI) — add a series shock only if supported. Schedule-sensitivity experiment. Full run. **Card ships.** Reports. | TI 2025 pairings reproduced exactly from actual results; PPC summary stats not extreme |
 | **D5** (Aug 6) | Meta work (§VIII). Hero contest rates + player sample counts + pool breadth → `reports/meta_scouting.md` (**ships unconditionally**). Then `patch_adaptation` only, backtested. | Report readable with sample counts stated. Pre-registered test on post-patch matches. **Card regenerates only on pass** |
