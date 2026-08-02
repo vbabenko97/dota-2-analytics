@@ -1,0 +1,10 @@
+# Historical team_id -> canonical team_id.
+#
+# An empty list is the CORRECT starting state: an alias is a claim that two
+# distinct OpenDota team_ids are the same organization, and inventing one
+# silently merges two teams' histories. Step 5 resolves the four re-brands
+# spec VI names, against real data, before any entry appears here.
+#
+# Provenance for every entry: inferred (a reading of org identity, not an
+# official statement).
+aliases: []
