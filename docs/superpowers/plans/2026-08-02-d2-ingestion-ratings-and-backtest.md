@@ -6,12 +6,15 @@
 
 **Architecture:** Ingestion is one narrow seam: `explorer_query` is the only function in `src/ti26/` that touches the network, and it takes an injectable transport so every other test runs offline. Raw responses land in immutable timestamped snapshots and are never re-fetched; a normalization layer converts them to `MapRow`, and a stdlib `sqlite3` store answers `as_of`-bounded queries. Ratings are pure functions over an ordered map sequence keyed by `roster_version_id`, not by organization, so a re-branded org keeps its history and a new roster does not inherit one it never earned. The backtest harness replays tournaments at rolling cutoffs and is the only component permitted to declare the gate result.
 
-**Tech Stack:** Python 3.13, `uv`, `pytest`, `numpy`, `scipy`, `PyYAML`, `ruff`, and the standard library (`sqlite3`, `urllib.request`, `gzip`, `json`, `hashlib`). **No new third-party dependencies.**
+**Tech Stack:** Python as declared by `requires-python` in `pyproject.toml:4` (currently `>=3.12`) — do not hard-code a version anywhere; `uv`, `pytest`, `numpy`, `scipy`, `PyYAML`, `ruff`, and the standard library (`sqlite3`, `urllib.request`, `gzip`, `json`, `hashlib`). **No new third-party dependencies.**
 
 ## Global Constraints
 
 - **One network seam.** `src/ti26/data/opendota.py::explorer_query` is the only function in `src/ti26/` permitted to perform I/O against a remote host, and it accepts a `transport` callable so tests never hit the network. A network call anywhere else under `src/ti26/` is a plan violation.
-- **Raw snapshots are immutable.** `data/raw/` is written once per snapshot id and never overwritten or edited. Re-running ingestion creates a new snapshot directory. Code that opens a path under `data/raw/` in any mode other than read is a plan violation.
+- **Raw snapshots are immutable, enforced by the filesystem.** Snapshot chunks and manifests are created with exclusive-create mode (`"xb"`), never `exists()`-then-write. Re-running ingestion creates a new snapshot directory. Code that opens a path under `data/raw/` for writing without `x` mode is a plan violation.
+- **Test the production call path, not a hand-assembled one.** If a test wires a collaborator that the real runner does not wire, the test proves nothing about the shipped system. Every rating model must be driven through `run_model`, and `run_model` must construct exactly what `cli_d2` constructs. A test that calls `RosterIndex.observe` directly while the runner never does is a plan violation, not a passing test. This is the defect pattern that dominated D1.
+- **The gate's bootstrap is clustered, never iid over maps.** Maps within a series share teams, day, patch and momentum; iid resampling understates the interval and lets the gate pass on noise. Resample tournaments (falling back to two-stage tournament→series when tournaments are few), and align the two models' losses **by `match_id`**, never by position.
+- **Predictions carry their own provenance.** Every `Prediction` records `fold_id`, `league_id`, `series_id`, `match_id`, `rated` and `reason`, so any metric can be re-derived, re-grouped, or audited without re-running the fit.
 - **The `as_of` leakage assertion is blocking.** `assert_no_leakage(rows, as_of)` raises if any row has `start_time > as_of`. Every rating fit and every backtest fold calls it. Per spec §IV this is "the single reproducibility check worth automating".
 - **Pre-registered D2 forecast-value gate, verbatim from spec §II** (registered 2026-08-02, before any backtest was run): `mean(LL_elo − LL_glicko) ≥ 0.003` nats/map **AND** paired bootstrap 95% CI on that difference excludes 0. Both conditions. The threshold `0.003` is loaded from `config/d2_gate.yaml`; writing it as a literal in `src/` is a plan violation.
 - **Fit on all ingested maps.** `tier` and `league_id` are covariates/weights, never an ingest-time or fit-time filter. Spec §III: a tier filter drops ~80% of 2026 maps for a metadata-maintenance reason unrelated to match quality.
@@ -30,6 +33,8 @@
 | File | Responsibility |
 |---|---|
 | `config/d2_gate.yaml` | Pre-registered gate thresholds and rating hyperparameters. Single source; no literals in `src/` |
+| `config/ti2026_teams.yaml` | The 16 Swiss-stage teams and their OpenDota `team_id`s. Populated from real data in Task 8, never fabricated |
+| `src/ti26/teams.py` | Resolve the 16 configured teams to current `roster_version_id`s and fitted strengths |
 | `src/ti26/data/__init__.py` | Package marker |
 | `src/ti26/data/opendota.py` | The one network seam: `explorer_query(sql, transport)`; retry/backoff; no domain parsing |
 | `src/ti26/data/snapshot.py` | Immutable snapshot write/read plus `manifest.json` |
@@ -291,6 +296,29 @@ def test_rewriting_the_same_snapshot_raises(tmp_path):
         write_snapshot(tmp_path, "20260803T090501Z", "2025-02", [{"a": 2}])
 
 
+def test_rewriting_a_manifest_raises(tmp_path):
+    """The manifest is the index of what was fetched; overwriting it can make
+    a snapshot claim contents it does not have."""
+    entries = [{"name": "2025-02", "rows": 1, "start": 0, "end": 1}]
+    write_manifest(tmp_path, "20260803T090501Z", entries)
+    with pytest.raises(SnapshotExistsError):
+        write_manifest(tmp_path, "20260803T090501Z", entries)
+
+
+def test_the_original_bytes_survive_a_failed_overwrite(tmp_path):
+    """An exists()-then-write implementation can truncate before it raises.
+
+    This asserts the ORIGINAL content is intact after the failure, which is
+    the property that actually matters and which a bare `pytest.raises`
+    check would not catch.
+    """
+    write_snapshot(tmp_path, "20260803T090501Z", "2025-02", [{"original": True}])
+    with pytest.raises(SnapshotExistsError):
+        write_snapshot(tmp_path, "20260803T090501Z", "2025-02", [{"clobbered": True}])
+    path = tmp_path / "20260803T090501Z" / "2025-02.json.gz"
+    assert read_snapshot(path) == [{"original": True}]
+
+
 def test_manifest_records_counts_and_query_for_each_chunk(tmp_path):
     entries = [
         {"name": "2025-02", "rows": 2268, "start": 1738368000, "end": 1740787200},
@@ -333,16 +361,27 @@ def snapshot_id(now: datetime) -> str:
     return now.strftime("%Y%m%dT%H%M%SZ")
 
 
+def _exclusive_write(path: Path, payload: bytes) -> None:
+    """Create-or-fail. `exists()` then write is a race, not a guarantee.
+
+    Two ingest runs started in the same second share a snapshot id; with a
+    check-then-write they would both pass the check and one would silently
+    clobber the other. Exclusive create pushes the decision into the kernel.
+    """
+    try:
+        with open(path, "xb") as fh:
+            fh.write(payload)
+    except FileExistsError as exc:
+        raise SnapshotExistsError(
+            f"{path} already exists; snapshots are immutable — use a new snapshot id"
+        ) from exc
+
+
 def write_snapshot(root: Path, sid: str, name: str, rows: list[dict]) -> Path:
     directory = root / sid
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{name}.json.gz"
-    if path.exists():
-        raise SnapshotExistsError(
-            f"{path} already exists; snapshots are immutable — use a new snapshot id"
-        )
-    with gzip.open(path, "wt", encoding="utf-8") as fh:
-        json.dump(rows, fh)
+    _exclusive_write(path, gzip.compress(json.dumps(rows).encode()))
     return path
 
 
@@ -361,14 +400,14 @@ def write_manifest(root: Path, sid: str, entries: list[dict]) -> Path:
         "total_rows": sum(e["rows"] for e in entries),
         "entries": entries,
     }
-    path.write_text(json.dumps(payload, indent=2) + "\n")
+    _exclusive_write(path, (json.dumps(payload, indent=2) + "\n").encode())
     return path
 ```
 
 - [ ] **Step 8: Run the full task suite and lint**
 
 Run: `.venv/bin/python -m pytest tests/test_opendota.py tests/test_snapshot.py -v && .venv/bin/ruff check .`
-Expected: PASS (10 tests), lint clean
+Expected: PASS (12 tests), lint clean
 
 - [ ] **Step 9: Commit**
 
@@ -387,7 +426,7 @@ git commit -m "feat: OpenDota explorer client and immutable snapshots"
 
 **Interfaces:**
 - Consumes: `read_snapshot` from Task 1.
-- Produces: `MapRow` frozen dataclass with fields `match_id: int, start_time: int, duration: int, radiant_win: bool, league_id: int | None, tier: str | None, radiant_team_id: int | None, dire_team_id: int | None, series_id: int | None, series_type: int | None, patch: str | None, radiant_accounts: tuple[int, ...], dire_accounts: tuple[int, ...], radiant_heroes: tuple[int, ...], dire_heroes: tuple[int, ...], has_null_team: bool, has_bad_roster: bool` and property `best_of: int`; `RosterSlotError(ValueError)`; `normalize_row(raw: dict) -> MapRow`; `normalize_all(raw: list[dict]) -> tuple[list[MapRow], dict[str, int]]` returning rows plus a counted rejection tally; `LeakageError(AssertionError)`; `assert_no_leakage(rows: Sequence[MapRow], as_of: int) -> None`; `open_store(path: str | Path) -> sqlite3.Connection`; `insert_rows(conn, rows: Sequence[MapRow]) -> int`; `load_rows(conn, as_of: int | None = None, since: int | None = None) -> list[MapRow]`.
+- Produces: `MapRow` frozen dataclass with fields `match_id: int, start_time: int, duration: int, radiant_win: bool, league_id: int | None, tier: str | None, radiant_team_id: int | None, dire_team_id: int | None, series_id: int | None, series_type: int | None, patch: str | None, radiant_accounts: tuple[int, ...], dire_accounts: tuple[int, ...], radiant_heroes: tuple[int, ...], dire_heroes: tuple[int, ...], has_null_team: bool, has_bad_roster: bool` and property `best_of: int`; `RosterSlotError(ValueError)`; `normalize_row(raw: dict) -> MapRow`; `normalize_all(raw: list[dict]) -> tuple[list[MapRow], dict[str, int]]` returning rows plus a counted rejection tally; `LeakageError(AssertionError)`; `ConflictingRowError(ValueError)`; `assert_no_leakage(rows: Sequence[MapRow], as_of: int) -> None`; `open_store(path: str | Path) -> sqlite3.Connection`; `insert_rows(conn, rows: Sequence[MapRow]) -> int` returning the count of **newly inserted** rows (exact duplicates are tolerated and not counted; conflicting duplicates raise); `load_rows(conn, as_of: int | None = None, since: int | None = None) -> list[MapRow]`.
 
 - [ ] **Step 1: Write the failing schema test**
 
@@ -615,7 +654,14 @@ Expected: PASS (11 tests)
 import pytest
 
 from ti26.data.schema import MapRow
-from ti26.data.store import LeakageError, assert_no_leakage, insert_rows, load_rows, open_store
+from ti26.data.store import (
+    ConflictingRowError,
+    LeakageError,
+    assert_no_leakage,
+    insert_rows,
+    load_rows,
+    open_store,
+)
 
 
 def row(match_id, start_time, **kw):
@@ -637,13 +683,37 @@ def test_roundtrip_preserves_every_field(tmp_path):
     assert load_rows(conn) == [original]
 
 
-def test_insert_is_idempotent_so_reingest_does_not_double_count(tmp_path):
+def test_reinserting_an_identical_row_is_a_no_op(tmp_path):
     """Snapshots overlap at month edges on re-runs; a duplicated map would
     be rated twice and inflate a team's evidence for free."""
     conn = open_store(tmp_path / "d2.sqlite")
     insert_rows(conn, [row(1, 1000)])
     insert_rows(conn, [row(1, 1000), row(2, 2000)])
     assert [r.match_id for r in load_rows(conn)] == [1, 2]
+
+
+def test_reinserting_a_CONFLICTING_row_raises(tmp_path):
+    """`insert or replace` would silently let a later snapshot rewrite
+    history — the same match_id arriving with a different winner or roster
+    would overwrite the earlier record and no one would ever know.
+
+    Same id + different content is a data-integrity failure, not an update.
+    """
+    conn = open_store(tmp_path / "d2.sqlite")
+    insert_rows(conn, [row(1, 1000, radiant_win=True)])
+    with pytest.raises(ConflictingRowError, match="match_id=1"):
+        insert_rows(conn, [row(1, 1000, radiant_win=False)])
+
+
+def test_a_rejected_conflict_leaves_the_original_intact(tmp_path):
+    conn = open_store(tmp_path / "d2.sqlite")
+    original = row(1, 1000, radiant_win=True)
+    insert_rows(conn, [original])
+    with pytest.raises(ConflictingRowError):
+        insert_rows(conn, [row(2, 2000), row(1, 1000, radiant_win=False)])
+    stored = load_rows(conn)
+    assert original in stored
+    assert all(r.radiant_win for r in stored if r.match_id == 1)
 
 
 def test_rows_load_in_start_time_order(tmp_path):
@@ -723,30 +793,59 @@ class LeakageError(AssertionError):
     """A row dated after `as_of` reached a fit. Spec IV: blocking."""
 
 
+class ConflictingRowError(ValueError):
+    """The same match_id arrived twice with different content."""
+
+
 def open_store(path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path))
     conn.executescript(SCHEMA)
     return conn
 
 
+def _tuple_of(r: MapRow) -> tuple:
+    return (
+        r.match_id, r.start_time, r.duration, int(r.radiant_win), r.league_id, r.tier,
+        r.radiant_team_id, r.dire_team_id, r.series_id, r.series_type, r.patch,
+        json.dumps(list(r.radiant_accounts)), json.dumps(list(r.dire_accounts)),
+        json.dumps(list(r.radiant_heroes)), json.dumps(list(r.dire_heroes)),
+        int(r.has_null_team), int(r.has_bad_roster),
+    )
+
+
 def insert_rows(conn: sqlite3.Connection, rows: Sequence[MapRow]) -> int:
-    payload = [
-        (
-            r.match_id, r.start_time, r.duration, int(r.radiant_win), r.league_id, r.tier,
-            r.radiant_team_id, r.dire_team_id, r.series_id, r.series_type, r.patch,
-            json.dumps(list(r.radiant_accounts)), json.dumps(list(r.dire_accounts)),
-            json.dumps(list(r.radiant_heroes)), json.dumps(list(r.dire_heroes)),
-            int(r.has_null_team), int(r.has_bad_roster),
-        )
-        for r in rows
-    ]
+    """Insert, tolerating exact duplicates and rejecting conflicting ones.
+
+    `insert or replace` would let a later snapshot silently rewrite history:
+    the same match_id arriving with a different winner would overwrite the
+    earlier record with no trace. Same id + same bytes is a re-ingest; same
+    id + different bytes is a data-integrity failure that must surface.
+
+    The whole batch runs in one transaction, so a conflict anywhere rolls the
+    batch back and leaves the store exactly as it was.
+    """
+    payload = [_tuple_of(r) for r in rows]
     placeholders = ",".join("?" * len(_COLUMNS))
-    with conn:
-        conn.executemany(
-            f"insert or replace into maps ({','.join(_COLUMNS)}) values ({placeholders})",
-            payload,
-        )
-    return len(payload)
+    inserted = 0
+    with conn:  # rolls back the whole batch if anything raises
+        for record in payload:
+            existing = conn.execute(
+                f"select {','.join(_COLUMNS)} from maps where match_id = ?", (record[0],)
+            ).fetchone()
+            if existing is None:
+                conn.execute(
+                    f"insert into maps ({','.join(_COLUMNS)}) values ({placeholders})", record
+                )
+                inserted += 1
+            elif tuple(existing) != record:
+                differing = [
+                    _COLUMNS[i] for i in range(len(_COLUMNS)) if existing[i] != record[i]
+                ]
+                raise ConflictingRowError(
+                    f"match_id={record[0]} already stored with different values "
+                    f"in {differing}; refusing to overwrite ingested history"
+                )
+    return inserted
 
 
 def load_rows(
@@ -788,7 +887,7 @@ def assert_no_leakage(rows: Sequence[MapRow], as_of: int) -> None:
 - [ ] **Step 8: Run the full task suite and lint**
 
 Run: `.venv/bin/python -m pytest tests/test_schema.py tests/test_store.py -v && .venv/bin/ruff check .`
-Expected: PASS (17 tests), lint clean
+Expected: PASS (19 tests), lint clean
 
 - [ ] **Step 9: Commit**
 
@@ -807,12 +906,14 @@ git commit -m "feat: map schema normalization, sqlite store, leakage assertion"
 
 **Interfaces:**
 - Consumes: `MapRow` from Task 2.
-- Produces: `roster_version_id(accounts: Iterable[int]) -> str` (16 hex chars); `load_aliases(path) -> dict[int, int]` mapping historical `team_id` → canonical `team_id`; `canonical_team_id(team_id: int | None, aliases: dict[int, int]) -> int | None`; `continuity(previous: Iterable[int], current: Iterable[int]) -> float` returning shared/5; `RosterIndex` with `.observe(row: MapRow) -> tuple[str, str]` returning `(radiant_rvid, dire_rvid)`, `.predecessor(rvid: str) -> str | None`, and `.history(rvid: str) -> int` (number of maps observed for that roster).
+- Produces: `roster_version_id(accounts: Iterable[int]) -> str` (16 hex chars); `load_aliases(path) -> dict[int, int]` mapping historical `team_id` → canonical `team_id`; `canonical_team_id(team_id: int | None, aliases: dict[int, int]) -> int | None`; `continuity(previous: Iterable[int], current: Iterable[int]) -> float` returning shared/5; `RosterIndex` with `.observe(row: MapRow) -> tuple[str, str]` returning `(radiant_rvid, dire_rvid)`, `.predecessor(rvid: str) -> str | None`, `.accounts(rvid: str) -> tuple[int, ...]`, `.continuity_with_predecessor(rvid: str) -> float` (measured shared-player fraction; 0.0 with no history), and `.history(rvid: str) -> int` (number of maps observed for that roster).
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/test_roster.py
+import pytest
+
 from ti26.data.schema import MapRow
 from ti26.roster import (
     RosterIndex,
@@ -915,6 +1016,40 @@ def test_predecessor_ignores_a_different_team_with_a_similar_roster():
     index.observe(row(1, 100, [1, 2, 3, 4, 5], [6, 7, 8, 9, 10], r_team=10))
     r2, _ = index.observe(row(2, 200, [1, 2, 3, 4, 99], [6, 7, 8, 9, 10], r_team=77))
     assert index.predecessor(r2) is None, "team 77 has no history despite 4 shared players"
+
+
+def test_continuity_with_predecessor_measures_actual_overlap():
+    """The inheritance weight is measured, not assumed.
+
+    A one-player swap and a three-player rebuild must NOT receive the same
+    weight; a fixed constant cannot tell them apart, which is precisely why
+    the index stores account sets.
+    """
+    index = RosterIndex()
+    index.observe(row(1, 100, [1, 2, 3, 4, 5], [6, 7, 8, 9, 10]))
+    one_swap, _ = index.observe(row(2, 200, [1, 2, 3, 4, 91], [6, 7, 8, 9, 10]))
+    assert index.continuity_with_predecessor(one_swap) == pytest.approx(0.8)
+
+    other = RosterIndex()
+    other.observe(row(1, 100, [1, 2, 3, 4, 5], [6, 7, 8, 9, 10]))
+    rebuild, _ = other.observe(row(2, 200, [1, 2, 91, 92, 93], [6, 7, 8, 9, 10]))
+    assert other.continuity_with_predecessor(rebuild) == pytest.approx(0.4)
+
+
+def test_continuity_is_zero_for_a_roster_with_no_history():
+    index = RosterIndex()
+    first, _ = index.observe(row(1, 100, [1, 2, 3, 4, 5], [6, 7, 8, 9, 10]))
+    assert index.continuity_with_predecessor(first) == 0.0
+
+
+def test_aliases_chain_history_across_a_rebrand():
+    """The alias table is inert unless observe() consults it. This test fails
+    if `canonical_team_id` is dropped from the observe path."""
+    index = RosterIndex(aliases={77: 10})
+    index.observe(row(1, 100, [1, 2, 3, 4, 5], [6, 7, 8, 9, 10], r_team=10))
+    rebranded, _ = index.observe(row(2, 200, [1, 2, 3, 4, 91], [6, 7, 8, 9, 10], r_team=77))
+    assert index.predecessor(rebranded) == roster_version_id([1, 2, 3, 4, 5])
+    assert index.continuity_with_predecessor(rebranded) == pytest.approx(0.8)
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -958,22 +1093,36 @@ def canonical_team_id(team_id: int | None, aliases: dict[int, int]) -> int | Non
 
 
 class RosterIndex:
-    """Tracks which roster each canonical team most recently fielded."""
+    """Tracks which roster each canonical team most recently fielded.
+
+    Stores the account set per roster, not just the id, so continuity can be
+    computed from actual player overlap rather than assumed.
+    """
 
     def __init__(self, aliases: dict[int, int] | None = None) -> None:
         self._aliases = aliases or {}
         self._latest_by_team: dict[int, str] = {}
         self._predecessor: dict[str, str | None] = {}
+        self._accounts: dict[str, tuple[int, ...]] = {}
         self._maps: dict[str, int] = {}
 
-    def observe(self, row: MapRow) -> tuple[str, str]:
+    def observe(self, row: MapRow, count: bool = True) -> tuple[str, str]:
+        """Register both rosters. `count=False` registers without tallying maps.
+
+        Prediction needs a roster's predecessor resolved before the roster has
+        played anything, so `predict` registers with `count=False`. Only team
+        ids and player ids are read — never the outcome — so registering a
+        future row cannot leak.
+        """
         out = []
         for team_id, accounts in (
             (row.radiant_team_id, row.radiant_accounts),
             (row.dire_team_id, row.dire_accounts),
         ):
             rvid = roster_version_id(accounts)
-            self._maps[rvid] = self._maps.get(rvid, 0) + 1
+            self._accounts.setdefault(rvid, tuple(sorted(accounts)))
+            if count:
+                self._maps[rvid] = self._maps.get(rvid, 0) + 1
             canonical = canonical_team_id(team_id, self._aliases)
             if canonical is not None:
                 previous = self._latest_by_team.get(canonical)
@@ -987,6 +1136,21 @@ class RosterIndex:
 
     def predecessor(self, rvid: str) -> str | None:
         return self._predecessor.get(rvid)
+
+    def accounts(self, rvid: str) -> tuple[int, ...]:
+        return self._accounts.get(rvid, ())
+
+    def continuity_with_predecessor(self, rvid: str) -> float:
+        """Measured shared-player fraction, or 0.0 when there is no history.
+
+        This replaces a fixed inheritance weight. A fixed weight is right for
+        a single substitution and badly wrong for a three-player change, and
+        nothing in the id alone distinguishes the two cases.
+        """
+        previous = self.predecessor(rvid)
+        if previous is None:
+            return 0.0
+        return continuity(self._accounts.get(previous, ()), self._accounts.get(rvid, ()))
 
     def history(self, rvid: str) -> int:
         return self._maps.get(rvid, 0)
@@ -1040,14 +1204,32 @@ Expected: PASS (9 tests)
 
 - [ ] **Step 7: Verify the tests discriminate by mutation**
 
-Copy `src/ti26/roster.py` to `/tmp/roster_mutant.py`, change `sorted(accounts)` to `accounts` (dropping order-independence), and run the suite against the copy with an explicit `PYTHONPATH` override. **The `pythonpath = ["src"]` setting in `pyproject.toml:18` silently re-resolves imports to the real tracked source**, so without the override you will test unmutated code and see a false pass.
+**`PYTHONPATH` does not work here.** `pyproject.toml:18` sets `pythonpath = ["src"]`, and pytest *prepends* that to `sys.path`, so the real tracked `src/` wins over any `PYTHONPATH` entry and you test unmutated code while watching a green suite. Override the ini setting itself with `-o pythonpath=...`.
 
-Run:
+Run, copying to a scratch tree and mutating only the copy:
+
 ```bash
-cp -r src /tmp/mut && cp /tmp/roster_mutant.py /tmp/mut/ti26/roster.py
-PYTHONPATH=/tmp/mut .venv/bin/python -m pytest tests/test_roster.py -p no:cacheprovider -v
+rm -rf /tmp/mut && cp -r src /tmp/mut
+sed -i '' 's/sorted(accounts)/accounts/' /tmp/mut/ti26/roster.py
+.venv/bin/python -m pytest tests/test_roster.py -o pythonpath=/tmp/mut -p no:cacheprovider -v
 ```
-Expected: `test_roster_id_is_order_independent` FAILS. Then `rm -rf /tmp/mut /tmp/roster_mutant.py` and confirm `git status` is clean — never mutate tracked source.
+
+Expected: `test_roster_id_is_order_independent` FAILS.
+
+Confirm the override actually took effect before trusting the result — if every test still passes, you are running the real source and the mutation proved nothing:
+
+```bash
+.venv/bin/python -m pytest tests/test_roster.py -o pythonpath=/tmp/mut \
+  --collect-only -q 2>/dev/null | head -1
+.venv/bin/python -c "import ti26.roster, sys; print(ti26.roster.__file__)"  # sanity: real path
+```
+
+Then clean up and verify nothing tracked was touched — a prior build left a mutation marker in committed source this way:
+
+```bash
+rm -rf /tmp/mut
+git status --short   # must be empty
+```
 
 - [ ] **Step 8: Commit**
 
@@ -1214,8 +1396,17 @@ from ti26.data.schema import MapRow
 
 @dataclass(frozen=True)
 class Prediction:
+    """One out-of-sample forecast, carrying enough provenance to be re-grouped.
+
+    `series_id` is what the clustered bootstrap resamples on and `fold_id`
+    is what fold-integrity assertions check, so neither is optional.
+    """
+
+    fold_id: int
     match_id: int
     start_time: int
+    league_id: int | None
+    series_id: int | None
     p_radiant: float
     rated: bool
     reason: str | None = None
@@ -1464,9 +1655,13 @@ git commit -m "feat: Elo comparator, floor baselines, pre-registered gate config
 
 **Interfaces:**
 - Consumes: `MapRow`, `skip_reason`, `RosterIndex`, `roster_version_id`, `continuity`.
-- Produces: `GlickoRating` frozen dataclass `(rating: float, rd: float, volatility: float)`; `GlickoModel(tau: float = 0.5, initial_rating: float = 1500.0, initial_rd: float = 350.0, initial_volatility: float = 0.06, period_seconds: int = 604800, roster_index: RosterIndex | None = None)` with `.rating_of(rvid) -> GlickoRating`, `.predict(row) -> float`, `.update(row) -> None`, `.flush() -> None`, `.strengths() -> dict[str, float]`, `.prior_driven(min_maps: int = 10) -> list[str]`.
+- Produces: `GlickoRating` frozen dataclass `(rating: float, rd: float, volatility: float)`; `expected_score(player, opponent) -> float`; `update_rating(player, results, tau) -> GlickoRating`; `GlickoModel(tau: float = 0.5, initial_rating: float = 1500.0, initial_rd: float = 350.0, initial_volatility: float = 0.06, period_seconds: int = 604800, roster_index: RosterIndex | None = None)` with `.rating_of(rvid, at_period: int | None = None) -> GlickoRating`, `.predict(row) -> float`, `.update(row) -> None`, `.flush() -> None`, `.strengths() -> dict[str, float]`, `.rating_deviations() -> dict[str, float]`, `.prior_driven(min_maps: int = 10) -> list[str]`, `.activity_report() -> list[dict]`.
 
-**Note for the implementer:** Glicko-2 updates in *rating periods*, not per match. `update` accumulates results into the current period and flushes when a row's `start_time` crosses a period boundary; `flush` forces the pending period through. `predict` must reflect rating-deviation inflation, which is the entire reason spec §V prefers Glicko here.
+**Three notes for the implementer:**
+
+1. **Rating periods, not matches.** `update` accumulates into the current integer period and flushes when a row's `start_time` crosses a boundary; `flush` forces the pending period through.
+2. **Idle time inflates RD.** A roster that plays nothing for `k` periods has its deviation grown to `sqrt(phi² + k·σ²)`, capped at `initial_rd`. This is lazy — computed in `rating_of` from `at_period`, not by sweeping every roster every period.
+3. **The model owns the `RosterIndex` and calls `observe` itself** — `update` with counting, `predict` with `count=False`. Do not make the caller do it. A collaborator that only tests wire is a collaborator that is not in production.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1562,25 +1757,144 @@ def test_results_only_take_effect_after_the_period_closes():
     assert model.predict(row(4, 2 * WEEK + 1, A, B)) > baseline
 
 
-def test_new_roster_inherits_from_its_predecessor_not_the_global_prior():
-    """Spec III: without continuity blending a re-branded org looks brand new,
-    which is badly wrong for a roster that has played together for a year."""
+def test_new_roster_inherits_without_the_test_wiring_the_index_by_hand():
+    """Spec III: without continuity blending a re-branded org looks brand new.
+
+    The model owns the index and calls `observe` itself. If a future change
+    moves observation back out to the caller, this test fails -- which is the
+    point: a test that wires collaborators the runner does not wire proves
+    nothing about the shipped system.
+    """
     index = RosterIndex()
     model = GlickoModel(roster_index=index, period_seconds=WEEK)
     for week in range(12):
-        r = row(week, week * WEEK, A, B, radiant_win=True)
-        index.observe(r)
-        model.update(r)
+        model.update(row(week, week * WEEK, A, B, radiant_win=True))
     model.flush()
 
     swapped = [1, 2, 3, 4, 99]
-    new_row = row(99, 20 * WEEK, swapped, B)
-    index.observe(new_row)
+    model.predict(row(99, 12 * WEEK, swapped, B))  # registers the new roster
     inherited = model.rating_of(roster_version_id(swapped))
     assert inherited.rating > 1500.0, "4/5 continuity carries most of the history"
-    assert inherited.rd > model.rating_of(roster_version_id(A)).rd, (
-        "but the new roster is less certain than the one that earned the rating"
+    assert inherited.rd >= model.rating_of(roster_version_id(A)).rd, (
+        "but the new roster is no more certain than the one that earned the rating"
     )
+
+
+def test_inheritance_weight_tracks_measured_overlap():
+    """A one-player swap must inherit MORE than a three-player rebuild.
+
+    A fixed weight passes any single-scenario test; only comparing two
+    different overlaps can catch it.
+    """
+    def build(new_roster):
+        index = RosterIndex()
+        model = GlickoModel(roster_index=index, period_seconds=WEEK)
+        for week in range(12):
+            model.update(row(week, week * WEEK, A, B, radiant_win=True))
+        model.flush()
+        model.predict(row(99, 12 * WEEK, new_roster, B))
+        return model.rating_of(roster_version_id(new_roster)).rating
+
+    one_swap = build([1, 2, 3, 4, 99])
+    rebuild = build([1, 2, 97, 98, 99])
+    assert one_swap > rebuild > 1500.0
+
+
+def test_a_roster_with_no_shared_players_gets_the_global_prior():
+    index = RosterIndex()
+    model = GlickoModel(roster_index=index, period_seconds=WEEK)
+    for week in range(12):
+        model.update(row(week, week * WEEK, A, B, radiant_win=True))
+    model.flush()
+    fresh = [91, 92, 93, 94, 95]
+    model.predict(row(99, 12 * WEEK, fresh, B))
+    assert model.rating_of(roster_version_id(fresh)).rating == pytest.approx(1500.0)
+
+
+def test_idle_rosters_lose_certainty_every_empty_period():
+    """Spec III measured recent volume collapsing. A team last seen months
+    before TI must NOT arrive carrying a tight RD -- that error lands exactly
+    in the tails where the 4-0 and 0-4 slots live.
+    """
+    model = GlickoModel(period_seconds=WEEK)
+    for week in range(12):
+        model.update(row(week, week * WEEK, A, B, radiant_win=True))
+    model.flush()
+    active_rd = model.rating_of(roster_version_id(A)).rd
+
+    after_10 = model.rating_of(roster_version_id(A), at_period=22).rd
+    after_40 = model.rating_of(roster_version_id(A), at_period=52).rd
+    assert after_10 > active_rd
+    assert after_40 > after_10, "RD must keep growing across MULTIPLE idle periods"
+
+
+def test_idle_inflation_never_exceeds_the_never_seen_prior():
+    """Otherwise a long-idle roster becomes more uncertain than one that has
+    never played, which is incoherent."""
+    model = GlickoModel(period_seconds=WEEK, initial_rd=350.0)
+    for week in range(12):
+        model.update(row(week, week * WEEK, A, B, radiant_win=True))
+    model.flush()
+    assert model.rating_of(roster_version_id(A), at_period=100_000).rd <= 350.0
+
+
+def test_idle_inflation_does_not_move_the_point_rating():
+    """Uncertainty grows; the estimate itself does not drift."""
+    model = GlickoModel(period_seconds=WEEK)
+    for week in range(12):
+        model.update(row(week, week * WEEK, A, B, radiant_win=True))
+    model.flush()
+    before = model.rating_of(roster_version_id(A)).rating
+    assert model.rating_of(roster_version_id(A), at_period=60).rating == pytest.approx(before)
+
+
+def test_a_long_idle_favourite_is_predicted_less_confidently():
+    """The end-to-end consequence of inflation, through `predict` rather than
+    through internals -- this is what actually reaches the card."""
+    model = GlickoModel(period_seconds=WEEK)
+    for week in range(12):
+        model.update(row(week, week * WEEK, A, B, radiant_win=True))
+    model.flush()
+    fresh = model.predict(row(500, 12 * WEEK, A, B))
+    model.update(row(501, 60 * WEEK, C, [21, 22, 23, 24, 25], radiant_win=True))
+    model.flush()
+    stale = model.predict(row(502, 60 * WEEK, A, B))
+    assert 0.5 < stale < fresh, "idle time pulls the forecast back toward even"
+
+
+def test_the_two_expected_score_forms_are_deliberately_different():
+    """Glickman specifies opponent-only RD for the UPDATE step and combined
+    RD for outcome PREDICTION. Both are correct in their place. This pins the
+    distinction so neither gets 'simplified' into the other.
+    """
+    from ti26.ratings.glicko import GlickoRating, _e, expected_score
+
+    player = GlickoRating(1700.0, 350.0, 0.06)   # strong but very uncertain
+    opponent = GlickoRating(1500.0, 30.0, 0.06)  # average and well known
+
+    combined = expected_score(player, opponent)
+    opponent_only = _e(
+        (player.rating - 1500.0) / 173.7178,
+        (opponent.rating - 1500.0) / 173.7178,
+        opponent.rd / 173.7178,
+    )
+    assert combined < opponent_only, (
+        "the prediction form must discount for the PLAYER's own uncertainty; "
+        "the update form deliberately does not"
+    )
+
+
+def test_activity_report_gives_maps_per_roster_per_period():
+    model = GlickoModel(period_seconds=WEEK)
+    for week in range(3):
+        for i in range(2):
+            model.update(row(week * 10 + i, week * WEEK + i, A, B, radiant_win=True))
+    model.flush()
+    report = {r["roster_version_id"]: r for r in model.activity_report()}
+    entry = report[roster_version_id(A)]
+    assert entry["total_maps"] == 6
+    assert entry["active_periods"] == 3
+    assert entry["maps_by_period"] == {0: 2, 1: 2, 2: 2}
 
 
 def test_prior_driven_rosters_are_reported():
@@ -1656,7 +1970,21 @@ def _e(mu: float, mu_j: float, phi_j: float) -> float:
 
 
 def expected_score(player: GlickoRating, opponent: GlickoRating) -> float:
-    """Win probability accounting for BOTH rating deviations."""
+    """Win probability for FORECASTING, accounting for BOTH rating deviations.
+
+    Glickman specifies two different expected-score forms and they are not
+    interchangeable. Do not "simplify" one into the other:
+
+    * `_e(mu, mu_j, phi_j)` above uses the OPPONENT's deviation only. That is
+      the Glicko-2 update step, and it is what `update_rating` calls.
+    * This function uses the COMBINED `sqrt(phi_a^2 + phi_b^2)`. That is the
+      outcome-prediction form, and it is what a log-loss backtest needs:
+      uncertainty about EITHER side must flatten the forecast toward 0.5.
+
+    Using the opponent-only form here would let a roster we know nothing about
+    still receive an extreme prediction, deleting the exact property that makes
+    Glicko worth preferring to Elo (spec V).
+    """
     mu = (player.rating - 1500.0) / SCALE
     mu_j = (opponent.rating - 1500.0) / SCALE
     phi = math.sqrt(player.rd**2 + opponent.rd**2) / SCALE
@@ -1730,6 +2058,18 @@ def update_rating(
 
 
 class GlickoModel:
+    """Glicko-2 over integer rating periods, with idle-time RD inflation.
+
+    Two things distinguish this from a naive per-match implementation, and
+    both matter given the measured collapse in recent match volume (spec III):
+
+    1. A roster that stops playing gets LESS certain, not frozen. Idle periods
+       inflate RD by `sqrt(phi^2 + k*sigma^2)`. Without this a team last seen
+       in March 2026 would arrive at TI carrying a March-tight RD, and the
+       error lands squarely in the tails where the 4-0 and 0-4 slots live.
+    2. Inheritance is weighted by MEASURED player overlap, not a constant.
+    """
+
     def __init__(
         self,
         tau: float = 0.5,
@@ -1741,39 +2081,65 @@ class GlickoModel:
     ) -> None:
         self._tau = tau
         self._initial = GlickoRating(initial_rating, initial_rd, initial_volatility)
-        self._period = period_seconds
+        self._period_seconds = period_seconds
         self._index = roster_index
         self._ratings: dict[str, GlickoRating] = {}
+        self._last_period: dict[str, int] = {}
         self._maps: dict[str, int] = {}
+        self._maps_by_period: dict[int, dict[str, int]] = {}
         self._pending: dict[str, list[tuple[GlickoRating, float]]] = {}
-        self._period_start: int | None = None
+        self._epoch: int | None = None
+        self._current_period: int = 0
         self.skipped: dict[str, int] = {}
 
-    def rating_of(self, rvid: str) -> GlickoRating:
-        if rvid in self._ratings:
-            return self._ratings[rvid]
-        return self._inherit(rvid)
+    def _period_of(self, start_time: int) -> int:
+        if self._epoch is None:
+            self._epoch = start_time
+        return (start_time - self._epoch) // self._period_seconds
 
-    def _inherit(self, rvid: str) -> GlickoRating:
-        """Continuity-weighted initialization (spec III)."""
+    def _inflate(self, rating: GlickoRating, periods: int) -> GlickoRating:
+        """Idle-period RD growth, capped at the prior's uncertainty.
+
+        Uncapped inflation would eventually make a long-idle roster MORE
+        uncertain than one never seen at all, which is incoherent.
+        """
+        if periods <= 0:
+            return rating
+        phi = rating.rd / SCALE
+        phi_star = math.sqrt(phi * phi + periods * rating.volatility**2)
+        return GlickoRating(
+            rating.rating, min(phi_star * SCALE, self._initial.rd), rating.volatility
+        )
+
+    def rating_of(self, rvid: str, at_period: int | None = None) -> GlickoRating:
+        period = self._current_period if at_period is None else at_period
+        if rvid not in self._ratings:
+            return self._inherit(rvid, period)
+        idle = period - self._last_period.get(rvid, period)
+        return self._inflate(self._ratings[rvid], idle)
+
+    def _inherit(self, rvid: str, period: int) -> GlickoRating:
+        """Continuity-weighted initialization (spec III), overlap-measured."""
         if self._index is None:
             return self._initial
         predecessor = self._index.predecessor(rvid)
         if predecessor is None or predecessor not in self._ratings:
             return self._initial
-        prior = self._ratings[predecessor]
-        # Continuity is unknown from the id alone; the index stores the
-        # predecessor, so weight by how much of the rating we can justify
-        # carrying. Full continuity would mean the id had not changed at all,
-        # so the achievable maximum here is 4/5.
-        weight = 0.8
+        weight = self._index.continuity_with_predecessor(rvid)
+        if weight <= 0.0:
+            return self._initial
+        prior = self.rating_of(predecessor, at_period=period)
         rating = weight * prior.rating + (1.0 - weight) * self._initial.rating
-        # Uncertainty must INCREASE relative to the predecessor: this roster
-        # has never played. Blend toward the prior RD rather than away.
+        # Variance blend: uncertainty must never fall below the predecessor's,
+        # because this exact roster has played nothing.
         rd = math.sqrt(weight * prior.rd**2 + (1.0 - weight) * self._initial.rd**2)
-        return GlickoRating(rating, max(rd, prior.rd * 1.1), prior.volatility)
+        return GlickoRating(rating, max(rd, prior.rd), prior.volatility)
 
     def predict(self, row: MapRow) -> float:
+        if self._index is not None:
+            # Register rosters without counting maps. Uses team ids and player
+            # ids only -- no outcome -- so it cannot leak.
+            self._index.observe(row, count=False)
         a = self.rating_of(roster_version_id(row.radiant_accounts))
         b = self.rating_of(roster_version_id(row.dire_accounts))
         return expected_score(a, b)
@@ -1783,11 +2149,13 @@ class GlickoModel:
         if reason is not None:
             self.skipped[reason] = self.skipped.get(reason, 0) + 1
             return
-        if self._period_start is None:
-            self._period_start = row.start_time
-        if row.start_time - self._period_start >= self._period:
+        if self._index is not None:
+            self._index.observe(row)
+
+        period = self._period_of(row.start_time)
+        if period > self._current_period:
             self.flush()
-            self._period_start = row.start_time
+            self._current_period = period
 
         a = roster_version_id(row.radiant_accounts)
         b = roster_version_id(row.dire_accounts)
@@ -1795,8 +2163,10 @@ class GlickoModel:
         score = 1.0 if row.radiant_win else 0.0
         self._pending.setdefault(a, []).append((rb, score))
         self._pending.setdefault(b, []).append((ra, 1.0 - score))
-        self._maps[a] = self._maps.get(a, 0) + 1
-        self._maps[b] = self._maps.get(b, 0) + 1
+        for rvid in (a, b):
+            self._maps[rvid] = self._maps.get(rvid, 0) + 1
+            bucket = self._maps_by_period.setdefault(period, {})
+            bucket[rvid] = bucket.get(rvid, 0) + 1
 
     def flush(self) -> None:
         if not self._pending:
@@ -1806,23 +2176,58 @@ class GlickoModel:
             for rvid, results in self._pending.items()
         }
         self._ratings.update(updated)
+        for rvid in updated:
+            self._last_period[rvid] = self._current_period
         self._pending = {}
 
     def strengths(self) -> dict[str, float]:
+        """Zero-centred logit strengths, inflated to the current period."""
         self.flush()
         if not self._ratings:
             return {}
-        mean = sum(r.rating for r in self._ratings.values()) / len(self._ratings)
-        return {k: (r.rating - mean) * LOGIT_PER_GLICKO for k, r in self._ratings.items()}
+        current = {rvid: self.rating_of(rvid) for rvid in self._ratings}
+        mean = sum(r.rating for r in current.values()) / len(current)
+        return {k: (r.rating - mean) * LOGIT_PER_GLICKO for k, r in current.items()}
+
+    def rating_deviations(self) -> dict[str, float]:
+        self.flush()
+        return {rvid: self.rating_of(rvid).rd for rvid in self._ratings}
 
     def prior_driven(self, min_maps: int = 10) -> list[str]:
         return sorted(r for r in self._ratings if self._maps.get(r, 0) < min_maps)
+
+    def activity_report(self) -> list[dict]:
+        """Maps per roster per rating period, plus current idle length.
+
+        Spec III measured recent volume collapsing to ~1,600 maps in the last
+        90 days; this is how that shows up per team rather than in aggregate.
+        """
+        self.flush()
+        rows = []
+        for rvid in sorted(self._ratings):
+            per_period = {
+                period: counts[rvid]
+                for period, counts in sorted(self._maps_by_period.items())
+                if rvid in counts
+            }
+            rows.append(
+                {
+                    "roster_version_id": rvid,
+                    "total_maps": self._maps.get(rvid, 0),
+                    "active_periods": len(per_period),
+                    "maps_by_period": per_period,
+                    "idle_periods": self._current_period - self._last_period.get(rvid, 0),
+                    "rating": self.rating_of(rvid).rating,
+                    "rd": self.rating_of(rvid).rd,
+                }
+            )
+        return rows
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_glicko.py -v`
-Expected: PASS (10 tests). The Glickman fixture test is the load-bearing one — if it fails, the volatility iteration or the scale conversion is wrong, and no amount of monotonicity testing will find it.
+Expected: PASS (19 tests). The Glickman fixture test is the load-bearing one — if it fails, the volatility iteration or the scale conversion is wrong, and no amount of monotonicity testing will find it.
 
 - [ ] **Step 5: Lint and commit**
 
@@ -1842,7 +2247,7 @@ git commit -m "feat: roster-aware Glicko-2 with continuity inheritance"
 
 **Interfaces:**
 - Consumes: `MapRow`, `assert_no_leakage`, `RatingModel`, `GateConfig`.
-- Produces: `Fold` frozen dataclass `(league_id: int, as_of: int, n_train: int, n_test: int)`; `rolling_folds(rows, min_train: int = 500) -> list[Fold]`; `run_model(rows, model_factory, folds) -> list[Prediction]`; `per_map_log_loss(predictions, rows) -> np.ndarray` (the per-map vector the paired bootstrap consumes); `log_loss(predictions, rows) -> float`; `brier(predictions, rows) -> float`; `accuracy(predictions, rows) -> float`; `calibration(predictions, rows) -> tuple[float, float]` returning `(slope, intercept)`; `paired_bootstrap(losses_a, losses_b, draws, ci, seed) -> tuple[float, float, float]` returning `(mean_diff, lo, hi)`; `GateResult` frozen dataclass `(margin: float, ci_low: float, ci_high: float, passed: bool, reasons: list[str])`; `evaluate_gate(elo_losses, glicko_losses, config) -> GateResult`.
+- Produces: `Fold` frozen dataclass `(fold_id: int, league_id: int, as_of: int, first_match: int, n_train: int, n_test: int)`; `FoldIntegrityError(AssertionError)`; `assert_fold_integrity(folds, rows) -> None`; `rolling_folds(rows, min_train: int = 500) -> list[Fold]`; `run_model(rows, model_factory, folds) -> list[Prediction]`; `per_map_log_loss(predictions, rows) -> np.ndarray`; `log_loss(predictions, rows) -> float`; `brier(predictions, rows) -> float`; `accuracy(predictions, rows) -> float`; `calibration(predictions, rows) -> tuple[float, float]` returning `(slope, intercept)`; `MisalignedPredictionsError(ValueError)`; `paired_differences(predictions_a, predictions_b, rows) -> tuple[np.ndarray, np.ndarray, np.ndarray]` returning `(diff, tournament, series)` aligned by `match_id`; `paired_cluster_bootstrap(diff, tournament, series, draws, ci, seed, memory_budget=2_000_000) -> tuple[float, float, float, str]` returning `(mean_diff, lo, hi, method)`; `MIN_TOURNAMENTS_FOR_SINGLE_STAGE: int = 30`; `GateResult` frozen dataclass `(margin, ci_low, ci_high, passed, method, n_maps, reasons)`; `evaluate_gate(predictions_elo, predictions_glicko, rows, config) -> GateResult`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1856,12 +2261,16 @@ import pytest
 from ti26.data.schema import MapRow
 from ti26.ratings import GateConfig, Prediction
 from ti26.backtest import (
+    FoldIntegrityError,
+    MisalignedPredictionsError,
     accuracy,
+    assert_fold_integrity,
     brier,
     calibration,
     evaluate_gate,
     log_loss,
-    paired_bootstrap,
+    paired_cluster_bootstrap,
+    paired_differences,
     rolling_folds,
 )
 
@@ -1877,8 +2286,11 @@ def row(match_id, start_time, league_id, radiant_win=True):
     )
 
 
-def pred(match_id, p):
-    return Prediction(match_id=match_id, start_time=match_id, p_radiant=p, rated=True)
+def pred(match_id, p, league_id=1, series_id=0, fold_id=0):
+    return Prediction(
+        fold_id=fold_id, match_id=match_id, start_time=match_id, league_id=league_id,
+        series_id=series_id, p_radiant=p, rated=True,
+    )
 
 
 DAY = 86400
@@ -1894,7 +2306,51 @@ def test_folds_cut_24h_before_each_tournaments_first_match():
     fold = folds[0]
     assert fold.league_id == 2
     assert fold.as_of == 10_000_000 - DAY, "cutoff is 24h before the first match (spec IV)"
+    assert fold.first_match == 10_000_000
     assert fold.n_test == 50
+    assert fold.fold_id == 0
+
+
+def test_fold_integrity_accepts_well_formed_folds():
+    rows = (
+        [row(i, i * 100, league_id=1) for i in range(600)]
+        + [row(1000 + i, 10_000_000 + i * 100, league_id=2) for i in range(50)]
+    )
+    assert assert_fold_integrity(rolling_folds(rows, min_train=500), rows) is None
+
+
+def test_fold_integrity_rejects_a_cutoff_that_does_not_precede_its_tournament():
+    """A cutoff at or after the first match means the model trained on the
+    tournament it is being scored on -- the exact leakage spec IV forbids,
+    and it produces excellent metrics."""
+    from ti26.backtest import Fold
+
+    rows = [row(1, 5_000, league_id=7)]
+    bad = [Fold(fold_id=0, league_id=7, as_of=5_000, first_match=5_000, n_train=1, n_test=1)]
+    with pytest.raises(FoldIntegrityError, match="not before"):
+        assert_fold_integrity(bad, rows)
+
+
+def test_fold_integrity_rejects_a_league_appearing_twice():
+    """Duplicated folds double-weight one tournament in the gate."""
+    from ti26.backtest import Fold
+
+    rows = [row(1, 5_000, league_id=7)]
+    dupes = [
+        Fold(fold_id=0, league_id=7, as_of=1_000, first_match=5_000, n_train=1, n_test=1),
+        Fold(fold_id=1, league_id=7, as_of=2_000, first_match=5_000, n_train=1, n_test=1),
+    ]
+    with pytest.raises(FoldIntegrityError, match="more than one fold"):
+        assert_fold_integrity(dupes, rows)
+
+
+def test_fold_integrity_rejects_a_miscounted_test_set():
+    from ti26.backtest import Fold
+
+    rows = [row(1, 5_000, league_id=7), row(2, 6_000, league_id=7)]
+    wrong = [Fold(fold_id=0, league_id=7, as_of=1_000, first_match=5_000, n_train=9, n_test=5)]
+    with pytest.raises(FoldIntegrityError, match="n_test=5"):
+        assert_fold_integrity(wrong, rows)
 
 
 def test_tournaments_without_enough_history_are_skipped():
@@ -1964,77 +2420,202 @@ def test_calibration_detects_an_overconfident_forecaster():
     assert slope < 0.75, "overconfidence must show up as slope well below 1"
 
 
-def test_paired_bootstrap_ci_excludes_zero_for_a_real_difference():
-    rng = np.random.default_rng(3)
-    a = rng.normal(0.700, 0.10, size=5000)
-    b = a - 0.01  # b is genuinely better by 0.01 nats on every map
-    mean, lo, hi = paired_bootstrap(a, b, draws=2000, ci=0.95, seed=1)
-    assert mean == pytest.approx(0.01, abs=0.002)
+def clustered(n_tournaments, series_per_tournament, maps_per_series, effect, noise, seed):
+    """Build (diff, tournament, series) with variance living BETWEEN series.
+
+    Every map in a series shares one draw, which is the correlation structure
+    an iid map-level bootstrap wrongly ignores.
+    """
+    rng = np.random.default_rng(seed)
+    diff, tournaments, series = [], [], []
+    sid = 0
+    for t in range(n_tournaments):
+        for _ in range(series_per_tournament):
+            shared = rng.normal(effect, noise)
+            for _ in range(maps_per_series):
+                diff.append(shared + rng.normal(0, 0.001))
+                tournaments.append(t)
+                series.append(sid)
+            sid += 1
+    return np.asarray(diff), np.asarray(tournaments), np.asarray(series)
+
+
+def test_cluster_bootstrap_ci_excludes_zero_for_a_real_difference():
+    diff, tour, ser = clustered(40, 12, 3, effect=0.02, noise=0.01, seed=3)
+    mean, lo, hi, method = paired_cluster_bootstrap(diff, tour, ser, 2000, 0.95, seed=1)
+    assert mean == pytest.approx(0.02, abs=0.004)
     assert lo > 0.0
+    assert "tournaments" in method
 
 
-def test_paired_bootstrap_ci_includes_zero_for_pure_noise():
-    rng = np.random.default_rng(4)
-    a = rng.normal(0.700, 0.10, size=5000)
-    b = rng.normal(0.700, 0.10, size=5000)
-    _, lo, hi = paired_bootstrap(a, b, draws=2000, ci=0.95, seed=1)
+def test_cluster_bootstrap_ci_includes_zero_for_pure_noise():
+    diff, tour, ser = clustered(40, 12, 3, effect=0.0, noise=0.05, seed=4)
+    _, lo, hi, _ = paired_cluster_bootstrap(diff, tour, ser, 2000, 0.95, seed=1)
     assert lo < 0.0 < hi
 
 
-def test_bootstrap_is_paired_not_independent():
-    """Pairing is the entire point: the same maps are hard for both models.
+def test_clustered_interval_is_wider_than_the_iid_one():
+    """THE test for this task. When correlation lives between series, an iid
+    map-level bootstrap sees 3x more independent evidence than exists and
+    reports a CI that is too narrow -- which is how a gate passes on noise.
 
-    Independent resampling would inflate the CI enormously on correlated
-    losses, so a much narrower CI here proves the pairing is real.
+    If this fails, the clustering is cosmetic.
     """
-    rng = np.random.default_rng(5)
-    shared = rng.normal(0.700, 0.30, size=4000)  # large shared variance
-    a = shared + rng.normal(0, 0.01, size=4000)
-    b = shared + rng.normal(0, 0.01, size=4000) - 0.005
-    _, lo, hi = paired_bootstrap(a, b, draws=2000, ci=0.95, seed=1)
-    assert (hi - lo) < 0.01, "paired CI must not carry the shared variance"
+    diff, tour, ser = clustered(40, 12, 3, effect=0.0, noise=0.05, seed=5)
+    _, c_lo, c_hi, _ = paired_cluster_bootstrap(diff, tour, ser, 2000, 0.95, seed=1)
+
+    rng = np.random.default_rng(1)
+    idx = rng.integers(0, len(diff), size=(2000, len(diff)))
+    iid = diff[idx].mean(axis=1)
+    i_lo, i_hi = np.quantile(iid, [0.025, 0.975])
+
+    assert (c_hi - c_lo) > 1.5 * (i_hi - i_lo)
+
+
+def test_two_stage_path_engages_when_tournaments_are_few():
+    """With a handful of tournaments, single-stage resampling has too few
+    distinct draws; the second stage keeps the distribution usable."""
+    diff, tour, ser = clustered(4, 30, 3, effect=0.01, noise=0.02, seed=6)
+    mean, lo, hi, method = paired_cluster_bootstrap(diff, tour, ser, 1000, 0.95, seed=1)
+    assert "two-stage" in method
+    assert np.isfinite(lo) and np.isfinite(hi) and lo < hi
+
+
+def test_bootstrap_memory_budget_does_not_change_the_answer():
+    """Batching is an implementation detail; a tiny budget must give the same
+    interval as a large one, or the batching is wrong."""
+    diff, tour, ser = clustered(40, 6, 3, effect=0.01, noise=0.02, seed=7)
+    big = paired_cluster_bootstrap(diff, tour, ser, 1000, 0.95, seed=1, memory_budget=2_000_000)
+    small = paired_cluster_bootstrap(diff, tour, ser, 1000, 0.95, seed=1, memory_budget=50)
+    assert big[:3] == pytest.approx(small[:3])
+
+
+def test_bootstrap_is_seed_reproducible():
+    diff, tour, ser = clustered(40, 6, 3, effect=0.01, noise=0.02, seed=8)
+    first = paired_cluster_bootstrap(diff, tour, ser, 500, 0.95, seed=42)
+    second = paired_cluster_bootstrap(diff, tour, ser, 500, 0.95, seed=42)
+    assert first == second
+
+
+def test_losses_align_by_match_id_not_by_position():
+    """If one model's prediction list is reordered, the paired difference must
+    be unchanged. Positional zipping would silently compare unrelated maps.
+    """
+    rows = [row(i, i, 1, radiant_win=i % 3 == 0) for i in range(50)]
+    a = [pred(i, 0.4 + 0.004 * i) for i in range(50)]
+    b = [pred(i, 0.5) for i in range(50)]
+    straight, _, _ = paired_differences(a, b, rows)
+    shuffled, _, _ = paired_differences(a, list(reversed(b)), rows)
+    assert straight == pytest.approx(shuffled)
+
+
+def test_mismatched_prediction_sets_raise():
+    rows = [row(i, i, 1) for i in range(10)]
+    a = [pred(i, 0.5) for i in range(10)]
+    b = [pred(i, 0.5) for i in range(9)]
+    with pytest.raises(MisalignedPredictionsError, match="10 vs 9"):
+        paired_differences(a, b, rows)
+
+
+def test_a_prediction_with_no_matching_row_does_not_shift_the_pairing():
+    """Dropping an unmatched prediction must not slide every later pair by one.
+
+    Zipping predictions against a filtered loss array does exactly that, and
+    it fails silently: the arrays still have equal length, so nothing raises
+    and the gate quietly compares unrelated maps.
+    """
+    rows = [row(i, i, 1, radiant_win=i % 2 == 0) for i in range(10)]
+    extra = 999  # present in both prediction sets, absent from `rows`
+    a = [pred(i, 0.3 + 0.05 * i) for i in range(10)] + [pred(extra, 0.9)]
+    b = [pred(i, 0.5) for i in range(10)] + [pred(extra, 0.1)]
+
+    with_extra, _, _ = paired_differences(a, b, rows)
+    without_extra, _, _ = paired_differences(a[:-1], b[:-1], rows)
+    assert with_extra == pytest.approx(without_extra)
+    assert len(with_extra) == 10
+
+
+def test_null_series_ids_become_singleton_clusters_not_one_giant_cluster():
+    """Collapsing every unlabelled map into a single shared cluster would
+    make the CI absurdly wide and the gate unpassable for a data reason."""
+    rows = [row(i, i, 1) for i in range(20)]
+    a = [pred(i, 0.6, series_id=None) for i in range(20)]
+    b = [pred(i, 0.5, series_id=None) for i in range(20)]
+    _, _, series = paired_differences(a, b, rows)
+    assert len(set(series.tolist())) == 20
 
 
 def config(**kw):
     base = dict(
-        min_margin_nats=0.003, bootstrap_draws=2000, bootstrap_ci=0.95, seed=1,
+        min_margin_nats=0.003, bootstrap_draws=1000, bootstrap_ci=0.95, seed=1,
         elo_k=20.0, glicko_tau=0.5, ewma_half_life_maps=30.0,
     )
     base.update(kw)
     return GateConfig(**base)
 
 
-def test_gate_requires_both_conditions_margin_and_significance():
-    rng = np.random.default_rng(9)
-    elo = rng.normal(0.700, 0.05, size=8000)
+def gate_fixture(edge, jitter, seed, n_tournaments=40, series_per=10, maps_per=3):
+    """Two prediction sets over the same maps, where B is better by `edge`.
 
-    # Significant but below the pre-registered margin -> FAIL.
-    small = elo - 0.0005
-    result = evaluate_gate(elo, small, config())
+    Built as real Prediction objects over real rows so the gate exercises the
+    same alignment and clustering path the runner uses.
+    """
+    rng = np.random.default_rng(seed)
+    rows, a, b = [], [], []
+    match_id = 0
+    sid = 0
+    for t in range(n_tournaments):
+        for _ in range(series_per):
+            base = rng.uniform(0.35, 0.65)
+            shift = rng.normal(edge, jitter)
+            for _ in range(maps_per):
+                won = rng.random() < base
+                rows.append(row(match_id, match_id, league_id=t, radiant_win=won))
+                pa = base if won else 1 - base
+                pb = min(max(pa + shift, 0.01), 0.99)
+                a.append(pred(match_id, pa if won else 1 - pa, league_id=t,
+                              series_id=sid, fold_id=t))
+                b.append(pred(match_id, pb if won else 1 - pb, league_id=t,
+                              series_id=sid, fold_id=t))
+                match_id += 1
+            sid += 1
+    return a, b, rows
+
+
+def test_gate_requires_both_conditions_margin_and_significance():
+    # Consistent small edge to B, low between-series noise -> PASS.
+    a, b, rows = gate_fixture(edge=0.05, jitter=0.005, seed=9)
+    result = evaluate_gate(a, b, rows, config())
+    assert result.passed is True
+    assert result.reasons == []
+    assert result.n_maps == len(rows)
+
+    # No edge at all -> margin condition fails.
+    a, b, rows = gate_fixture(edge=0.0, jitter=0.005, seed=10)
+    result = evaluate_gate(a, b, rows, config())
     assert result.passed is False
     assert any("margin" in r for r in result.reasons)
 
-    # Large margin but swamped by noise -> FAIL.
-    noisy = elo - 0.004 + rng.normal(0, 0.5, size=8000)
-    result = evaluate_gate(elo, noisy, config())
+    # Real average edge, but swamped by between-series noise -> CI fails.
+    a, b, rows = gate_fixture(edge=0.02, jitter=0.60, seed=11)
+    result = evaluate_gate(a, b, rows, config())
     assert result.passed is False
     assert any("CI" in r for r in result.reasons)
-
-    # Both conditions met -> PASS.
-    good = elo - 0.006
-    result = evaluate_gate(elo, good, config())
-    assert result.passed is True
-    assert result.reasons == []
 
 
 def test_gate_reads_the_margin_from_config_not_a_literal():
     """Pre-registration is meaningless if the threshold is hard-coded in two
     places and only one of them is the registered one."""
-    rng = np.random.default_rng(13)
-    elo = rng.normal(0.700, 0.02, size=8000)
-    candidate = elo - 0.004
-    assert evaluate_gate(elo, candidate, config(min_margin_nats=0.003)).passed is True
-    assert evaluate_gate(elo, candidate, config(min_margin_nats=0.010)).passed is False
+    a, b, rows = gate_fixture(edge=0.05, jitter=0.005, seed=13)
+    assert evaluate_gate(a, b, rows, config(min_margin_nats=0.003)).passed is True
+    assert evaluate_gate(a, b, rows, config(min_margin_nats=10.0)).passed is False
+
+
+def test_gate_records_which_bootstrap_method_it_used():
+    """The report prints this; a silently-swapped method would change the CI
+    without changing anything a reader can see."""
+    a, b, rows = gate_fixture(edge=0.05, jitter=0.005, seed=14)
+    assert "tournaments" in evaluate_gate(a, b, rows, config()).method
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2060,7 +2641,7 @@ import numpy as np
 
 from ti26.data.schema import MapRow
 from ti26.data.store import assert_no_leakage
-from ti26.ratings import GateConfig, Prediction
+from ti26.ratings import GateConfig, Prediction, skip_reason
 
 DAY_SECONDS = 86400
 EPS = 1e-15
@@ -2068,10 +2649,57 @@ EPS = 1e-15
 
 @dataclass(frozen=True)
 class Fold:
+    fold_id: int
     league_id: int
     as_of: int
+    first_match: int
     n_train: int
     n_test: int
+
+
+class FoldIntegrityError(AssertionError):
+    """A fold violated a property the backtest's validity depends on."""
+
+
+def assert_fold_integrity(folds: Sequence[Fold], rows: Sequence[MapRow]) -> None:
+    """Check the properties that make a rolling backtest mean anything.
+
+    Every one of these has silently produced good-looking, worthless metrics
+    in real projects, so they are assertions rather than comments.
+    """
+    by_id = {}
+    for fold in folds:
+        if fold.fold_id in by_id:
+            raise FoldIntegrityError(f"duplicate fold_id {fold.fold_id}")
+        by_id[fold.fold_id] = fold
+
+    seen_leagues = set()
+    for fold in folds:
+        if fold.league_id in seen_leagues:
+            raise FoldIntegrityError(
+                f"league {fold.league_id} appears in more than one fold; its maps "
+                "would be scored twice and weighted double in the gate"
+            )
+        seen_leagues.add(fold.league_id)
+
+        if fold.as_of >= fold.first_match:
+            raise FoldIntegrityError(
+                f"fold {fold.fold_id}: as_of={fold.as_of} is not before its first "
+                f"match at {fold.first_match}"
+            )
+        test_rows = [r for r in rows if r.league_id == fold.league_id]
+        if not test_rows:
+            raise FoldIntegrityError(f"fold {fold.fold_id} has no test rows")
+        earliest = min(r.start_time for r in test_rows)
+        if earliest <= fold.as_of:
+            raise FoldIntegrityError(
+                f"fold {fold.fold_id}: a test map at {earliest} is at or before "
+                f"as_of={fold.as_of}; it was in the training set"
+            )
+        if fold.n_test != len(test_rows):
+            raise FoldIntegrityError(
+                f"fold {fold.fold_id}: n_test={fold.n_test} but {len(test_rows)} rows match"
+            )
 
 
 @dataclass(frozen=True)
@@ -2080,6 +2708,8 @@ class GateResult:
     ci_low: float
     ci_high: float
     passed: bool
+    method: str
+    n_maps: int
     reasons: list[str] = field(default_factory=list)
 
 
@@ -2098,7 +2728,16 @@ def rolling_folds(rows: Sequence[MapRow], min_train: int = 500) -> list[Fold]:
         n_test = sum(1 for r in ordered if r.league_id == league_id)
         if n_train < min_train:
             continue
-        folds.append(Fold(league_id=league_id, as_of=as_of, n_train=n_train, n_test=n_test))
+        folds.append(
+            Fold(
+                fold_id=len(folds),
+                league_id=league_id,
+                as_of=as_of,
+                first_match=first,
+                n_train=n_train,
+                n_test=n_test,
+            )
+        )
     return folds
 
 
@@ -2107,8 +2746,13 @@ def run_model(
     model_factory: Callable[[], object],
     folds: Sequence[Fold],
 ) -> list[Prediction]:
-    """Refit from scratch at each cutoff, then predict that tournament."""
+    """Refit from scratch at each cutoff, then predict that tournament.
+
+    The factory must return a fully wired model — the same object `cli_d2`
+    constructs. Nothing here injects collaborators the runner would not.
+    """
     ordered = sorted(rows, key=lambda r: (r.start_time, r.match_id))
+    assert_fold_integrity(folds, ordered)
     predictions: list[Prediction] = []
     for fold in folds:
         train = [r for r in ordered if r.start_time <= fold.as_of]
@@ -2121,12 +2765,17 @@ def run_model(
         for row in ordered:
             if row.league_id != fold.league_id:
                 continue
+            reason = skip_reason(row)
             predictions.append(
                 Prediction(
+                    fold_id=fold.fold_id,
                     match_id=row.match_id,
                     start_time=row.start_time,
+                    league_id=row.league_id,
+                    series_id=row.series_id,
                     p_radiant=model.predict(row),
-                    rated=True,
+                    rated=reason is None,
+                    reason=reason,
                 )
             )
     return predictions
@@ -2192,38 +2841,157 @@ def calibration(
     return float(slope), float(intercept)
 
 
-def paired_bootstrap(
-    losses_a: Sequence[float],
-    losses_b: Sequence[float],
+class MisalignedPredictionsError(ValueError):
+    """Two models produced predictions over different match sets."""
+
+
+def paired_differences(
+    predictions_a: Sequence[Prediction],
+    predictions_b: Sequence[Prediction],
+    rows: Sequence[MapRow],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Align two models' per-map losses BY match_id, not by position.
+
+    Positional alignment is a silent corruption waiting to happen: the moment
+    one model skips a row the other rates, every subsequent pair is mismatched
+    and the gate compares unrelated maps while looking perfectly healthy.
+    """
+    outcomes = {r.match_id: r.radiant_win for r in rows}
+
+    def losses(predictions: Sequence[Prediction]) -> dict[int, float]:
+        # Computed here rather than by zipping against `per_map_log_loss`,
+        # which filters unmatched predictions out and would shift every
+        # subsequent pairing by one -- silently, and only sometimes.
+        out = {}
+        for prediction in predictions:
+            if prediction.match_id not in outcomes:
+                continue
+            p = min(max(prediction.p_radiant, EPS), 1.0 - EPS)
+            y = 1.0 if outcomes[prediction.match_id] else 0.0
+            out[prediction.match_id] = -(y * math.log(p) + (1.0 - y) * math.log(1.0 - p))
+        return out
+
+    loss_a, loss_b = losses(predictions_a), losses(predictions_b)
+    if set(loss_a) != set(loss_b):
+        only_a = sorted(set(loss_a) - set(loss_b))[:5]
+        only_b = sorted(set(loss_b) - set(loss_a))[:5]
+        raise MisalignedPredictionsError(
+            f"prediction sets differ: {len(loss_a)} vs {len(loss_b)} matches; "
+            f"only in A {only_a}, only in B {only_b}"
+        )
+
+    cluster = {p.match_id: (p.league_id, p.series_id) for p in predictions_a}
+    match_ids = sorted(loss_a)
+    diff = np.asarray([loss_a[m] - loss_b[m] for m in match_ids], dtype=float)
+    tournament = np.asarray([cluster[m][0] if cluster[m][0] is not None else -1 for m in match_ids])
+    # A null series_id would silently merge unrelated maps into one cluster,
+    # so fall back to the match's own id: a singleton cluster, never a merge.
+    series = np.asarray(
+        [cluster[m][1] if cluster[m][1] is not None else -m for m in match_ids]
+    )
+    return diff, tournament, series
+
+
+# Below this many tournaments, resampling whole tournaments yields too few
+# distinct draws to form a usable distribution, so the second stage is added.
+MIN_TOURNAMENTS_FOR_SINGLE_STAGE = 30
+
+# Peak elements held by any one bootstrap batch. Batches are sized from this,
+# so memory stays flat regardless of `draws`.
+BOOTSTRAP_MEMORY_BUDGET = 2_000_000
+
+
+def paired_cluster_bootstrap(
+    diff: np.ndarray,
+    tournament: np.ndarray,
+    series: np.ndarray,
     draws: int,
     ci: float,
     seed: int,
-) -> tuple[float, float, float]:
-    """Bootstrap the mean of per-map differences, resampling PAIRS.
+    memory_budget: int = BOOTSTRAP_MEMORY_BUDGET,
+) -> tuple[float, float, float, str]:
+    """Cluster bootstrap over tournaments, falling back to two stages.
 
-    Pairing matters: the same maps are hard for both models, so independent
-    resampling would carry the shared variance into the interval and hide
-    real differences.
+    Maps within a series share teams, day, patch and momentum, so iid
+    resampling over maps treats ~3 correlated observations as 3 independent
+    ones, understates the interval, and lets the gate pass on noise.
+
+    Resampling WHOLE tournaments is the conservative choice: every correlated
+    unit inside moves together. When tournaments are few, a second stage
+    resamples series within each drawn tournament so the distribution is not
+    degenerate. Returns the method actually used, which the report prints.
     """
-    a = np.asarray(losses_a, dtype=float)
-    b = np.asarray(losses_b, dtype=float)
-    if a.shape != b.shape:
-        raise ValueError(f"paired bootstrap needs equal lengths, got {a.shape} and {b.shape}")
-    diff = a - b
+    if len(diff) == 0:
+        raise ValueError("no paired differences to bootstrap")
+
+    # Collapse to series-level sums/counts first: the unit of resampling is
+    # never the individual map.
+    series_keys, series_inverse = np.unique(series, return_inverse=True)
+    series_sum = np.bincount(series_inverse, weights=diff)
+    series_cnt = np.bincount(series_inverse).astype(float)
+    series_tournament = np.zeros(len(series_keys), dtype=tournament.dtype)
+    series_tournament[series_inverse] = tournament
+
+    tournament_keys, tournament_inverse = np.unique(series_tournament, return_inverse=True)
+    n_tournaments = len(tournament_keys)
     rng = np.random.default_rng(seed)
-    indices = rng.integers(0, len(diff), size=(draws, len(diff)))
-    means = diff[indices].mean(axis=1)
     alpha = (1.0 - ci) / 2.0
-    lo, hi = np.quantile(means, [alpha, 1.0 - alpha])
-    return float(diff.mean()), float(lo), float(hi)
+    means: list[np.ndarray] = []
+
+    if n_tournaments >= MIN_TOURNAMENTS_FOR_SINGLE_STAGE:
+        method = f"cluster bootstrap over {n_tournaments} tournaments"
+        t_sum = np.bincount(tournament_inverse, weights=series_sum)
+        t_cnt = np.bincount(tournament_inverse, weights=series_cnt)
+        batch = max(1, memory_budget // max(n_tournaments, 1))
+        remaining = draws
+        while remaining > 0:
+            b = min(batch, remaining)
+            idx = rng.integers(0, n_tournaments, size=(b, n_tournaments))
+            means.append(t_sum[idx].sum(axis=1) / t_cnt[idx].sum(axis=1))
+            remaining -= b
+    else:
+        method = (
+            f"two-stage cluster bootstrap (tournament then series) over "
+            f"{n_tournaments} tournaments"
+        )
+        by_tournament = [np.flatnonzero(tournament_inverse == t) for t in range(n_tournaments)]
+        n_series = np.asarray([len(s) for s in by_tournament])
+        width = int(n_series.max())
+        padded_sum = np.zeros((n_tournaments, width))
+        padded_cnt = np.zeros((n_tournaments, width))
+        for t, members in enumerate(by_tournament):
+            padded_sum[t, : len(members)] = series_sum[members]
+            padded_cnt[t, : len(members)] = series_cnt[members]
+
+        batch = max(1, memory_budget // max(n_tournaments * width, 1))
+        positions = np.arange(width)[None, None, :]
+        remaining = draws
+        while remaining > 0:
+            b = min(batch, remaining)
+            t_idx = rng.integers(0, n_tournaments, size=(b, n_tournaments))
+            counts = n_series[t_idx][..., None]
+            s_idx = (rng.random((b, n_tournaments, width)) * counts).astype(np.int64)
+            mask = positions < counts
+            sums = np.take_along_axis(padded_sum[t_idx], s_idx, axis=2) * mask
+            cnts = np.take_along_axis(padded_cnt[t_idx], s_idx, axis=2) * mask
+            means.append(sums.sum(axis=(1, 2)) / cnts.sum(axis=(1, 2)))
+            remaining -= b
+
+    distribution = np.concatenate(means)
+    lo, hi = np.quantile(distribution, [alpha, 1.0 - alpha])
+    return float(diff.mean()), float(lo), float(hi), method
 
 
 def evaluate_gate(
-    elo_losses: Sequence[float], glicko_losses: Sequence[float], config: GateConfig
+    predictions_elo: Sequence[Prediction],
+    predictions_glicko: Sequence[Prediction],
+    rows: Sequence[MapRow],
+    config: GateConfig,
 ) -> GateResult:
     """The pre-registered gate. BOTH conditions, per spec II."""
-    margin, lo, hi = paired_bootstrap(
-        elo_losses, glicko_losses, config.bootstrap_draws, config.bootstrap_ci, config.seed
+    diff, tournament, series = paired_differences(predictions_elo, predictions_glicko, rows)
+    margin, lo, hi, method = paired_cluster_bootstrap(
+        diff, tournament, series, config.bootstrap_draws, config.bootstrap_ci, config.seed
     )
     reasons = []
     if margin < config.min_margin_nats:
@@ -2233,14 +3001,20 @@ def evaluate_gate(
     if lo <= 0.0:
         reasons.append(f"bootstrap {config.bootstrap_ci:.0%} CI [{lo:.5f}, {hi:.5f}] includes 0")
     return GateResult(
-        margin=margin, ci_low=lo, ci_high=hi, passed=not reasons, reasons=reasons
+        margin=margin,
+        ci_low=lo,
+        ci_high=hi,
+        passed=not reasons,
+        reasons=reasons,
+        method=method,
+        n_maps=len(diff),
     )
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_backtest.py -v`
-Expected: PASS (14 tests)
+Expected: PASS (27 tests). `test_clustered_interval_is_wider_than_the_iid_one` is the load-bearing one — if it fails, the clustering is cosmetic and the gate is running on an interval that is too narrow.
 
 - [ ] **Step 5: Lint and commit**
 
@@ -2261,7 +3035,9 @@ git commit -m "feat: rolling backtest, calibration, paired bootstrap, pre-regist
 
 **Interfaces:**
 - Consumes: `MapRow` (Task 2), `EloModel.strengths` (Task 4).
-- Produces: `DurationFit` frozen dataclass `(log_mean: float, log_sigma: float, gap_coefficient: float, gap_se: float, n: int, material: bool)`; `fit_duration_model(rows: Sequence[MapRow], gaps: Mapping[int, float] | None = None) -> DurationFit`; `sensitivity_sweep(sigmas: Sequence[float]) -> list[float]` returning the placeholder-vs-fitted spread; `MIN_DURATION_SECONDS: int = 600`; `MAX_DURATION_SECONDS: int = 9000`.
+- Produces: `DurationFit` frozen dataclass `(log_mean: float, log_sigma: float, gap_coefficient: float, gap_se: float, n: int, material: bool)`; `fit_duration_model(rows: Sequence[MapRow], gaps: Mapping[int, float] | None = None) -> DurationFit`; `rating_gaps(rows: Sequence[MapRow], model) -> dict[int, float]` (absolute pre-match logit gap per `match_id`, predict-then-update so it cannot leak); `sensitivity_sweep(strengths, rules, sigmas: Sequence[float], n_sims: int = 20000, seed: int = 0) -> list[dict]` returning one `{log_sigma, max_abs_delta, is_baseline}` per sigma, compared against the first entry; `MIN_DURATION_SECONDS: int = 600`; `MAX_DURATION_SECONDS: int = 9000`.
+
+**Both `rating_gaps` and `sensitivity_sweep` must be called by `cli_d2` in Task 8.** A conditioning argument the runner never passes is a conditioning that does not exist, and a sweep nobody runs cannot report how much the card depends on an invented parameter.
 
 **Why this task exists:** spec §XII — the duration resolver is consulted on 4.79 lookups per ranking call in 300/300 simulated tournaments, roughly 30% of the field, and it is currently driven by a log-normal we invented (`log_mean: 7.65`, `log_sigma: 0.25`, provenance `arbitrary`). It is load-bearing, not decorative.
 
@@ -2352,6 +3128,60 @@ def test_gap_effect_is_reported_immaterial_when_it_is_noise():
     fit = fit_duration_model(rows, gaps=gaps)
     assert abs(fit.gap_coefficient) < 0.02
     assert fit.material is False
+
+
+def test_rating_gaps_are_computed_before_the_result_is_known():
+    """Predict-then-update. If the model were updated first, the gap for a map
+    would encode that map's own outcome and the duration fit would be
+    conditioned on the future."""
+    from ti26.ratings.elo import EloModel
+    from ti26.duration import rating_gaps
+
+    A, B = [1, 2, 3, 4, 5], [6, 7, 8, 9, 10]
+    rows = [
+        MapRow(
+            match_id=i, start_time=100 + i, duration=2000, radiant_win=True,
+            league_id=1, tier="professional", radiant_team_id=10, dire_team_id=20,
+            series_id=1, series_type=1, patch="7.41",
+            radiant_accounts=tuple(A), dire_accounts=tuple(B),
+            radiant_heroes=(1, 2, 3, 4, 5), dire_heroes=(6, 7, 8, 9, 10),
+            has_null_team=False, has_bad_roster=False,
+        )
+        for i in range(10)
+    ]
+    gaps = rating_gaps(rows, EloModel())
+    assert gaps[0] == pytest.approx(0.0), "the first map has no prior evidence at all"
+    assert gaps[9] > gaps[1], "the gap widens as A keeps winning"
+    assert set(gaps) == {r.match_id for r in rows}
+
+
+def test_sensitivity_sweep_reports_zero_delta_for_its_own_baseline():
+    from ti26.duration import sensitivity_sweep
+    from ti26.rules import load_rules
+
+    rules = load_rules("config/ti2026_rules.yaml")
+    strengths = {f"t{i:02d}": (i - 7.5) * 0.15 for i in range(16)}
+    result = sensitivity_sweep(strengths, rules, [0.25, 0.45], n_sims=2000, seed=3)
+    assert result[0]["is_baseline"] is True
+    assert result[0]["max_abs_delta"] == 0.0
+    assert result[1]["max_abs_delta"] >= 0.0
+
+
+@pytest.mark.slow
+def test_sensitivity_sweep_detects_that_log_sigma_moves_the_card():
+    """Spec XII: this parameter steers ~30% of every ranking, so a sweep that
+    reports no movement at any sigma would mean the resolver is not wired in.
+
+    Marked slow: it needs enough simulations that the delta is signal rather
+    than Monte Carlo noise.
+    """
+    from ti26.duration import sensitivity_sweep
+    from ti26.rules import load_rules
+
+    rules = load_rules("config/ti2026_rules.yaml")
+    strengths = {f"t{i:02d}": 0.0 for i in range(16)}  # fully tied: duration decides
+    result = sensitivity_sweep(strengths, rules, [0.05, 1.20], n_sims=60000, seed=5)
+    assert result[1]["max_abs_delta"] > 0.005
 
 
 def test_fitted_sigma_differs_from_the_invented_placeholder():
@@ -2467,12 +3297,65 @@ def fit_duration_model(
         n=len(usable),
         material=bool(material),
     )
+
+
+def rating_gaps(rows: Sequence[MapRow], model) -> dict[int, float]:
+    """Absolute pre-match logit gap per map, from a model walked in time order.
+
+    Predict-then-update, so the gap for a map never sees that map's result.
+    Spec XII requires the duration fit be conditioned at minimum on rating
+    gap; this is what supplies it.
+    """
+    gaps: dict[int, float] = {}
+    for row in sorted(rows, key=lambda r: (r.start_time, r.match_id)):
+        p = min(max(model.predict(row), 1e-6), 1.0 - 1e-6)
+        gaps[row.match_id] = abs(math.log(p / (1.0 - p)))
+        model.update(row)
+    return gaps
+
+
+def sensitivity_sweep(
+    strengths: Mapping[str, float],
+    rules,
+    sigmas: Sequence[float],
+    n_sims: int = 20000,
+    seed: int = 0,
+) -> list[dict]:
+    """How far does the card move across plausible `log_sigma` values?
+
+    Spec XII: the duration parameter steers ~30% of every ranking, so the
+    honest report is not just a point estimate but how much the answer depends
+    on it. Compares each sigma's category marginals against the first sigma in
+    the list, which the caller passes as the fitted value.
+    """
+    from dataclasses import replace
+
+    from ti26.montecarlo import category_marginals
+    from ti26.types import Category
+
+    baseline: dict[str, dict] | None = None
+    out: list[dict] = []
+    for sigma in sigmas:
+        marginals = category_marginals(
+            dict(strengths), replace(rules, duration_log_sigma=sigma), n_sims=n_sims, seed=seed
+        )
+        if baseline is None:
+            baseline = marginals
+            out.append({"log_sigma": sigma, "max_abs_delta": 0.0, "is_baseline": True})
+            continue
+        delta = max(
+            abs(marginals[team][category] - baseline[team][category])
+            for team in baseline
+            for category in Category
+        )
+        out.append({"log_sigma": sigma, "max_abs_delta": float(delta), "is_baseline": False})
+    return out
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/python -m pytest tests/test_duration.py -v`
-Expected: PASS (6 tests)
+Run: `.venv/bin/python -m pytest tests/test_duration.py -v -m "not slow"`
+Expected: PASS (8 tests, 1 deselected)
 
 - [ ] **Step 5: Add the `empirical` provenance tag to the spec**
 
@@ -2495,13 +3378,15 @@ git commit -m "feat: fit the duration tiebreak model from real durations"
 ## Task 8: Ingest CLI, D2 runner, gate report, end-to-end verification
 
 **Files:**
-- Create: `src/ti26/cli_ingest.py`, `src/ti26/cli_d2.py`
+- Create: `src/ti26/cli_ingest.py`, `src/ti26/teams.py`, `src/ti26/cli_d2.py`, `config/ti2026_teams.yaml`
 - Modify: `config/ti2026_rules.yaml` (fitted duration values + provenance)
-- Test: `tests/test_cli_d2.py`
+- Test: `tests/test_teams.py`, `tests/test_cli_d2.py`
 
 **Interfaces:**
-- Consumes: everything from Tasks 1–7, plus `ti26.montecarlo.category_marginals`, `ti26.optimize.solve_card`, `ti26.rules.load_rules` from D1.
-- Produces: `ti26.cli_ingest.main(argv) -> int` writing `data/raw/<sid>/*.json.gz`, `manifest.json`, and `data/processed/d2.sqlite`; `ti26.cli_d2.main(argv) -> int` writing `reports/d2_gate.md`, `reports/backtest_metrics.csv`, `reports/duration_fit.json`, `reports/strengths.csv`.
+- Consumes: everything from Tasks 1–7, plus `ti26.rules.load_rules`, `ti26.montecarlo.category_marginals` and **`ti26.cli.main`** from D1.
+- Produces: `TeamEntry` frozen dataclass `(name: str, team_id: int)`; `UnresolvedTeamError(ValueError)`; `load_teams(path) -> list[TeamEntry]`; `latest_rosters(rows, aliases) -> dict[int, str]`; `resolve_rosters(rows, teams, aliases) -> dict[str, str]`; `team_strengths(resolved, strengths) -> tuple[dict[str, float], list[str]]`; `ti26.cli_ingest.main(argv) -> int` writing `data/raw/<sid>/*.json.gz`, `manifest.json`, and `data/processed/d2.sqlite`; `ti26.cli_d2.main(argv) -> int` writing `reports/d2_gate.md`, `reports/backtest_metrics.csv`, `reports/duration_fit.json`, `reports/duration_sensitivity.json`, `reports/strengths.csv`, and — via `ti26.cli.main(["--strengths", ...])` — `reports/recommended_card.json`.
+
+**The end-to-end requirement, stated once so it cannot be missed:** `cli_d2` fits the selected model on all data, resolves the 16 configured teams to their current rosters, writes `reports/strengths.csv`, and **calls D1's card generator with `--strengths` pointing at that file**. Invoking `ti26.cli` without `--strengths` silently produces a card from a synthetic ladder (`src/ti26/cli.py:15-16`) and is a plan violation.
 
 - [ ] **Step 1: Write the ingest CLI**
 
@@ -2574,7 +3459,220 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 2: Write the D2 runner**
+- [ ] **Step 2: Write the team-resolution module**
+
+```python
+# src/ti26/teams.py
+"""Resolve the 16 configured Swiss-stage teams to rosters and strengths.
+
+D1's card generator takes a strength per team name. This is the bridge from
+rating-space (keyed by roster hash) to card-space (keyed by the names a human
+types into Valve's form).
+"""
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
+
+from ti26.data.schema import MapRow
+from ti26.roster import canonical_team_id, roster_version_id
+
+
+@dataclass(frozen=True)
+class TeamEntry:
+    name: str
+    team_id: int
+
+
+class UnresolvedTeamError(ValueError):
+    """A configured team could not be tied to any roster in the store."""
+
+
+def load_teams(path: str | Path) -> list[TeamEntry]:
+    data = yaml.safe_load(Path(path).read_text()) or {}
+    entries = data.get("teams") or []
+    teams = [TeamEntry(name=str(e["name"]), team_id=int(e["team_id"])) for e in entries]
+    names = [t.name for t in teams]
+    if len(set(names)) != len(names):
+        raise UnresolvedTeamError(f"duplicate team names in {path}: {names}")
+    ids = [t.team_id for t in teams]
+    if len(set(ids)) != len(ids):
+        raise UnresolvedTeamError(f"duplicate team_ids in {path}: {ids}")
+    return teams
+
+
+def latest_rosters(
+    rows: Sequence[MapRow], aliases: Mapping[int, int]
+) -> dict[int, str]:
+    """Most recently fielded roster per canonical team id."""
+    latest: dict[int, tuple[int, str]] = {}
+    for row in sorted(rows, key=lambda r: (r.start_time, r.match_id)):
+        for team_id, accounts in (
+            (row.radiant_team_id, row.radiant_accounts),
+            (row.dire_team_id, row.dire_accounts),
+        ):
+            canonical = canonical_team_id(team_id, dict(aliases))
+            if canonical is None:
+                continue
+            latest[canonical] = (row.start_time, roster_version_id(accounts))
+    return {team_id: rvid for team_id, (_, rvid) in latest.items()}
+
+
+def resolve_rosters(
+    rows: Sequence[MapRow], teams: Sequence[TeamEntry], aliases: Mapping[int, int]
+) -> dict[str, str]:
+    """Map each configured team name to its current roster_version_id.
+
+    Raises listing EVERY unresolved team at once. Resolving fifteen of sixteen
+    and silently defaulting the last would put a prior-driven team on the card
+    with no indication it was guessed.
+    """
+    current = latest_rosters(rows, aliases)
+    resolved, missing = {}, []
+    for team in teams:
+        canonical = canonical_team_id(team.team_id, dict(aliases))
+        if canonical is None or canonical not in current:
+            missing.append(f"{team.name} (team_id={team.team_id})")
+            continue
+        resolved[team.name] = current[canonical]
+    if missing:
+        raise UnresolvedTeamError(
+            f"{len(missing)} of {len(teams)} teams have no maps in the store: "
+            + "; ".join(missing)
+        )
+    return resolved
+
+
+def team_strengths(
+    resolved: Mapping[str, str], strengths: Mapping[str, float]
+) -> tuple[dict[str, float], list[str]]:
+    """Attach a fitted strength to each team; report which fell back to the prior.
+
+    A zero-centred logit strength of 0.0 IS the average-team prior, so an
+    unrated roster is not an error — but it must be named, per spec III's
+    requirement to report which teams are prior-driven.
+    """
+    out, prior_driven = {}, []
+    for name, rvid in resolved.items():
+        if rvid in strengths:
+            out[name] = float(strengths[rvid])
+        else:
+            out[name] = 0.0
+            prior_driven.append(name)
+    return out, sorted(prior_driven)
+```
+
+- [ ] **Step 3: Write the team-resolution test**
+
+```python
+# tests/test_teams.py
+import pytest
+
+from ti26.data.schema import MapRow
+from ti26.roster import roster_version_id
+from ti26.teams import (
+    TeamEntry,
+    UnresolvedTeamError,
+    latest_rosters,
+    load_teams,
+    resolve_rosters,
+    team_strengths,
+)
+
+
+def row(match_id, start_time, r_team, d_team, radiant, dire):
+    return MapRow(
+        match_id=match_id, start_time=start_time, duration=2000, radiant_win=True,
+        league_id=1, tier="professional", radiant_team_id=r_team, dire_team_id=d_team,
+        series_id=1, series_type=1, patch="7.41",
+        radiant_accounts=tuple(radiant), dire_accounts=tuple(dire),
+        radiant_heroes=(1, 2, 3, 4, 5), dire_heroes=(6, 7, 8, 9, 10),
+        has_null_team=False, has_bad_roster=False,
+    )
+
+
+A_OLD, A_NEW, B = [1, 2, 3, 4, 5], [1, 2, 3, 4, 9], [6, 7, 8, 9, 10]
+
+
+def test_latest_roster_wins_over_an_earlier_one():
+    """A team that substituted last week must be carried at its CURRENT
+    roster, not the one that accumulated the rating."""
+    rows = [row(1, 100, 10, 20, A_OLD, B), row(2, 200, 10, 20, A_NEW, B)]
+    assert latest_rosters(rows, {})[10] == roster_version_id(A_NEW)
+
+
+def test_aliases_are_applied_when_resolving():
+    rows = [row(1, 100, 77, 20, A_NEW, B)]
+    resolved = resolve_rosters(rows, [TeamEntry("Rebranded", 10)], {77: 10})
+    assert resolved["Rebranded"] == roster_version_id(A_NEW)
+
+
+def test_every_unresolved_team_is_reported_at_once():
+    """Fifteen of sixteen resolving is not a partial success."""
+    rows = [row(1, 100, 10, 20, A_NEW, B)]
+    teams = [TeamEntry("Known", 10), TeamEntry("Ghost", 999), TeamEntry("Spectre", 998)]
+    with pytest.raises(UnresolvedTeamError, match="2 of 3") as exc:
+        resolve_rosters(rows, teams, {})
+    assert "Ghost" in str(exc.value) and "Spectre" in str(exc.value)
+
+
+def test_duplicate_names_or_ids_are_rejected(tmp_path):
+    path = tmp_path / "teams.yaml"
+    path.write_text("teams:\n  - {name: X, team_id: 1}\n  - {name: X, team_id: 2}\n")
+    with pytest.raises(UnresolvedTeamError, match="duplicate team names"):
+        load_teams(path)
+
+    path.write_text("teams:\n  - {name: X, team_id: 1}\n  - {name: Y, team_id: 1}\n")
+    with pytest.raises(UnresolvedTeamError, match="duplicate team_ids"):
+        load_teams(path)
+
+
+def test_unrated_rosters_get_the_average_prior_and_are_named():
+    resolved = {"Rated": "aaa", "New": "bbb"}
+    strengths, prior_driven = team_strengths(resolved, {"aaa": 0.7})
+    assert strengths == {"Rated": 0.7, "New": 0.0}
+    assert prior_driven == ["New"], "spec III: prior-driven teams must be reported"
+```
+
+- [ ] **Step 4: Create the team config**
+
+```yaml
+# config/ti2026_teams.yaml
+# The 16 teams in the TI 2026 Swiss stage, with their OpenDota team_ids.
+#
+# Starts EMPTY on purpose. Step 5 populates it from the store; inventing an
+# id here would silently put another organization's rating on the card.
+# `cli_d2` refuses to produce a card unless exactly `rules.n_teams` entries
+# resolve, so an incomplete file fails loudly rather than shipping a guess.
+teams: []
+```
+
+- [ ] **Step 5: Populate the team config from real data**
+
+List the organizations most active in recent tier-1 play, then fill in the 16 that are actually in the Swiss stage:
+
+```bash
+.venv/bin/python - <<'PY'
+import sqlite3, json, collections
+conn = sqlite3.connect("data/processed/d2.sqlite")
+cutoff = conn.execute("select max(start_time) - 180*86400 from maps").fetchone()[0]
+counts = collections.Counter()
+for r_id, d_id in conn.execute(
+    "select radiant_team_id, dire_team_id from maps where start_time > ? "
+    "and tier in ('premium','professional')", (cutoff,)
+):
+    for t in (r_id, d_id):
+        if t is not None:
+            counts[t] += 1
+print(json.dumps(counts.most_common(40), indent=1))
+PY
+```
+
+Names come from the same explorer `teams` table used in Task 3 Step 5. Write each confirmed entry as `- {name: <display name>, team_id: <id>}`. **Do not pad the list to 16 with guesses** — if the field is not fully known yet, leave the file short and record in the ledger that the card step is blocked pending the team list. A card built on the wrong sixteen teams is worse than no card.
+
+- [ ] **Step 6: Write the D2 runner**
 
 ```python
 # src/ti26/cli_d2.py
@@ -2583,6 +3681,7 @@ if __name__ == "__main__":
 import argparse
 import csv
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from ti26.backtest import (
@@ -2591,28 +3690,40 @@ from ti26.backtest import (
     calibration,
     evaluate_gate,
     log_loss,
-    per_map_log_loss,
     rolling_folds,
     run_model,
 )
+from ti26.cli import main as cli_main
 from ti26.data.store import load_rows, open_store
-from ti26.duration import fit_duration_model
+from ti26.duration import fit_duration_model, rating_gaps, sensitivity_sweep
 from ti26.ratings import load_gate_config
 from ti26.ratings.elo import EloModel
 from ti26.ratings.glicko import GlickoModel
 from ti26.ratings.simple import ConstantModel, EwmaModel
-from ti26.roster import RosterIndex
+from ti26.roster import RosterIndex, load_aliases
+from ti26.rules import load_rules
+from ti26.teams import load_teams, resolve_rosters, team_strengths
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="D2: fit ratings and evaluate the gate")
     parser.add_argument("--store", default="data/processed/d2.sqlite")
     parser.add_argument("--gate-config", default="config/d2_gate.yaml")
+    parser.add_argument("--rules", default="config/ti2026_rules.yaml")
+    parser.add_argument("--aliases", default="config/team_aliases.yaml")
+    parser.add_argument("--teams", default="config/ti2026_teams.yaml")
     parser.add_argument("--min-train", type=int, default=500)
+    parser.add_argument("--final-model", choices=["auto", "elo", "glicko"], default="auto")
+    parser.add_argument("--card-sims", type=int, default=250_000)
+    parser.add_argument("--card-seed", type=int, default=1)
+    parser.add_argument("--skip-card", action="store_true",
+                        help="stop after the gate; use when the team list is not yet known")
     parser.add_argument("--out", default="reports")
     args = parser.parse_args(argv)
 
     config = load_gate_config(args.gate_config)
+    rules = load_rules(args.rules)
+    aliases = load_aliases(args.aliases)
     rows = load_rows(open_store(args.store))
     if not rows:
         raise SystemExit(f"{args.store} is empty; run `python -m ti26.cli_ingest` first")
@@ -2621,11 +3732,15 @@ def main(argv: list[str] | None = None) -> int:
     if not folds:
         raise SystemExit(f"no tournament had {args.min_train}+ prior maps; lower --min-train")
 
+    # The SAME factories are used for the backtest and for the final fit, so a
+    # collaborator missing here is missing in both -- never in only one.
     models = {
         "constant": lambda: ConstantModel(),
         "ewma": lambda: EwmaModel(half_life_maps=config.ewma_half_life_maps),
         "elo": lambda: EloModel(k=config.elo_k),
-        "glicko": lambda: GlickoModel(tau=config.glicko_tau, roster_index=RosterIndex()),
+        "glicko": lambda: GlickoModel(
+            tau=config.glicko_tau, roster_index=RosterIndex(aliases)
+        ),
     }
 
     out = Path(args.out)
@@ -2650,19 +3765,31 @@ def main(argv: list[str] | None = None) -> int:
         for name in models:
             writer.writerow([name, *(metrics[name][k] for k in sorted(metrics[name]))])
 
-    result = evaluate_gate(
-        per_map_log_loss(predictions["elo"], rows),
-        per_map_log_loss(predictions["glicko"], rows),
-        config,
-    )
+    result = evaluate_gate(predictions["elo"], predictions["glicko"], rows, config)
 
-    duration_fit = fit_duration_model(rows)
+    # --- Final fit on everything, then the card -------------------------------
+    selected = args.final_model
+    if selected == "auto":
+        selected = "glicko" if result.passed else "elo"
+
+    final = models[selected]()
+    for row in rows:
+        final.update(row)
+    final.flush()
+    fitted = final.strengths()
+
+    # Rating gap per map from a SEPARATE Elo pass, predict-then-update, so the
+    # duration fit is conditioned on gap without ever seeing a map's own result.
+    gaps = rating_gaps(rows, EloModel(k=config.elo_k))
+    duration_fit = fit_duration_model(rows, gaps=gaps)
     (out / "duration_fit.json").write_text(
         json.dumps(
             {
                 "log_mean": duration_fit.log_mean,
                 "log_sigma": duration_fit.log_sigma,
                 "gap_coefficient": duration_fit.gap_coefficient,
+                "gap_se": duration_fit.gap_se,
+                "gap_effect_material": duration_fit.material,
                 "n": duration_fit.n,
                 "placeholder_log_mean": 7.65,
                 "placeholder_log_sigma": 0.25,
@@ -2672,6 +3799,54 @@ def main(argv: list[str] | None = None) -> int:
         )
         + "\n"
     )
+
+    card_status = "skipped (--skip-card)"
+    sweep: list[dict] = []
+    prior_driven: list[str] = []
+    if not args.skip_card:
+        teams = load_teams(args.teams)
+        if len(teams) != rules.n_teams:
+            raise SystemExit(
+                f"{args.teams} lists {len(teams)} teams but the rules require "
+                f"{rules.n_teams}; populate it or pass --skip-card"
+            )
+        resolved = resolve_rosters(rows, teams, aliases)
+        strengths, prior_driven = team_strengths(resolved, fitted)
+
+        strengths_path = out / "strengths.csv"
+        with strengths_path.open("w", newline="") as fh:
+            writer = csv.writer(fh)
+            writer.writerow(["team", "strength", "roster_version_id", "prior_driven"])
+            for name in sorted(strengths):
+                writer.writerow(
+                    [name, f"{strengths[name]:.6f}", resolved[name], name in prior_driven]
+                )
+
+        # The card comes from the D1 generator, fed OUR fitted strengths --
+        # not from its synthetic fallback ladder.
+        card_rc = cli_main(
+            [
+                "--strengths", str(strengths_path),
+                "--rules", args.rules,
+                "--n-sims", str(args.card_sims),
+                "--seed", str(args.card_seed),
+                "--out", str(out),
+            ]
+        )
+        if card_rc != 0:
+            raise SystemExit(f"card generation failed with exit code {card_rc}")
+        card_status = f"generated from {selected} strengths ({len(strengths)} teams)"
+
+        # Spec XII: report how much the card depends on the duration parameter.
+        sweep = sensitivity_sweep(
+            strengths,
+            replace(rules, duration_log_sigma=duration_fit.log_sigma),
+            [duration_fit.log_sigma, duration_fit.log_sigma * 0.5,
+             duration_fit.log_sigma * 1.5, 0.25],
+            n_sims=max(20_000, args.card_sims // 10),
+            seed=args.card_seed,
+        )
+        (out / "duration_sensitivity.json").write_text(json.dumps(sweep, indent=2) + "\n")
 
     verdict = "PASS" if result.passed else "FAIL"
     lines = [
@@ -2686,6 +3861,12 @@ def main(argv: list[str] | None = None) -> int:
         "",
         f"Observed margin: **{result.margin:.5f}** nats/map, "
         f"CI [{result.ci_low:.5f}, {result.ci_high:.5f}]",
+        "",
+        f"Interval method: {result.method}. Maps compared: {result.n_maps}.",
+        "",
+        "The interval is a **cluster** bootstrap, not an iid one over maps: maps "
+        "inside a series share teams, day, patch and momentum, and treating them "
+        "as independent would understate the interval and let this gate pass on noise.",
         "",
         f"Folds: {len(folds)} tournaments, {sum(f.n_test for f in folds)} out-of-sample maps.",
         "",
@@ -2714,16 +3895,53 @@ def main(argv: list[str] | None = None) -> int:
             "Reasons: " + "; ".join(result.reasons)
         ),
         "",
-        f"## Duration model (spec XII)",
+        "## Duration model (spec XII)",
         "",
-        f"Fitted from {duration_fit.n} real map durations: "
-        f"`log_mean={duration_fit.log_mean:.4f}`, `log_sigma={duration_fit.log_sigma:.4f}` "
-        f"(placeholder was 7.65 / 0.25, provenance `arbitrary`).",
+        f"Fitted from {duration_fit.n} real map durations, conditioned on pre-match "
+        f"rating gap: `log_mean={duration_fit.log_mean:.4f}`, "
+        f"`log_sigma={duration_fit.log_sigma:.4f}`, "
+        f"`gap_coefficient={duration_fit.gap_coefficient:.4f}` "
+        f"(SE {duration_fit.gap_se:.4f}, material={duration_fit.material}). "
+        "The placeholder was 7.65 / 0.25 with provenance `arbitrary`.",
+        "",
+        "## Card",
+        "",
+        f"Status: {card_status}. Final model: **{selected}** "
+        f"({'gate passed' if result.passed else 'gate failed — Elo is the shipped fit'}).",
     ]
+    if not args.skip_card and prior_driven:
+        lines += [
+            "",
+            f"**Prior-driven teams ({len(prior_driven)}):** " + ", ".join(prior_driven)
+            + ". These carry the average-team prior, not a fitted rating.",
+        ]
+    if not result.passed:
+        lines += [
+            "",
+            "Spec §X rung 3 makes public ratings the default when this gate fails. "
+            "To ship that instead, write a `team,strength` CSV and run "
+            "`python -m ti26.cli --strengths <file>`.",
+        ]
+    if sweep:
+        lines += [
+            "",
+            "## Duration sensitivity",
+            "",
+            "| log_sigma | max abs delta vs fitted |",
+            "|---|---|",
+        ] + [
+            f"| {s['log_sigma']:.4f} | {s['max_abs_delta']:.5f} |" for s in sweep
+        ] + [
+            "",
+            "Largest movement in any single category probability when the duration "
+            "parameter is varied. Spec §XII: this parameter is consulted on roughly "
+            "30% of every ranking, so its influence is reported rather than assumed away.",
+        ]
     (out / "d2_gate.md").write_text("\n".join(lines) + "\n")
 
     print(f"gate: {verdict} (margin {result.margin:.5f}, CI [{result.ci_low:.5f}, "
-          f"{result.ci_high:.5f}])")
+          f"{result.ci_high:.5f}], {result.method})")
+    print(f"card: {card_status}")
     return 0
 
 
@@ -2731,13 +3949,12 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 3: Write the end-to-end test**
+- [ ] **Step 7: Write the end-to-end test**
 
 ```python
 # tests/test_cli_d2.py
 import csv
 import json
-from pathlib import Path
 
 import pytest
 
@@ -2748,53 +3965,135 @@ from ti26.data.store import insert_rows, open_store
 WEEK = 604800
 
 
-def row(match_id, start_time, league_id, radiant, dire, radiant_win, duration=2000):
+def row(match_id, start_time, league_id, radiant, dire, radiant_win,
+        r_team, d_team, series_id, duration=2000):
     return MapRow(
         match_id=match_id, start_time=start_time, duration=duration,
         radiant_win=radiant_win, league_id=league_id, tier="professional",
-        radiant_team_id=hash(tuple(radiant)) % 1000, dire_team_id=hash(tuple(dire)) % 1000,
-        series_id=match_id // 3, series_type=1, patch="7.41",
+        radiant_team_id=r_team, dire_team_id=d_team,
+        series_id=series_id, series_type=1, patch="7.41",
         radiant_accounts=tuple(radiant), dire_accounts=tuple(dire),
         radiant_heroes=(1, 2, 3, 4, 5), dire_heroes=(6, 7, 8, 9, 10),
         has_null_team=False, has_bad_roster=False,
     )
 
 
-def seeded_store(path, n_teams=16, n_maps=1200):
-    """Deterministic ladder: lower-indexed rosters are genuinely stronger."""
+def seeded_store(path, n_teams=16, n_series=1200, maps_per_series=3):
+    """Deterministic ladder: lower-indexed rosters are genuinely stronger.
+
+    Team ids are `1000 + index` so `config/ti2026_teams.yaml` fixtures can
+    reference them; `hash()` would vary with PYTHONHASHSEED. Maps are grouped
+    into real series so the clustered bootstrap has clusters to resample, and
+    tournaments are spread across many league ids so the single-stage path is
+    the one actually exercised.
+    """
     import random
 
     rng = random.Random(4)
     rosters = [[t * 5 + p for p in range(5)] for t in range(n_teams)]
     strength = {t: (n_teams - t) * 0.2 for t in range(n_teams)}
-    rows = []
-    for i in range(n_maps):
+    rows, match_id = [], 0
+    for s in range(n_series):
         a, b = rng.sample(range(n_teams), 2)
         p = 1 / (1 + pow(2.718281828, -(strength[a] - strength[b])))
-        league = 1 if i < n_maps - 200 else 2
-        rows.append(
-            row(i, i * 3600, league, rosters[a], rosters[b], rng.random() < p,
-                duration=int(rng.lognormvariate(7.55, 0.33)))
-        )
+        # First 900 series are history; the rest are spread over 40 tournaments
+        # so `rolling_folds` produces enough folds for tournament clustering.
+        league = 1 if s < 900 else 100 + (s % 40)
+        for _ in range(maps_per_series):
+            rows.append(
+                row(match_id, match_id * 600, league, rosters[a], rosters[b],
+                    rng.random() < p, r_team=1000 + a, d_team=1000 + b, series_id=s,
+                    duration=int(rng.lognormvariate(7.55, 0.33)))
+            )
+            match_id += 1
     conn = open_store(path)
     insert_rows(conn, rows)
     return conn
+
+
+def write_team_config(path, n_teams=16):
+    lines = ["teams:"]
+    for t in range(n_teams):
+        lines.append(f"  - {{name: Team{t:02d}, team_id: {1000 + t}}}")
+    path.write_text("\n".join(lines) + "\n")
+    return path
 
 
 def test_end_to_end_produces_a_gate_report_and_metrics(tmp_path):
     store = tmp_path / "d2.sqlite"
     seeded_store(store)
     out = tmp_path / "reports"
-    assert d2_main(["--store", str(store), "--out", str(out), "--min-train", "200"]) == 0
+    assert d2_main(
+        ["--store", str(store), "--out", str(out), "--min-train", "200", "--skip-card"]
+    ) == 0
 
     report = (out / "d2_gate.md").read_text()
     assert "**Verdict:" in report
     assert "0.003" in report, "the pre-registered margin must appear in the report"
+    assert "cluster" in report.lower(), "the interval method must be stated"
 
     with (out / "backtest_metrics.csv").open() as fh:
         metrics = {r["model"]: r for r in csv.DictReader(fh)}
     assert set(metrics) == {"constant", "ewma", "elo", "glicko"}
     assert float(metrics["constant"]["log_loss"]) == pytest.approx(0.6931, abs=1e-3)
+
+
+def test_the_card_is_built_from_fitted_strengths_not_the_synthetic_ladder(tmp_path):
+    """THE end-to-end test for this task.
+
+    D1's `cli.py` falls back to a synthetic ladder when `--strengths` is
+    absent, so a runner that forgets to pass it still writes a plausible card
+    and every other assertion here would pass. Pinning the card to the
+    strengths file is what makes the pipeline real.
+    """
+    store = tmp_path / "d2.sqlite"
+    seeded_store(store)
+    out = tmp_path / "reports"
+    teams = write_team_config(tmp_path / "teams.yaml")
+
+    assert d2_main([
+        "--store", str(store), "--out", str(out), "--min-train", "200",
+        "--teams", str(teams), "--card-sims", "3000", "--card-seed", "7",
+    ]) == 0
+
+    with (out / "strengths.csv").open() as fh:
+        strengths = list(csv.DictReader(fh))
+    assert len(strengths) == 16
+    assert {r["team"] for r in strengths} == {f"Team{t:02d}" for t in range(16)}
+    assert len({r["strength"] for r in strengths}) > 1, "a flat vector means nothing was fitted"
+
+    card = json.loads((out / "recommended_card.json").read_text())
+    assert set(card["assignments"]) == {f"Team{t:02d}" for t in range(16)}, (
+        "the card must name OUR teams; the synthetic ladder would emit t00..t15"
+    )
+
+
+def test_missing_teams_fail_loudly_rather_than_shipping_a_partial_card(tmp_path):
+    store = tmp_path / "d2.sqlite"
+    seeded_store(store)
+    teams = write_team_config(tmp_path / "teams.yaml", n_teams=9)
+    with pytest.raises(SystemExit, match="9 teams"):
+        d2_main([
+            "--store", str(store), "--out", str(tmp_path / "reports"),
+            "--min-train", "200", "--teams", str(teams),
+        ])
+
+
+def test_duration_sensitivity_is_reported(tmp_path):
+    """Spec XII requires reporting how far the card moves with the duration
+    parameter, not just fitting it."""
+    store = tmp_path / "d2.sqlite"
+    seeded_store(store)
+    out = tmp_path / "reports"
+    teams = write_team_config(tmp_path / "teams.yaml")
+    d2_main([
+        "--store", str(store), "--out", str(out), "--min-train", "200",
+        "--teams", str(teams), "--card-sims", "3000",
+    ])
+    sweep = json.loads((out / "duration_sensitivity.json").read_text())
+    assert sweep[0]["is_baseline"] is True
+    assert len(sweep) >= 3
+    assert all("max_abs_delta" in s for s in sweep)
 
 
 def test_rating_models_beat_the_constant_floor_on_separable_data(tmp_path):
@@ -2859,28 +4158,41 @@ def test_reported_verdict_agrees_with_the_reported_numbers(tmp_path):
         assert "Proceed to D3" in report
 ```
 
-- [ ] **Step 4: Run the test to verify it fails, then passes**
+- [ ] **Step 8: Run the tests to verify they fail, then pass**
 
-Run: `.venv/bin/python -m pytest tests/test_cli_d2.py -v`
-Expected first: FAIL with `ModuleNotFoundError: No module named 'ti26.cli_d2'`. After Steps 1–2 are in place: PASS (5 tests).
+Run: `.venv/bin/python -m pytest tests/test_teams.py tests/test_cli_d2.py -v`
+Expected first: FAIL with `ModuleNotFoundError`. After the implementation steps: PASS (12 tests).
 
-- [ ] **Step 5: Run the real ingest**
+`test_the_card_is_built_from_fitted_strengths_not_the_synthetic_ladder` is the load-bearing one. D1's `cli.py:15-16` silently falls back to a synthetic `t00..t15` ladder when `--strengths` is absent, so a runner that forgets to pass it still writes a complete, plausible-looking card — and every other assertion in the file still passes. Asserting the card names *our* teams is what makes the pipeline real rather than decorative.
+
+- [ ] **Step 9: Run the real ingest**
 
 ```bash
 .venv/bin/python -m ti26.cli_ingest --months 18
 ```
 Expected: ~19 monthly lines totalling ≈41,600 maps, an immutable snapshot under `data/raw/<sid>/`, and `data/processed/d2.sqlite`. Record the snapshot id and the rejection tally in the ledger. If the row count is below 35,000, stop and report rather than proceeding — the spec's §III figures were measured on 2026-08-02 and a large shortfall means the query or the window is wrong.
 
-- [ ] **Step 6: Run the real D2 evaluation**
+- [ ] **Step 10: Run the real D2 evaluation**
+
+If `config/ti2026_teams.yaml` is fully populated:
 
 ```bash
 .venv/bin/python -m ti26.cli_d2
 ```
-Expected: `reports/d2_gate.md` with a verdict, `reports/backtest_metrics.csv`, `reports/duration_fit.json`.
 
-**Report the verdict as it comes out.** A FAIL is a legitimate, pre-registered outcome meaning "ship the public-rating fallback and stop"; it is not a defect to be tuned away. Do not adjust `min_margin_nats`, `elo_k`, `glicko_tau`, or `--min-train` in response to seeing the result.
+If the Swiss field is not yet known, run the gate alone and record in the ledger that the card is blocked on the team list:
 
-- [ ] **Step 7: Write the fitted duration values into the rules config**
+```bash
+.venv/bin/python -m ti26.cli_d2 --skip-card
+```
+
+Expected: `reports/d2_gate.md` with a verdict and the interval method, `reports/backtest_metrics.csv`, `reports/duration_fit.json`, and — unless skipped — `reports/strengths.csv`, `reports/duration_sensitivity.json`, `reports/recommended_card.json`.
+
+**Report the verdict as it comes out.** A FAIL is a legitimate, pre-registered outcome meaning "ship the public-rating fallback and stop"; it is not a defect to be tuned away. Do not adjust `min_margin_nats`, `elo_k`, `glicko_tau`, `--min-train`, or the bootstrap clustering in response to seeing the result.
+
+**Also report the cluster count.** If `d2_gate.md` says the two-stage method was used, that means fewer than 30 tournaments cleared `--min-train`, and the interval rests on a small number of clusters. Say so plainly rather than quoting the CI as if it came from 40.
+
+- [ ] **Step 11: Write the fitted duration values into the rules config**
 
 Replace the `duration_model` block in `config/ti2026_rules.yaml` with the values from `reports/duration_fit.json`, and change its provenance from `arbitrary` to `empirical`:
 
@@ -2897,24 +4209,29 @@ and in the `provenance` block:
   duration_model: empirical   # fitted in D2; see reports/duration_fit.json
 ```
 
-- [ ] **Step 8: Confirm the D1 suite still passes with the fitted values**
+- [ ] **Step 12: Confirm the D1 suite still passes with the fitted values**
 
 Run: `.venv/bin/python -m pytest -q`
 Expected: all 427 D1 tests plus the new D2 tests pass. The D1 tests must not depend on the placeholder duration constants; if any fails, it was asserting against `7.65`/`0.25` rather than against behaviour, and that is a genuine defect to fix in the test, not a reason to revert the fitted values.
 
-- [ ] **Step 9: Generate a card from fitted strengths**
+- [ ] **Step 13: Re-run the card on the fitted duration model**
+
+Step 10 produced the card using the duration values that were in the config *at that time*. Step 11 changed them, so regenerate:
 
 ```bash
-.venv/bin/python -m ti26.cli --n-sims 250000 --seed 1
+.venv/bin/python -m ti26.cli_d2
 ```
-Expected: `reports/category_probabilities.csv` and `reports/recommended_card.json`. This closes the spec §II **engineering gate**: a legal card produced end-to-end with the leakage assertion passing.
 
-- [ ] **Step 10: Lint and commit**
+Compare `reports/duration_sensitivity.json` against the card: if `max_abs_delta` at the ±50% sigma settings exceeds ~0.02, say so in the ledger — it means a meaningful share of the card rests on a parameter with only this fit behind it.
+
+- [ ] **Step 14: Lint and commit**
 
 ```bash
 .venv/bin/ruff check .
-git add src/ti26/cli_ingest.py src/ti26/cli_d2.py tests/test_cli_d2.py config/ti2026_rules.yaml
-git commit -m "feat: ingest CLI, D2 gate runner, fitted duration model"
+git add src/ti26/cli_ingest.py src/ti26/cli_d2.py src/ti26/teams.py \
+        tests/test_cli_d2.py tests/test_teams.py \
+        config/ti2026_rules.yaml config/ti2026_teams.yaml
+git commit -m "feat: ingest CLI, D2 gate runner, team resolution, fitted duration model"
 ```
 
 ---
@@ -2931,9 +4248,20 @@ D2 is complete when all of the following hold, each with named evidence:
 | One network seam | `grep -rn "urllib.request\|http" src/ti26/ --include=*.py` matches only `data/opendota.py` |
 | No gate literal in source | `grep -rn "0\.003" src/` returns nothing |
 | Leakage assertion active | `run_model` calls `assert_no_leakage` once per fold; `tests/test_store.py` proves it raises |
+| Fold integrity enforced | `run_model` calls `assert_fold_integrity`; `tests/test_backtest.py` proves each check fires |
+| Snapshots immutable by mode | `grep -rn "open(" src/ti26/data/snapshot.py` shows only `"xb"` and read modes; no `exists()` guard |
+| No silent row overwrites | `grep -rn "insert or replace" src/` returns nothing |
+| Bootstrap is clustered | `reports/d2_gate.md` names the method; `test_clustered_interval_is_wider_than_the_iid_one` passes |
+| Losses aligned by id | `paired_differences` raises on mismatched key sets; positional zipping absent from `src/` |
+| Idle rosters lose certainty | `test_idle_rosters_lose_certainty_every_empty_period` and the multi-period cases pass |
+| Inheritance is measured | `grep -rn "0\.8" src/ti26/ratings/glicko.py` returns nothing; weight comes from `continuity_with_predecessor` |
 | Ingest completed | `data/raw/<sid>/manifest.json` exists with `total_rows` ≥ 35,000 |
-| Gate reported honestly | `reports/d2_gate.md` states PASS or FAIL with the observed margin and CI, and no config value was changed after the run |
-| Duration model fitted | `config/ti2026_rules.yaml` carries `duration_model: empirical` and values from `reports/duration_fit.json` |
-| Engineering gate | `reports/recommended_card.json` exists and assigns 16 teams to the derived capacities |
+| Gate reported honestly | `reports/d2_gate.md` states PASS or FAIL with the observed margin, CI, interval method and cluster count, and no config value was changed after the run |
+| Duration model fitted **and conditioned** | `reports/duration_fit.json` carries a non-null `gap_coefficient` and `gap_se`; `config/ti2026_rules.yaml` carries `duration_model: empirical` |
+| Sensitivity reported | `reports/duration_sensitivity.json` exists with ≥3 sigma settings |
+| Engineering gate, end to end | `reports/strengths.csv` holds 16 fitted strengths and `reports/recommended_card.json` assigns **those 16 team names** — not `t00..t15` — to the derived capacities |
 
-**Known limitation to carry forward, not to fix here:** the continuity weight in `GlickoModel._inherit` is fixed at 0.8 rather than computed from actual player overlap, because `RosterIndex.predecessor` returns an id, not an overlap fraction. This is honest for the common single-substitution case and wrong for a two- or three-player change. Record it in the ledger; D3 either threads the overlap through or states why 0.8 is adequate.
+**Known limitations to carry forward, not to fix here:**
+
+1. **`sensitivity_sweep` varies `log_sigma` only.** The fit also estimates a rating-gap coefficient, but D1's `DurationResolver` takes scalar `log_mean`/`log_sigma` and has no per-pair conditioning hook. If `duration_fit.material` comes back true, the fitted gap effect is *measured but not yet applied*, and the report must say so rather than implying the simulator uses it. Threading it through is a D3 decision.
+2. **Tournament clustering assumes a league id identifies a tournament.** OpenDota league ids can span multi-stage events months apart, which would over-cluster and widen the interval. Conservative in the direction that makes the gate harder to pass, so it is acceptable here — but note the cluster count in the ledger.
