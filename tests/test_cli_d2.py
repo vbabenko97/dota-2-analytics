@@ -256,9 +256,18 @@ def test_disqualified_final_model_writes_no_card_and_exits_with_the_floor_code(t
 
     assert rc == FLOOR_REFUSED_EXIT
     assert rc != 0
+    # The card's direct inputs are withheld on refusal -- writing them would
+    # invite running the card manually from a disqualified model.
     assert not (out / "strengths.csv").exists()
     assert not (out / "recommended_card.json").exists()
-    assert not (out / "duration_sensitivity.json").exists()
+    # Fix round 2: the duration sensitivity sweep is NOT part of "the card"
+    # and must still run -- spec XII requires reporting the simulator's
+    # sensitivity to the duration parameter regardless of the floor verdict,
+    # since that parameter ships into `ti2026_rules.yaml` either way. A
+    # runner that dropped this file when it dropped the card fails here.
+    sweep = json.loads((out / "duration_sensitivity.json").read_text())
+    assert sweep[0]["is_baseline"] is True
+    assert all("max_abs_delta" in s for s in sweep)
 
     report = (out / "d2_gate.md").read_text()
     assert "REFUSED" in report
@@ -267,6 +276,11 @@ def test_disqualified_final_model_writes_no_card_and_exits_with_the_floor_code(t
     # The old bug this fix closes: Card and Consequence sections must not
     # disagree about whether a card was produced.
     assert "generated from elo strengths" not in report
+    # The sweep's strengths input must be labeled diagnostic, not silently
+    # presented as an endorsed fit -- a runner that fed the disqualified
+    # strengths into the sweep without saying so fails this.
+    assert "diagnostic only" in report
+    assert "disqualified elo strengths" in report
 
 
 def test_duration_fit_is_written_and_differs_from_the_placeholder(tmp_path):

@@ -24,7 +24,7 @@ from ti26.ratings.glicko import GlickoModel
 from ti26.ratings.simple import ConstantModel, EwmaModel
 from ti26.roster import RosterIndex, load_aliases
 from ti26.rules import load_rules
-from ti26.teams import load_teams, resolve_rosters, team_strengths
+from ti26.teams import UnresolvedTeamError, load_teams, resolve_rosters, team_strengths
 
 # Distinct from 0 (success) and from the plain `raise SystemExit(str)` paths
 # elsewhere in this module (which exit 1): a caller that only checks "did
@@ -159,30 +159,60 @@ def main(argv: list[str] | None = None) -> int:
 
     card_status = "skipped (--skip-card)"
     sweep: list[dict] = []
+    sweep_strengths_note = ""
     prior_driven: list[str] = []
     floor_refused = False
     if not args.skip_card:
+        teams = load_teams(args.teams)
+        if len(teams) != rules.n_teams:
+            raise SystemExit(
+                f"{args.teams} lists {len(teams)} teams but the rules require "
+                f"{rules.n_teams}; populate it or pass --skip-card"
+            )
+
         if not floor[selected]["cleared"]:
             # Spec V: a model that loses to a coin flip is not a strength
             # source. No card is written from it, and no OTHER model is
             # silently substituted -- the user picked (or "auto" picked)
             # `selected`, and if it fails the floor the run refuses rather
-            # than second-guessing that choice.
+            # than second-guessing that choice. `strengths.csv` is withheld
+            # too: it is the card's direct input, and writing it invites
+            # running the card manually from a disqualified model.
             floor_refused = True
             card_status = (
                 f"REFUSED: {selected} log loss {floor[selected]['log_loss']:.5f} does not "
                 f"beat the constant floor {floor['constant']['log_loss']:.5f} (spec V "
                 "rung 1); no card written from our fit"
             )
-        else:
-            teams = load_teams(args.teams)
-            if len(teams) != rules.n_teams:
-                raise SystemExit(
-                    f"{args.teams} lists {len(teams)} teams but the rules require "
-                    f"{rules.n_teams}; populate it or pass --skip-card"
+            # The duration sensitivity sweep still runs: spec XII requires
+            # reporting the simulator's sensitivity to the duration
+            # parameter regardless of which strength source ships, and that
+            # parameter is written into `ti2026_rules.yaml` (and so used by
+            # any rung-3 public-ratings card) whether or not OUR fit
+            # cleared the floor. The sweep measures the SIMULATOR's
+            # sensitivity, not the quality of the strengths behind it --
+            # Task 7 measured this statistic close to invariant to which
+            # strengths it is given -- so the disqualified fit is a valid,
+            # explicitly-labeled diagnostic input, kept in memory only
+            # (never written to `strengths.csv`).
+            try:
+                resolved = resolve_rosters(rows, teams, aliases)
+                sweep_strengths, _ = team_strengths(resolved, fitted)
+                sweep_strengths_note = (
+                    f"diagnostic only, not endorsed: disqualified {selected} strengths "
+                    f"({len(sweep_strengths)} teams)"
                 )
+            except UnresolvedTeamError as exc:
+                sweep_strengths = {t.name: 0.0 for t in teams}
+                sweep_strengths_note = (
+                    f"diagnostic only: tied strengths (roster resolution failed for an "
+                    f"unrelated reason: {exc})"
+                )
+        else:
             resolved = resolve_rosters(rows, teams, aliases)
             strengths, prior_driven = team_strengths(resolved, fitted)
+            sweep_strengths = strengths
+            sweep_strengths_note = f"fitted {selected} strengths ({len(strengths)} teams)"
 
             strengths_path = out / "strengths.csv"
             with strengths_path.open("w", newline="") as fh:
@@ -208,16 +238,17 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit(f"card generation failed with exit code {card_rc}")
             card_status = f"generated from {selected} strengths ({len(strengths)} teams)"
 
-            # Spec XII: report how much the card depends on the duration parameter.
-            sweep = sensitivity_sweep(
-                strengths,
-                replace(rules, duration_log_sigma=duration_fit.log_sigma),
-                [duration_fit.log_sigma, duration_fit.log_sigma * 0.5,
-                 duration_fit.log_sigma * 1.5, 0.25],
-                n_sims=max(20_000, args.card_sims // 10),
-                seed=args.card_seed,
-            )
-            (out / "duration_sensitivity.json").write_text(json.dumps(sweep, indent=2) + "\n")
+        # Spec XII: report how much the card depends on the duration parameter,
+        # regardless of whether a card actually shipped this run.
+        sweep = sensitivity_sweep(
+            sweep_strengths,
+            replace(rules, duration_log_sigma=duration_fit.log_sigma),
+            [duration_fit.log_sigma, duration_fit.log_sigma * 0.5,
+             duration_fit.log_sigma * 1.5, 0.25],
+            n_sims=max(20_000, args.card_sims // 10),
+            seed=args.card_seed,
+        )
+        (out / "duration_sensitivity.json").write_text(json.dumps(sweep, indent=2) + "\n")
 
     verdict = "PASS" if result.passed else "FAIL"
     lines = [
@@ -334,6 +365,12 @@ def main(argv: list[str] | None = None) -> int:
         lines += [
             "",
             "## Duration sensitivity",
+            "",
+            (
+                f"Strengths used for this sweep: {sweep_strengths_note}. The sweep measures "
+                "the SIMULATOR's sensitivity to the duration parameter, not the quality of "
+                "these strengths -- it runs regardless of the floor verdict above."
+            ),
             "",
             "| log_sigma | max abs delta vs fitted |",
             "|---|---|",
