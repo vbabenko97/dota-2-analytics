@@ -643,9 +643,28 @@ def test_gate_reports_a_ci_entirely_below_zero_distinctly_from_including_zero():
 
 
 def test_gate_result_exposes_excluded_prediction_counts():
+    """Unrated rows are dropped from scoring (FIX 2), so the count of what was
+    dropped, and why, is the only evidence a reader has that the gate's
+    population is not the full one. A fixture with nothing excluded cannot
+    tell a wired-up tally from a hardcoded empty dict -- so append real
+    unrated predictions to both sides and require them to show up by reason.
+    """
     a, b, rows = gate_fixture(edge=0.05, jitter=0.005, seed=9)
+    assert evaluate_gate(a, b, rows, config()).excluded == {}
+
+    next_id = max(p.match_id for p in a) + 1
+    unrated = [("null_team", 3), ("bad_roster", 2)]
+    for reason, count in unrated:
+        for _ in range(count):
+            rows.append(row(next_id, next_id, league_id=0, radiant_win=True))
+            for side in (a, b):
+                side.append(pred(next_id, 0.5, league_id=0, series_id=0, fold_id=0,
+                                 rated=False, reason=reason))
+            next_id += 1
+
     result = evaluate_gate(a, b, rows, config())
-    assert result.excluded == {}
+    assert result.excluded == {"null_team": 3, "bad_roster": 2}
+    assert result.n_maps == len(rows) - 5, "excluded rows are not scored"
 
 
 class _CountingModel:
