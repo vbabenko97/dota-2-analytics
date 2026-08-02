@@ -480,6 +480,7 @@ official          — stated in the published rules
 logically forced  — the only outcome consistent with the official rules
 inferred          — a reading of ambiguous official text
 arbitrary         — unconstrained; chosen exchangeably (e.g. random among exact ties)
+empirical         — estimated from observed data; see the fit report for n and CI
 ```
 
 Provenance matters more than pretending every branch has textual authority. `inferred` and `arbitrary` branches are the first place to look when the differential test disagrees.
