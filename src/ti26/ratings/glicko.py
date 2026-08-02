@@ -210,6 +210,13 @@ class GlickoModel:
         return expected_score(a, b)
 
     def update(self, row: MapRow) -> None:
+        """Accumulate one map's result into the current rating period.
+
+        Rows must be observed in chronological `start_time` order, like
+        `RosterIndex.observe`. Nothing here enforces or checks ordering: an
+        out-of-order row would be bucketed into the wrong rating period and
+        could be flushed against the wrong set of concurrent results.
+        """
         reason = skip_reason(row)
         if reason is not None:
             self.skipped[reason] = self.skipped.get(reason, 0) + 1
@@ -246,7 +253,15 @@ class GlickoModel:
         self._pending = {}
 
     def strengths(self) -> dict[str, float]:
-        """Zero-centred logit strengths, inflated to the current period."""
+        """Zero-centred logit strengths, inflated to the current period.
+
+        Calling this closes the current rating period: it calls `flush()`,
+        which pushes whatever results are pending through `update_rating`
+        immediately. Every caller in this codebase calls it after the period
+        is already done, so this is latent today -- but calling it mid-period
+        forces a premature, partial update and fragments that period into
+        two sequential updates instead of one combined update.
+        """
         self.flush()
         if not self._ratings:
             return {}
@@ -255,6 +270,8 @@ class GlickoModel:
         return {k: (r.rating - mean) * LOGIT_PER_GLICKO for k, r in current.items()}
 
     def rating_deviations(self) -> dict[str, float]:
+        """Current RD per roster. Calling this closes the current rating
+        period (see `strengths`'s docstring for the mid-period hazard)."""
         self.flush()
         return {rvid: self.rating_of(rvid).rd for rvid in self._ratings}
 
@@ -266,6 +283,11 @@ class GlickoModel:
 
         Spec III measured recent volume collapsing to ~1,600 maps in the last
         90 days; this is how that shows up per team rather than in aggregate.
+
+        Calling this closes the current rating period (see `strengths`'s
+        docstring for the mid-period hazard) -- a real risk here, since a
+        diagnostic report is exactly the kind of thing a future caller might
+        reach for mid-period.
         """
         self.flush()
         rows = []

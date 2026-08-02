@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from ti26.data.schema import MapRow
@@ -199,16 +201,16 @@ def test_the_two_expected_score_forms_are_deliberately_different():
     RD for outcome PREDICTION. Both are correct in their place. This pins the
     distinction so neither gets 'simplified' into the other.
     """
-    from ti26.ratings.glicko import GlickoRating, _e, expected_score
+    from ti26.ratings.glicko import SCALE, GlickoRating, _e, expected_score
 
     player = GlickoRating(1700.0, 350.0, 0.06)   # strong but very uncertain
     opponent = GlickoRating(1500.0, 30.0, 0.06)  # average and well known
 
     combined = expected_score(player, opponent)
     opponent_only = _e(
-        (player.rating - 1500.0) / 173.7178,
-        (opponent.rating - 1500.0) / 173.7178,
-        opponent.rd / 173.7178,
+        (player.rating - 1500.0) / SCALE,
+        (opponent.rating - 1500.0) / SCALE,
+        opponent.rd / SCALE,
     )
     assert combined < opponent_only, (
         "the prediction form must discount for the PLAYER's own uncertainty; "
@@ -268,7 +270,110 @@ def test_predict_does_not_register_a_bad_roster_row_in_the_index():
     """
     index = RosterIndex()
     model = GlickoModel(roster_index=index, period_seconds=WEEK)
-    model.predict(row(1, 0, A, B, has_bad_roster=True))
+    p = model.predict(row(1, 0, A, B, has_bad_roster=True))
+    assert 0.0 < p < 1.0, "a skipped row must still get a forecast"
     assert index.accounts(roster_version_id(A)) == ()
     assert index.accounts(roster_version_id(B)) == ()
     assert index.predecessor(roster_version_id(A)) is None
+
+
+def test_volatility_solution_satisfies_glickmans_published_equation():
+    """The Glickman fixture alone cannot catch an algebra error here: three
+    independently plausible transcription bugs in `_solve_volatility`'s
+    `f(x)` -- `tau` instead of `tau**2` in the denominator, dropping the
+    square on `2*(phi_sq+v+ex)**2`, and flipping the numerator's sign -- were
+    verified by mutation to all stay within that fixture's tolerances (see
+    the report for the resulting f-values). The reason is arithmetic: for
+    that fixture's inputs `ex = exp(a)` is negligible next to `phi_sq + v`,
+    so near the root `f(x)` is dominated by the `(x - a)/tau**2` term and the
+    delicate part barely matters.
+
+    This test instead checks that the volatility the real solver returns
+    actually SOLVES Glickman's published root equation (2013 paper, step 5),
+    transcribed fresh here as `f_published` -- not imported from, nor
+    sharing any code with, `_solve_volatility`'s own `f`. The scenario -- a
+    modest favourite (1600/30) losing 100 times running to an evenly rated,
+    equally certain opponent (1500/30) -- is chosen so the exponential term
+    is material at the root: repeating an IDENTICAL result leaves `delta`
+    unchanged (Glicko-2's `v` and `delta_sum` scale oppositely with repeat
+    count) while `v` shrinks by a factor of the repeat count, which pushes
+    `delta_sq` far enough above `phi_sq + v` that `ex` at the converged root
+    ends up the same order of magnitude as `phi_sq + v` -- unlike the
+    Glickman fixture, where it never is.
+
+    This also exercises `_solve_volatility`'s `delta_sq > phi_sq + v`
+    BRACKET branch (`B = log(delta_sq - phi_sq - v)`), which nothing else in
+    this file pins directly -- confirmed by the `delta_sq > phi_sq + v`
+    assertion below, taken on the same values the solver itself computes.
+
+    Mutation-verified: reintroducing any of the three bugs above into
+    `_solve_volatility` makes `abs(f_published(x_root))` jump to order 1-10
+    (measured: 8.59, 2.24, 3.21) while leaving the Glickman fixture green.
+    """
+    from ti26.ratings.glicko import SCALE, GlickoRating, _e, _g, update_rating
+
+    player = GlickoRating(1600.0, 30.0, 0.06)
+    opponent = GlickoRating(1500.0, 30.0, 0.06)
+    tau = 0.5
+    n = 100
+
+    mu = (player.rating - 1500.0) / SCALE
+    phi = player.rd / SCALE
+    mu_j = (opponent.rating - 1500.0) / SCALE
+    phi_j = opponent.rd / SCALE
+    g_j = _g(phi_j)
+    e_j = _e(mu, mu_j, phi_j)
+    v_single = 1.0 / (g_j * g_j * e_j * (1.0 - e_j))
+    v = v_single / n
+    delta = v_single * g_j * (0.0 - e_j)
+    delta_sq, phi_sq = delta * delta, phi * phi
+    assert delta_sq > phi_sq + v, "scenario must exercise the bracket branch"
+
+    result = update_rating(player, [(opponent, 0.0)] * n, tau)
+
+    a = math.log(player.volatility**2)
+
+    def f_published(x: float) -> float:
+        """Glickman 2013 eq. for volatility, retyped independently of
+        `_solve_volatility`'s own `f` -- a bug in that copy cannot also be
+        baked into this one."""
+        ex = math.exp(x)
+        numerator = ex * (delta_sq - phi_sq - v - ex)
+        denominator = 2.0 * (phi_sq + v + ex) ** 2
+        return numerator / denominator - (x - a) / (tau * tau)
+
+    x_root = math.log(result.volatility**2)
+    assert abs(f_published(x_root)) < 1e-9
+
+
+def test_strengths_mid_period_fragments_the_rating_period():
+    """`strengths()`, like `rating_deviations()` and `activity_report()`,
+    calls `flush()` internally. Every current caller flushes first, so this
+    is latent today -- but a future caller invoking one of these mid-period
+    for diagnostics (their own docstring purpose) would force that period's
+    PARTIAL results through `update_rating` early, and a later match still
+    inside the same nominal period would then be processed as a SEPARATE
+    subsequent update rather than being combined with the first batch. That
+    silently splits one rating period into two, violating this task's first
+    constraint that updates happen in rating periods, not per match.
+
+    This pins the observable consequence: flushing the period in two pieces
+    (via a mid-period `strengths()` call) must not produce the same rating
+    as flushing it once with both results combined.
+    """
+
+    def final_rating(call_strengths_mid_period: bool) -> float:
+        model = GlickoModel(period_seconds=WEEK)
+        model.update(row(0, 0, A, B, radiant_win=False))
+        if call_strengths_mid_period:
+            model.strengths()  # forces a premature flush mid-period
+        model.update(row(1, 1, A, B, radiant_win=False))
+        model.flush()
+        return model.rating_of(roster_version_id(A)).rating
+
+    fragmented = final_rating(call_strengths_mid_period=True)
+    combined = final_rating(call_strengths_mid_period=False)
+    assert fragmented != pytest.approx(combined), (
+        "a mid-period strengths() call must not silently change the rating "
+        "by splitting one period's results into two sequential updates"
+    )
