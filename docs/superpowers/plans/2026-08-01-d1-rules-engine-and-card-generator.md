@@ -49,7 +49,7 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `Category` (str enum: `W4_0, W4_1, ELIM_WIN, ELIM_LOSS, L1_4, L0_4`); `TeamState` (fields `team_id: str, initial_group: str, series_wins: int, series_losses: int, map_wins: int, map_losses: int, opponents: list[str]`; properties `active: bool`, `record: tuple[int,int]`, `maps_played: int`); `SeriesResult(round_no: int, team_a: str, team_b: str, wins_a: int, wins_b: int, was_repeat: bool)`; `derive_record_capacities(n_teams, advance_at, eliminate_at, total_rounds) -> dict[tuple[int,int], int]`; `category_for_terminal_record(record, advance_at, eliminate_at) -> Category | None`; `derive_category_capacities(record_capacities, advance_at, eliminate_at) -> dict[Category,int]`; `load_rules(path) -> Rules` exposing `.n_teams, .total_rounds, .advance_at_wins, .eliminate_at_losses, .tiebreak_order, .within_group_rounds, .cross_group_rounds, .max_distance_elimination_rounds, .provenance, .record_capacities, .category_capacities, .random_baseline`.
+- Produces: `Category` (str enum: `W4_0, W4_1, ELIM_WIN, ELIM_LOSS, L1_4, L0_4`); `TeamState` (fields `team_id: str, initial_group: str, series_wins: int, series_losses: int, map_wins: int, map_losses: int, opponents: list[str]`; properties `record: tuple[int,int]`, `maps_played: int` — **no `active` property**, see the note after the code block); `SeriesResult(round_no, team_a, team_b, wins_a, wins_b, was_repeat)`; `RoundLog(round_no, ranking, pairings, repeat_count, min_possible_repeats, results)`; `SwissRun(states, groups, rounds)`; `EliminationMatch(chooser, opponent, available_when_choosing, wins_chooser, wins_opponent)`; `EliminationRun(categories, matches)`; `derive_record_capacities(n_teams, advance_at, eliminate_at, total_rounds) -> dict[tuple[int,int], int]`; `category_for_terminal_record(record, advance_at, eliminate_at) -> Category | None`; `derive_category_capacities(record_capacities, advance_at, eliminate_at) -> dict[Category,int]`; `load_rules(path) -> Rules` exposing `.n_teams, .total_rounds, .advance_at_wins, .eliminate_at_losses, .tiebreak_order, .within_group_rounds, .cross_group_rounds, .max_distance_elimination_rounds, .duration_log_mean, .duration_log_sigma, .provenance, .record_capacities, .category_capacities, .random_baseline`, plus the method `.is_active(team: TeamState) -> bool`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -75,11 +75,18 @@ def test_record_capacities_are_derived_not_configured():
 
 
 def test_record_capacities_generalise_to_a_smaller_bracket():
-    # 8 teams, 3 wins advance / 3 losses out, 5 rounds.
-    caps = derive_record_capacities(n_teams=8, advance_at=3, eliminate_at=3, total_rounds=5)
+    """8 teams, 3 wins advance / 3 losses out, 3 rounds.
+
+    Round count matters: at 5 rounds this format reaches a (2,1) group of
+    size 3 and correctly raises, because an odd record group cannot be
+    paired without a bye. Three rounds keeps every interior group even.
+    """
+    caps = derive_record_capacities(n_teams=8, advance_at=3, eliminate_at=3, total_rounds=3)
     assert sum(caps.values()) == 8
     assert caps[(3, 0)] == 1
     assert caps[(0, 3)] == 1
+    assert caps[(2, 1)] == 3
+    assert caps[(1, 2)] == 3
 
 
 def test_odd_record_group_is_rejected():
@@ -753,7 +760,19 @@ git commit -m "feat: official ranking with mandatory lazy duration resolution"
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `NoLegalPairingError(ValueError)`; `PairingChoice(matching, repeat_count, min_possible_repeats, candidates_considered)`; `perfect_matchings(items) -> Iterator[list[tuple[str,str]]]`; `choose_pairing(team_ids, rank_index, prior_opponents, rng, *, group_of=None, cross_group=False, maximize_distance=False) -> PairingChoice`.
+- Produces: `NoLegalPairingError(ValueError)`; `PairingChoice(matching, repeat_count, min_possible_repeats, total_matchings)`; `perfect_matchings(items) -> Iterator[list[tuple[str,str]]]` — raises `NoLegalPairingError` on odd-length input; `choose_pairing(team_ids, rank_index, prior_opponents, rng, *, group_of=None, cross_group=False, maximize_distance=False) -> PairingChoice`.
+
+> **Post-implementation note.** `total_matchings` counts matchings *before* the
+> cross-group filter, so it is the raw `(2n-1)!!` search-space size. It was
+> originally named `candidates_considered`, which implied a post-filter count it
+> never held. A second post-filter count was considered and declined as
+> speculative — nothing consumes it.
+>
+> Fix round 1 also replaced two vacuous forced-repeat tests (every matching in
+> each fixture tied at the same repeat count, so both passed with repeat-filtering
+> deleted) and a determinism test that exercised no randomness (its
+> minimum-distance matching was unique, so `rng.choice` ran on a one-element
+> list). See `task-3-report.md` for the mutation evidence.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2092,15 +2111,24 @@ def test_no_self_pairing(seed):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_repeats_are_minimised_not_assumed_absent(seed):
+def test_repeats_are_minimised_against_an_independent_recomputation(seed):
     """The engine must achieve the minimum repeat count every round.
 
-    Whether that minimum is ever above zero in a real 16-team five-round
-    Swiss is unproven; this asserts optimality, not absence.
+    Do NOT assert `round_log.repeat_count == round_log.min_possible_repeats`.
+    That is a tautology: `choose_pairing` filters candidates to those scoring
+    `fewest` repeats and then reports both numbers from that same filtered
+    set, so the equality holds for any input regardless of whether bucketing,
+    the group constraint, or the distance ordering are correct.
+
+    Instead reuse the independent recomputation helper from
+    `tests/test_swiss.py`: replay the log to rebuild each round's entering
+    records and prior-opponent sets, rebuild the buckets from the rules
+    config, brute-force `perfect_matchings` over each bucket, and compare the
+    minimum found that way against the repeat count of the pairings the
+    engine actually logged. Nothing in that path reads `PairingChoice`.
     """
     run = run_swiss(varied_strengths(seed), RULES, random.Random(seed))
-    for round_log in run.rounds:
-        assert round_log.repeat_count == round_log.min_possible_repeats
+    assert_rounds_hit_independent_repeat_minimum(run, RULES)
 
 
 @pytest.mark.parametrize("seed", SEEDS)

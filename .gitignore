@@ -17,10 +17,15 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-# Agent harness local state
-.claude/settings.local.json
-.claude/receipts/
-.claude/maintenance-uses.jsonl
+# CLI output — generated, not tracked
+reports/
+
+# Agent harness local state — machine-local config, plugin caches, and skill
+# scratch workspaces. None of it is project source.
+.superpowers/
+.claude/
+.claude-plugin/
+.codex/
 
 # macOS
 .DS_Store
