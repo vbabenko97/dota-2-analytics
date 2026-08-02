@@ -63,6 +63,10 @@ def _split(slots: Sequence, accounts: Sequence, heroes: Sequence, match_id) -> t
     return tuple(radiant[0]), tuple(dire[0]), tuple(radiant[1]), tuple(dire[1])
 
 
+def _opt_int(value: int | str | None) -> int | None:
+    return None if value is None else int(value)
+
+
 def normalize_row(raw: dict) -> MapRow:
     r_acc, d_acc, r_hero, d_hero = _split(
         raw["slots"], raw["accounts"], raw["heroes"], raw["match_id"]
@@ -72,12 +76,12 @@ def normalize_row(raw: dict) -> MapRow:
         start_time=int(raw["start_time"]),
         duration=int(raw["duration"]),
         radiant_win=bool(raw["radiant_win"]),
-        league_id=raw.get("leagueid"),
+        league_id=_opt_int(raw.get("leagueid")),
         tier=raw.get("tier"),
-        radiant_team_id=raw.get("radiant_team_id"),
-        dire_team_id=raw.get("dire_team_id"),
-        series_id=raw.get("series_id"),
-        series_type=raw.get("series_type"),
+        radiant_team_id=_opt_int(raw.get("radiant_team_id")),
+        dire_team_id=_opt_int(raw.get("dire_team_id")),
+        series_id=_opt_int(raw.get("series_id")),
+        series_type=_opt_int(raw.get("series_type")),
         patch=raw.get("patch"),
         radiant_accounts=r_acc,
         dire_accounts=d_acc,
@@ -96,4 +100,6 @@ def normalize_all(raw: list[dict]) -> tuple[list[MapRow], dict[str, int]]:
             rows.append(normalize_row(item))
         except RosterSlotError:
             tally["roster_slot_error"] = tally.get("roster_slot_error", 0) + 1
+        except (KeyError, TypeError, ValueError):
+            tally["malformed_row"] = tally.get("malformed_row", 0) + 1
     return rows, tally

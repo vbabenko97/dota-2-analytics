@@ -83,6 +83,12 @@ def test_null_team_id_is_flagged_not_dropped():
     assert row.match_id == 8925460065, "the row survives; only the flag changes"
 
 
+def test_null_account_in_roster_is_flagged_not_dropped():
+    row = normalize_row(raw(accounts=[1, 2, 3, 4, None, 6, 7, 8, 9, 10]))
+    assert row.has_bad_roster is True
+    assert row.match_id == 8925460065, "the row survives; only the flag changes"
+
+
 def test_normalize_all_counts_rejections_instead_of_discarding_silently():
     good = raw()
     bad = raw(match_id=1, slots=[0, 1, 2, 3, 4, 128, 129, 130, 131],
@@ -90,6 +96,23 @@ def test_normalize_all_counts_rejections_instead_of_discarding_silently():
     rows, tally = normalize_all([good, bad])
     assert len(rows) == 1
     assert tally == {"roster_slot_error": 1}, "every dropped row is accounted for"
+
+
+def test_normalize_all_tallies_a_missing_key_as_malformed_row():
+    good = raw()
+    bad = raw(match_id=2)
+    del bad["slots"]
+    rows, tally = normalize_all([good, bad])
+    assert [r.match_id for r in rows] == [8925460065]
+    assert tally == {"malformed_row": 1}
+
+
+def test_normalize_all_tallies_a_non_numeric_duration_as_malformed_row():
+    good = raw()
+    bad = raw(match_id=2, duration="not-a-number")
+    rows, tally = normalize_all([good, bad])
+    assert [r.match_id for r in rows] == [8925460065]
+    assert tally == {"malformed_row": 1}
 
 
 def test_accounts_are_hashable_tuples_for_roster_keying():
