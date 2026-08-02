@@ -1,6 +1,7 @@
 import csv
 import json
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -25,7 +26,7 @@ def row(match_id, start_time, league_id, radiant, dire, radiant_win,
     )
 
 
-def seeded_store(path, n_teams=16, n_series=1200, maps_per_series=3):
+def seeded_store(path, n_teams=16, n_series=1200, maps_per_series=3, n_null_team=0):
     """Deterministic ladder: lower-indexed rosters are genuinely stronger.
 
     Team ids are `1000 + index` so `config/ti2026_teams.yaml` fixtures can
@@ -33,6 +34,13 @@ def seeded_store(path, n_teams=16, n_series=1200, maps_per_series=3):
     into real series so the clustered bootstrap has clusters to resample, and
     tournaments are spread across many league ids so the single-stage path is
     the one actually exercised.
+
+    `n_null_team`: flips `has_null_team=True` on the LAST this-many generated
+    rows (still real, already-fold-assigned maps -- only the flag changes).
+    They are the chronologically latest rows, so they land in an existing
+    out-of-sample fold rather than training-only history. Used by tests that
+    need a real, deterministic, non-zero exclusion count to add up, rather
+    than asserting an arithmetic identity that holds trivially at zero.
     """
     import random
 
@@ -53,6 +61,8 @@ def seeded_store(path, n_teams=16, n_series=1200, maps_per_series=3):
                     duration=int(rng.lognormvariate(7.55, 0.33)))
             )
             match_id += 1
+    if n_null_team:
+        rows[-n_null_team:] = [replace(r, has_null_team=True) for r in rows[-n_null_team:]]
     conn = open_store(path)
     insert_rows(conn, rows)
     return conn
@@ -95,6 +105,42 @@ def write_team_config(path, n_teams=16):
     for t in range(n_teams):
         lines.append(f"  - {{name: Team{t:02d}, team_id: {1000 + t}}}")
     path.write_text("\n".join(lines) + "\n")
+    return path
+
+
+def write_rules_config(path, log_mean, log_sigma):
+    """A minimal, valid `--rules` file (see `src/ti26/rules.py::load_rules`)
+    with a controllable `duration_model`, for FIX B's staleness-warning test.
+    `--skip-card` never checks `n_teams`, so it does not need to agree with
+    any team fixture. `repr()` on the floats round-trips exactly through
+    YAML, so a value written from `duration_fit.json` here reproduces the
+    identical float `load_rules` reads back -- well inside
+    `DURATION_STALENESS_TOLERANCE`.
+    """
+    path.write_text(
+        "format:\n"
+        "  n_teams: 16\n"
+        "  total_rounds: 5\n"
+        "  advance_at_wins: 4\n"
+        "  eliminate_at_losses: 4\n"
+        "tiebreak_order:\n"
+        "  - series_wins\n"
+        "  - series_losses\n"
+        "  - opponent_series_wins\n"
+        "  - game_win_pct\n"
+        "  - opponent_game_win_pct\n"
+        "  - avg_duration\n"
+        "  - coin_toss\n"
+        "rounds:\n"
+        "  within_group: [2, 3]\n"
+        "  cross_group: [4]\n"
+        "  max_distance_when_loser_eliminated: [5]\n"
+        "duration_model:\n"
+        f"  log_mean: {log_mean!r}\n"
+        f"  log_sigma: {log_sigma!r}\n"
+        "provenance:\n"
+        "  duration_model: test_fixture\n"
+    )
     return path
 
 
@@ -414,3 +460,108 @@ def test_reported_verdict_agrees_with_the_reported_numbers(tmp_path):
         assert "Do not proceed to D3" in report
     else:
         assert "Proceed to D3" in report
+
+
+def test_excluded_maps_are_reported_and_the_arithmetic_is_internally_consistent(tmp_path):
+    """Fix round 4 FIX C: `GateResult.excluded` was repaired in Task 6
+    specifically so exclusions would be a real instrument, not a decorative
+    one -- but the surfacing itself (Fix round 4) had no test. The useful
+    assertion is the RELATIONSHIP, not a report literal that changes on
+    re-ingest: out-of-sample maps total minus the sum of excluded-by-reason
+    counts must equal maps compared. A fixture with zero exclusions would let
+    that hold trivially (0 - 0 == n), so 5 of this fixture's out-of-sample
+    rows are deliberately flagged `has_null_team` to force a real, nonzero
+    count to add up.
+    """
+    import re
+
+    store = tmp_path / "d2.sqlite"
+    seeded_store(store, n_null_team=5)
+    out = tmp_path / "reports"
+    d2_main(["--store", str(store), "--out", str(out), "--min-train", "200", "--skip-card"])
+    report = (out / "d2_gate.md").read_text()
+
+    total = int(
+        re.search(r"Folds: \d+ tournaments, (\d+) out-of-sample maps", report).group(1)
+    )
+    compared = int(re.search(r"Maps compared: (\d+)", report).group(1))
+    excluded_total = int(re.search(r"Excluded from scoring: (\d+) maps", report).group(1))
+
+    assert excluded_total == 5, "exactly the 5 injected null_team rows must be excluded"
+    assert total - excluded_total == compared, (
+        f"{total} out-of-sample minus {excluded_total} excluded must equal "
+        f"{compared} compared"
+    )
+    assert "null_team" in report
+
+
+def test_n_scored_reflects_the_rated_population_not_the_raw_prediction_count(tmp_path):
+    """Fix round 4 FIX F: `backtest_metrics.csv` used to report only
+    `n_predictions` (every out-of-sample row), inviting confusion with the
+    smaller population the log-loss/Brier/accuracy columns beside it are
+    actually computed over. Forces a real unrated subset (same mechanism as
+    the exclusion-arithmetic test above) so `n_scored` must be STRICTLY less
+    than `n_predictions`, not merely present and equal to it -- catches a
+    runner that always reports every row as scored.
+    """
+    store = tmp_path / "d2.sqlite"
+    seeded_store(store, n_null_team=5)
+    out = tmp_path / "reports"
+    d2_main(["--store", str(store), "--out", str(out), "--min-train", "200", "--skip-card"])
+
+    with (out / "backtest_metrics.csv").open() as fh:
+        rows = list(csv.DictReader(fh))
+    assert rows, "no metrics rows written"
+    for r in rows:
+        n_predictions = int(r["n_predictions"])
+        n_scored = int(r["n_scored"])
+        assert n_scored < n_predictions, (
+            f"{r['model']}: n_scored ({n_scored}) must be strictly less than "
+            f"n_predictions ({n_predictions}) once unrated rows exist"
+        )
+        assert n_predictions - n_scored == 5, (
+            "exactly the 5 injected null_team rows must be unscored, for every model "
+            "-- `rated` is a row property, not a model one"
+        )
+
+
+def test_duration_staleness_warning_fires_only_on_a_real_mismatch(tmp_path, capsys):
+    """Fix round 4 FIX B: `cli_d2` warns (stdout + `d2_gate.md`) when the
+    loaded rules config's `duration_model` has drifted from this run's
+    freshly-fitted values, instead of silently building a card from stale
+    parameters. Driven both ways on the SAME store/fit so the only variable
+    is the rules file: a config seeded with the placeholder values (7.65 /
+    0.25, confirmed elsewhere to differ from any real fit by >0.02 -- see
+    `test_duration_fit_is_written_and_differs_from_the_placeholder`) must
+    warn, and a config written back from that exact run's own
+    `duration_fit.json` (bit-identical inputs refit bit-identical floats)
+    must not.
+    """
+    store = tmp_path / "d2.sqlite"
+    seeded_store(store)
+
+    stale_rules = write_rules_config(tmp_path / "rules_stale.yaml", log_mean=7.65, log_sigma=0.25)
+    out1 = tmp_path / "reports1"
+    d2_main([
+        "--store", str(store), "--out", str(out1), "--min-train", "200",
+        "--skip-card", "--rules", str(stale_rules),
+    ])
+    captured1 = capsys.readouterr()
+    assert "WARNING" in captured1.out
+    report1 = (out1 / "d2_gate.md").read_text()
+    assert "does NOT match" in report1
+
+    fit = json.loads((out1 / "duration_fit.json").read_text())
+    fresh_rules = write_rules_config(
+        tmp_path / "rules_fresh.yaml", log_mean=fit["log_mean"], log_sigma=fit["log_sigma"]
+    )
+    out2 = tmp_path / "reports2"
+    d2_main([
+        "--store", str(store), "--out", str(out2), "--min-train", "200",
+        "--skip-card", "--rules", str(fresh_rules),
+    ])
+    captured2 = capsys.readouterr()
+    assert "WARNING" not in captured2.out
+    report2 = (out2 / "d2_gate.md").read_text()
+    assert "Matches the fit above" in report2
+    assert "does NOT match" not in report2
