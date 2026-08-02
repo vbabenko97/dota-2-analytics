@@ -82,7 +82,54 @@ def test_strengths_are_logit_scale_and_centred():
     gap = strengths[roster_version_id(A)] - strengths[roster_version_id(B)]
     elo_gap = model.rating(roster_version_id(A)) - model.rating(roster_version_id(B))
     assert gap == pytest.approx(elo_gap * math.log(10) / 400.0)
-    assert sum(strengths.values()) == pytest.approx(0.0, abs=1e-9), "centred at zero"
+
+
+def test_strengths_stay_consistent_with_predict_at_a_non_default_scale():
+    """`strengths()` must derive its logit conversion from the model's own
+    `scale`, not a hardcoded 400 -- otherwise a non-default scale would make
+    `strengths()` disagree with this same instance's `predict()`, which is
+    exactly the degenerate-simulation failure the logit-scale contract
+    exists to prevent."""
+    from ti26.roster import roster_version_id
+
+    model = EloModel(scale=200.0)
+    for i in range(10):
+        model.update(row(i, 100 + i, A, B, radiant_win=True))
+    strengths = model.strengths()
+    gap = strengths[roster_version_id(A)] - strengths[roster_version_id(B)]
+    implied_p = 1.0 / (1.0 + math.exp(-gap))
+    assert implied_p == pytest.approx(model.predict(row(999, 999, A, B)))
+
+
+def test_strengths_centring_point_is_stable_across_differently_sized_fits():
+    """Elo is zero-sum: every update adds +delta to the winner and -delta to
+    the loser, so the mean of every rated roster is always exactly the
+    initial rating (1500), no matter how many other rosters have played or
+    how asymmetric their histories are. This is what makes strengths from
+    two differently-sized fits comparable at all: if a model's centring
+    point drifted with population size, the same roster A/B result would be
+    assigned a different strength depending on what else happened to be fit
+    alongside it."""
+    from ti26.roster import roster_version_id
+
+    small = EloModel()
+    small.update(row(1, 100, A, B, radiant_win=True))
+
+    large = EloModel()
+    large.update(row(1, 100, A, B, radiant_win=True))
+    other_rosters = [
+        ([11, 12, 13, 14, 15], [16, 17, 18, 19, 20]),
+        ([21, 22, 23, 24, 25], [26, 27, 28, 29, 30]),
+        ([31, 32, 33, 34, 35], [36, 37, 38, 39, 40]),
+    ]
+    match_id = 2
+    for x, y in other_rosters:
+        for i in range(5):
+            large.update(row(match_id, 100 + match_id, x, y, radiant_win=(i % 2 == 0)))
+            match_id += 1
+
+    rvid_a = roster_version_id(A)
+    assert small.strengths()[rvid_a] == pytest.approx(large.strengths()[rvid_a])
 
 
 def test_gate_config_loads_the_preregistered_margin():

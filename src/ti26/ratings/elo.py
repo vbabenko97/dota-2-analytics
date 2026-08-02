@@ -6,10 +6,6 @@ from ti26.data.schema import MapRow
 from ti26.ratings import skip_reason
 from ti26.roster import roster_version_id
 
-# Elo points -> logit scale. A 400-point gap is 10:1 odds by construction,
-# so the conversion factor is ln(10)/400.
-LOGIT_PER_ELO = math.log(10) / 400.0
-
 
 class EloModel:
     def __init__(self, k: float = 20.0, initial: float = 1500.0, scale: float = 400.0) -> None:
@@ -41,8 +37,15 @@ class EloModel:
         self._ratings[b] = self.rating(b) - delta
 
     def strengths(self) -> dict[str, float]:
-        """Logit-scale, zero-centred strengths for `ti26.montecarlo`."""
+        """Logit-scale, zero-centred strengths for `ti26.montecarlo`.
+
+        Converted from this instance's own `scale`, not a fixed 400: a
+        `scale`-point gap is 10:1 odds by construction, so the conversion
+        factor is ln(10)/scale. Hardcoding 400 here would silently
+        desynchronize from `predict()` for any non-default scale.
+        """
         if not self._ratings:
             return {}
         mean = sum(self._ratings.values()) / len(self._ratings)
-        return {k: (v - mean) * LOGIT_PER_ELO for k, v in self._ratings.items()}
+        logit_per_point = math.log(10) / self._scale
+        return {k: (v - mean) * logit_per_point for k, v in self._ratings.items()}

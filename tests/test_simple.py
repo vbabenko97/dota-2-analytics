@@ -48,6 +48,27 @@ def test_ewma_forgets_old_results_faster_with_a_shorter_half_life():
     assert fast.predict(row(99, A, B)) > slow.predict(row(99, A, B))
 
 
+def test_ewma_is_more_confident_about_a_longer_winning_streak():
+    """A roster that has won its only game and one that has won 200 straight
+    both have a raw win rate of 1.0, which would clip to the same predicted
+    probability and make the model unable to tell a single data point from
+    a long streak. Laplace smoothing makes the rate sample-size aware, so
+    against the same unrated opponent the 200-win roster must be predicted
+    more confidently than the 1-win roster."""
+    C = [21, 22, 23, 24, 25]
+
+    one_win = EwmaModel(half_life_maps=30.0)
+    one_win.update(row(1, A, B, radiant_win=True))
+
+    two_hundred_wins = EwmaModel(half_life_maps=30.0)
+    for i in range(200):
+        two_hundred_wins.update(row(i, A, B, radiant_win=True))
+
+    p_one_win = one_win.predict(row(998, A, C))
+    p_two_hundred_wins = two_hundred_wins.predict(row(999, A, C))
+    assert p_two_hundred_wins > p_one_win
+
+
 def test_ewma_predictions_stay_in_the_open_unit_interval():
     """An unbeaten roster must not produce p = 1.0; log loss would be inf and
     a single upset would dominate every metric."""
