@@ -87,8 +87,18 @@ def test_a_rejected_conflict_leaves_the_original_intact(tmp_path):
 
 
 def test_rows_load_in_start_time_order(tmp_path):
+    """match_id order is DELIBERATELY decorrelated from start_time order
+    (ascending match_id 1,2,3 maps to start_time 3000,1000,2000, not
+    1000,2000,3000) -- an implementation that ordered by match_id instead
+    of start_time would return [3000, 1000, 2000], not this. A fixture
+    where the two orders coincide (as an earlier version of this test had:
+    match_id 3,1,2 inserted but start_time already ascending 1000-3000 with
+    match_id, so `order by match_id` and `order by start_time` land on the
+    identical sequence) cannot tell the two apart -- the same trap already
+    fixed in `rating_gaps` and `latest_rosters`.
+    """
     conn = open_store(tmp_path / "d2.sqlite")
-    insert_rows(conn, [row(3, 3000), row(1, 1000), row(2, 2000)])
+    insert_rows(conn, [row(1, 3000), row(2, 1000), row(3, 2000)])
     assert [r.start_time for r in load_rows(conn)] == [1000, 2000, 3000]
 
 

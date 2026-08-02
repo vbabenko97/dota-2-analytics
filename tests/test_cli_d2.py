@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from ti26.cli_d2 import FLOOR_REFUSED_EXIT, floor_check
+from ti26.cli_d2 import NO_CARD_EXIT, floor_check
 from ti26.cli_d2 import main as d2_main
 from ti26.data.schema import MapRow
 from ti26.data.store import insert_rows, open_store
@@ -124,6 +124,7 @@ def test_end_to_end_produces_a_gate_report_and_metrics(tmp_path):
     assert float(metrics["constant"]["log_loss"]) == pytest.approx(math.log(2), abs=1e-9)
 
 
+@pytest.mark.slow
 def test_the_card_is_built_from_fitted_strengths_not_the_synthetic_ladder(tmp_path):
     """THE end-to-end test for this task.
 
@@ -154,6 +155,7 @@ def test_the_card_is_built_from_fitted_strengths_not_the_synthetic_ladder(tmp_pa
     )
 
 
+@pytest.mark.slow
 def test_a_roster_migration_is_warned_about_not_hard_failed(tmp_path, capsys):
     """Fix round 3: the exact Tundra Esports/1win failure mode -- a
     configured team's roster reappears later under a brand-new, unaliased
@@ -203,6 +205,7 @@ def test_missing_teams_fail_loudly_rather_than_shipping_a_partial_card(tmp_path)
         ])
 
 
+@pytest.mark.slow
 def test_duration_sensitivity_is_reported(tmp_path):
     """Spec XII requires reporting how far the card moves with the duration
     parameter, not just fitting it."""
@@ -272,6 +275,7 @@ def test_floor_check_disqualifies_a_worse_model_and_clears_a_better_one():
     assert tied["elo"]["cleared"] is False, "an exact tie is not a beat"
 
 
+@pytest.mark.slow
 def test_disqualified_final_model_writes_no_card_and_exits_with_the_floor_code(tmp_path):
     """End-to-end: on data with zero true skill signal, Elo's out-of-sample
     log loss is measurably worse than the constant floor (confirmed for this
@@ -292,7 +296,7 @@ def test_disqualified_final_model_writes_no_card_and_exits_with_the_floor_code(t
         "--teams", str(teams), "--final-model", "elo",
     ])
 
-    assert rc == FLOOR_REFUSED_EXIT
+    assert rc == NO_CARD_EXIT
     assert rc != 0
     # The card's direct inputs are withheld on refusal -- writing them would
     # invite running the card manually from a disqualified model.
@@ -319,6 +323,49 @@ def test_disqualified_final_model_writes_no_card_and_exits_with_the_floor_code(t
     # strengths into the sweep without saying so fails this.
     assert "diagnostic only" in report
     assert "disqualified elo strengths" in report
+
+
+@pytest.mark.slow
+def test_gate_failure_under_auto_forces_rung_3_even_if_the_model_clears_the_floor(tmp_path):
+    """Fix round 4: spec X is explicit that public ratings are the default
+    when the elo-vs-glicko gate fails -- rung 3, not a quiet fallback to
+    Elo (rung 2). This is the previously-untested combination: force the
+    gate to FAIL (via an artificially high min_margin_nats) on data where
+    Elo clearly beats the constant floor (confirmed separately: elo log
+    loss 0.5348 vs constant 0.6931 on `seeded_store`), so if `--final-model
+    auto` selected Elo anyway (rung 2) instead of refusing, this test would
+    incorrectly find a card on disk.
+    """
+    store = tmp_path / "d2.sqlite"
+    seeded_store(store)
+    out = tmp_path / "reports"
+    teams = write_team_config(tmp_path / "teams.yaml")
+
+    gate_config = tmp_path / "gate.yaml"
+    gate_config.write_text(
+        "gate:\n"
+        "  min_margin_nats: 0.5\n"  # unreachable on this data -- forces gate FAIL
+        "  bootstrap_draws: 2000\n"
+        "  bootstrap_ci: 0.95\n"
+        "  seed: 20260802\n"
+        "hyperparameters:\n"
+        "  elo_k: 20.0\n"
+        "  glicko_tau: 0.5\n"
+        "  ewma_half_life_maps: 30.0\n"
+    )
+
+    rc = d2_main([
+        "--store", str(store), "--out", str(out), "--min-train", "200",
+        "--teams", str(teams), "--card-sims", "3000",
+        "--gate-config", str(gate_config),
+    ])
+    assert rc == NO_CARD_EXIT
+    assert not (out / "strengths.csv").exists()
+    assert not (out / "recommended_card.json").exists()
+
+    report = (out / "d2_gate.md").read_text()
+    assert "**Verdict: FAIL**" in report
+    assert "rung 3" in report.lower()
 
 
 def test_duration_fit_is_written_and_differs_from_the_placeholder(tmp_path):

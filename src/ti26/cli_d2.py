@@ -36,10 +36,18 @@ from ti26.teams import (
 
 # Distinct from 0 (success) and from the plain `raise SystemExit(str)` paths
 # elsewhere in this module (which exit 1): a caller that only checks "did
-# this fail" still sees failure, but a caller that cares WHY can tell "the
-# spec V floor was not cleared, so no card was written" apart from every
-# other error in this file.
-FLOOR_REFUSED_EXIT = 3
+# this fail" still sees failure, but a caller that cares WHY can tell "no
+# card was written from our fit" apart from every other error in this
+# file. Shared by BOTH refusal reasons -- the spec V floor not clearing,
+# and (spec X) the elo-vs-glicko gate failing under "auto" -- because both
+# mean the same thing to a caller: nothing shipped, check rung 3.
+NO_CARD_EXIT = 3
+
+# Refitting on UNCHANGED data reproduces bit-identical floats, so any gap
+# larger than this between `duration_fit` and the loaded rules config's
+# duration_model means the config is stale relative to this run's data,
+# not floating-point noise.
+DURATION_STALENESS_TOLERANCE = 1e-6
 
 
 def floor_check(metrics: dict[str, dict], floor_name: str = "constant") -> dict[str, dict]:
@@ -114,7 +122,14 @@ def main(argv: list[str] | None = None) -> int:
             "accuracy": accuracy(predictions[name], rows),
             "calibration_slope": slope,
             "calibration_intercept": intercept,
+            # Two different denominators, labeled so neither is mistaken for
+            # the other: `n_predictions` is every out-of-sample row (rated
+            # or not), `n_scored` is the population log_loss/brier/accuracy
+            # above are actually computed over (`rated=True` only). They sit
+            # in the same row as the floor-gate log-loss values, so an
+            # ambiguous single count would invite dividing by the wrong one.
             "n_predictions": len(predictions[name]),
+            "n_scored": sum(1 for p in predictions[name] if p.rated),
         }
 
     with (out / "backtest_metrics.csv").open("w", newline="") as fh:
@@ -133,8 +148,20 @@ def main(argv: list[str] | None = None) -> int:
 
     # --- Final fit on everything, then the card -------------------------------
     selected = args.final_model
+    gate_forced_rung3 = False
     if selected == "auto":
-        selected = "glicko" if result.passed else "elo"
+        if result.passed:
+            selected = "glicko"
+        else:
+            # Spec X is explicit: public ratings are "the default if the
+            # forecast-value gate fails" -- rung 3, not a quiet fallback to
+            # Elo (rung 2). This must hold regardless of whether Elo would
+            # separately clear the spec V floor below: a failed gate is not
+            # allowed to land on rung 2. `selected` still names Elo (used
+            # below only as the diagnostic input to the sensitivity sweep,
+            # same as a floor refusal), but no card is written from it.
+            selected = "elo"
+            gate_forced_rung3 = True
 
     final = models[selected]()
     for row in rows:
@@ -165,11 +192,38 @@ def main(argv: list[str] | None = None) -> int:
         + "\n"
     )
 
+    # The card (built below via `cli_main --rules args.rules`) reads its
+    # duration parameters from the STATIC config file on disk, not from
+    # `duration_fit` above -- `cli.main` calls `load_rules(args.rules)`
+    # itself and has no way to receive the freshly-fitted values from this
+    # run. Syncing `config/ti2026_rules.yaml` is a separate, manual step
+    # (this build's Step 11); nothing in this file writes it automatically.
+    # A silent re-ingest that refits different values without that manual
+    # sync would ship a card built on stale duration parameters. Made loud
+    # rather than threaded through automatically: the documented workflow
+    # deliberately runs the card once on the outgoing config (Step 10)
+    # BEFORE the config is updated from this exact fit (Step 11), so a
+    # mismatch is sometimes expected mid-workflow, not always a bug --
+    # hard-failing here would break that documented sequence.
+    duration_stale = (
+        abs(duration_fit.log_mean - rules.duration_log_mean) > DURATION_STALENESS_TOLERANCE
+        or abs(duration_fit.log_sigma - rules.duration_log_sigma) > DURATION_STALENESS_TOLERANCE
+    )
+    if duration_stale:
+        print(
+            f"WARNING: {args.rules}'s duration_model (log_mean="
+            f"{rules.duration_log_mean:.4f}, log_sigma={rules.duration_log_sigma:.4f}) does "
+            f"NOT match this run's freshly-fitted values (log_mean={duration_fit.log_mean:.4f}, "
+            f"log_sigma={duration_fit.log_sigma:.4f}). Any card built this run used the STALE "
+            "config values -- update the rules config from duration_fit.json and re-run "
+            "before trusting it."
+        )
+
     card_status = "skipped (--skip-card)"
     sweep: list[dict] = []
     sweep_strengths_note = ""
     prior_driven: list[str] = []
-    floor_refused = False
+    card_refused = False
     staleness: list[RosterStaleness] = []
     if not args.skip_card:
         teams = load_teams(args.teams)
@@ -198,26 +252,38 @@ def main(argv: list[str] | None = None) -> int:
                 f"unaliased team_id -- check before the card ships: {names}"
             )
 
-        if not floor[selected]["cleared"]:
-            # Spec V: a model that loses to a coin flip is not a strength
-            # source. No card is written from it, and no OTHER model is
-            # silently substituted -- the user picked (or "auto" picked)
-            # `selected`, and if it fails the floor the run refuses rather
-            # than second-guessing that choice. `strengths.csv` is withheld
-            # too: it is the card's direct input, and writing it invites
-            # running the card manually from a disqualified model.
-            floor_refused = True
-            card_status = (
-                f"REFUSED: {selected} log loss {floor[selected]['log_loss']:.5f} does not "
-                f"beat the constant floor {floor['constant']['log_loss']:.5f} (spec V "
-                "rung 1); no card written from our fit"
-            )
+        card_refused = gate_forced_rung3 or not floor[selected]["cleared"]
+        if card_refused:
+            # Two independent reasons converge on the same refusal: spec V
+            # (a model that loses to a coin flip is not a strength source)
+            # and spec X (a failed elo-vs-glicko gate goes straight to rung
+            # 3, never rung 2). No card is written either way, and no OTHER
+            # model is silently substituted -- the user picked (or "auto"
+            # picked) `selected`, and refusing beats second-guessing that
+            # choice. `strengths.csv` is withheld too: it is the card's
+            # direct input, and writing it invites running the card
+            # manually from a disqualified or gate-failed model.
+            if gate_forced_rung3:
+                card_status = (
+                    "REFUSED: the elo-vs-glicko gate failed under --final-model auto, so "
+                    "per spec X rung 3 no card ships from our fit -- regardless of "
+                    f"whether {selected} would separately clear the spec V floor (here: "
+                    f"{'cleared' if floor[selected]['cleared'] else 'not cleared'}; see "
+                    "the Floor check table)"
+                )
+            else:
+                card_status = (
+                    f"REFUSED: {selected} log loss {floor[selected]['log_loss']:.5f} does not "
+                    f"beat the constant floor {floor['constant']['log_loss']:.5f} (spec V "
+                    "rung 1); no card written from our fit"
+                )
             # The duration sensitivity sweep still runs: spec XII requires
             # reporting the simulator's sensitivity to the duration
-            # parameter regardless of which strength source ships, and that
-            # parameter is written into `ti2026_rules.yaml` (and so used by
-            # any rung-3 public-ratings card) whether or not OUR fit
-            # cleared the floor. The sweep measures the SIMULATOR's
+            # parameter regardless of which strength source ships. This
+            # does NOT write the fitted parameter into `ti2026_rules.yaml`
+            # -- that sync is a separate, manual step (see the staleness
+            # check above) -- it only reports how much a card would move if
+            # `log_sigma` changed. The sweep measures the SIMULATOR's
             # sensitivity, not the quality of the strengths behind it --
             # Task 7 measured this statistic close to invariant to which
             # strengths it is given -- so the disqualified fit is a valid,
@@ -297,6 +363,19 @@ def main(argv: list[str] | None = None) -> int:
         f"Interval method: {result.method}. Maps compared: {result.n_maps}.",
         "",
         (
+            f"Excluded from scoring: {sum(result.excluded.values())} maps "
+            + (
+                "(" + ", ".join(f"{v} {k}" for k, v in sorted(result.excluded.items())) + ")"
+                if result.excluded
+                else "(none)"
+            )
+            + f". {sum(f.n_test for f in folds)} out-of-sample maps total minus "
+            f"{sum(result.excluded.values())} excluded is {result.n_maps} compared -- the "
+            "model itself declined to rate these rows (`null_team`/`bad_roster`), so the "
+            "gate scores only the population it was willing to train on, per spec IV."
+        ),
+        "",
+        (
             "The interval is a **cluster** bootstrap, not an iid one over maps: maps "
             "inside a series share teams, day, patch and momentum, and treating them "
             "as independent would understate the interval and let this gate pass on noise."
@@ -347,13 +426,18 @@ def main(argv: list[str] | None = None) -> int:
             f"{'YES' if floor[selected]['cleared'] else 'NO'}.**"
         ),
     ]
-    if floor_refused:
+    if card_refused:
+        reason = (
+            "the elo-vs-glicko gate failed under `--final-model auto` (spec X: rung 3 is "
+            "the default on a failed gate, never a quiet fallback to rung 2)"
+            if gate_forced_rung3
+            else f"{selected} does not beat the constant floor (spec V rung 1)"
+        )
         lines += [
             "",
             (
-                f"**No card ships from our fit.** {selected} does not beat the constant "
-                "floor, so per spec V rung 1 it is disqualified as a strength source, and "
-                "no other model is silently substituted in its place. Spec X rung 3: use "
+                f"**No card ships from our fit.** {reason}, so no card is written and no "
+                "other model is silently substituted in its place. Spec X rung 3: use "
                 "public ratings (Noxville/datdota) instead -- write a `team,strength` CSV "
                 "and run `python -m ti26.cli --strengths <file>`."
             ),
@@ -377,6 +461,18 @@ def main(argv: list[str] | None = None) -> int:
             f"`gap_coefficient={duration_fit.gap_coefficient:.4f}` "
             f"(SE {duration_fit.gap_se:.4f}, material={duration_fit.material}). "
             "The placeholder was 7.65 / 0.25 with provenance `arbitrary`."
+        ),
+        "",
+        (
+            f"**Config staleness check:** `{args.rules}` currently has "
+            f"`log_mean={rules.duration_log_mean:.4f}`, `log_sigma={rules.duration_log_sigma:.4f}`. "
+            + (
+                "**This does NOT match the fit above -- any card built this run (or manually, "
+                "from this config) used STALE duration parameters.** Update the rules config "
+                "from `duration_fit.json` and re-run before trusting a card."
+                if duration_stale
+                else "Matches the fit above; a card built this run used these current values."
+            )
         ),
         "",
         "## Card",
@@ -468,7 +564,7 @@ def main(argv: list[str] | None = None) -> int:
           f"{result.ci_high:.5f}], {result.method})")
     print(f"floor: {selected} cleared={floor[selected]['cleared']}")
     print(f"card: {card_status}")
-    return FLOOR_REFUSED_EXIT if floor_refused else 0
+    return NO_CARD_EXIT if card_refused else 0
 
 
 if __name__ == "__main__":

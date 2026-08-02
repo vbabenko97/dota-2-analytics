@@ -108,6 +108,40 @@ def test_migration_detected_when_the_identical_roster_moves_to_a_new_id():
     assert checks[0].migrated_overlap == 5
 
 
+def test_the_earliest_migration_hit_is_reported_not_the_latest():
+    """Two later occurrences of the identical roster exist under two
+    DIFFERENT unaliased ids -- the earlier one is the moment the migration
+    first became visible, and is what must be reported. None of the other
+    tests in this file have two candidates to choose between, so a
+    tie-break mutated from earliest-wins to latest-wins would pass all of
+    them; only this one can catch it.
+    """
+    rows = [
+        row(3, 300, 888, 20, A_NEW, B),  # later occurrence, but NOT the earliest
+        row(2, 200, 999, 20, A_NEW, B),  # the earliest occurrence after last_ts=100
+        row(1, 100, 10, 20, A_NEW, B),   # configured team's own last map
+    ]
+    checks = check_roster_staleness(rows, [TeamEntry("Known", 10)], {})
+    assert checks[0].migrated_to == 999, "the EARLIEST later occurrence must win, not the latest"
+    assert checks[0].migrated_at == 200
+
+
+def test_an_exact_match_is_preferred_over_an_earlier_partial_match():
+    """An exact (5/5) match must be reported even when a partial (4/5)
+    match occurs EARLIER in time -- exact evidence is stronger than a
+    partial-overlap coincidence regardless of which came first. Untested
+    by every other case here, since none combine both kinds of hit."""
+    a_sub = [1, 2, 3, 4, 99]  # 4/5 shared with A_NEW
+    rows = [
+        row(3, 300, 999, 20, A_NEW, B),  # exact match, later
+        row(2, 200, 888, 20, a_sub, B),  # partial match, EARLIER
+        row(1, 100, 10, 20, A_NEW, B),   # configured team's own last map
+    ]
+    checks = check_roster_staleness(rows, [TeamEntry("Known", 10)], {})
+    assert checks[0].migrated_to == 999, "the exact match must win even though it is later"
+    assert checks[0].migrated_overlap == 5
+
+
 def test_partial_overlap_catches_a_simultaneous_roster_and_org_change():
     """4 of 5 accounts carry over to the new id -- the case an exact-hash-only
     search would miss entirely, per the coordinator's brief: a roster change
