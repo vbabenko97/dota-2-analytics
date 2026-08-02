@@ -1,0 +1,19 @@
+# config/d2_gate.yaml
+# Pre-registered 2026-08-02, BEFORE any backtest was run. See spec II.
+# Changing min_margin_nats after observing a result voids the gate.
+gate:
+  min_margin_nats: 0.003
+  bootstrap_draws: 10000
+  bootstrap_ci: 0.95
+  seed: 20260802
+
+hyperparameters:
+  elo_k: 20.0
+  glicko_tau: 0.5
+  ewma_half_life_maps: 30.0
+
+provenance:
+  min_margin_nats: pre_registered
+  elo_k: set_not_searched          # spec VII: hyperparameters are set, not searched
+  glicko_tau: set_not_searched     # 0.5 is the Glickman reference value
+  ewma_half_life_maps: set_not_searched
