@@ -1,8 +1,10 @@
 import csv
 import json
+import math
 
 import pytest
 
+from ti26.cli_d2 import FLOOR_REFUSED_EXIT, floor_check
 from ti26.cli_d2 import main as d2_main
 from ti26.data.schema import MapRow
 from ti26.data.store import insert_rows, open_store
@@ -56,6 +58,38 @@ def seeded_store(path, n_teams=16, n_series=1200, maps_per_series=3):
     return conn
 
 
+def noise_store(path, n_teams=16, n_series=1200, maps_per_series=3):
+    """Same shape as `seeded_store`, but with ZERO true skill signal.
+
+    Every pairing is an exact coin flip regardless of matchup, so any model
+    that reacts to noisy outcomes (Elo, Glicko) will systematically predict
+    away from 0.5 and pay for it in expected log loss, while the constant
+    model pays exactly ln(2) by construction. This is what makes a rating
+    model lose to the spec V floor without hand-tuning a "bad" model --
+    empirically confirmed for this exact seed: elo log loss 0.7185 vs
+    constant's 0.6931 (see task-8-report.md), a ~0.025 nat/map gap, far
+    above float noise.
+    """
+    import random
+
+    rng = random.Random(4)
+    rosters = [[t * 5 + p for p in range(5)] for t in range(n_teams)]
+    rows, match_id = [], 0
+    for s in range(n_series):
+        a, b = rng.sample(range(n_teams), 2)
+        league = 1 if s < 900 else 100 + (s % 40)
+        for _ in range(maps_per_series):
+            rows.append(
+                row(match_id, match_id * 600, league, rosters[a], rosters[b],
+                    rng.random() < 0.5, r_team=1000 + a, d_team=1000 + b, series_id=s,
+                    duration=int(rng.lognormvariate(7.55, 0.33)))
+            )
+            match_id += 1
+    conn = open_store(path)
+    insert_rows(conn, rows)
+    return conn
+
+
 def write_team_config(path, n_teams=16):
     lines = ["teams:"]
     for t in range(n_teams):
@@ -80,7 +114,14 @@ def test_end_to_end_produces_a_gate_report_and_metrics(tmp_path):
     with (out / "backtest_metrics.csv").open() as fh:
         metrics = {r["model"]: r for r in csv.DictReader(fh)}
     assert set(metrics) == {"constant", "ewma", "elo", "glicko"}
-    assert float(metrics["constant"]["log_loss"]) == pytest.approx(0.6931, abs=1e-3)
+    # ConstantModel always predicts exactly 0.5, so its aggregate log loss
+    # over ANY rated population is the exact constant ln(2) -- not a
+    # statistical estimate, so a tight tolerance costs nothing. This is now
+    # the spec V floor value itself (see floor_check), so pin it precisely:
+    # a bug that let even a few rows see a non-0.5 prediction, or that
+    # aggregated over the wrong population, would move this measurably
+    # above float-summation noise but still hide under the old abs=1e-3.
+    assert float(metrics["constant"]["log_loss"]) == pytest.approx(math.log(2), abs=1e-9)
 
 
 def test_the_card_is_built_from_fitted_strengths_not_the_synthetic_ladder(tmp_path):
@@ -159,6 +200,73 @@ def test_rating_models_beat_the_constant_floor_on_separable_data(tmp_path):
         metrics = {r["model"]: float(r["log_loss"]) for r in csv.DictReader(fh)}
     assert metrics["elo"] < metrics["constant"]
     assert metrics["glicko"] < metrics["constant"]
+
+
+def test_floor_check_disqualifies_a_worse_model_and_clears_a_better_one():
+    """Spec V, tested in isolation from any backtest: a model with a HIGHER
+    (worse) log loss than the constant floor must not clear it, and one with
+    a LOWER (better) log loss must. Margins here (0.70 vs 0.6931, 0.65 vs
+    0.6931 -- roughly 0.007 and 0.043 nats) are far above float precision on
+    purpose, per the coordinator's warning: a fixture where models tie, or
+    where the "worse" model is worse by less than float noise, would pass
+    under a broken (`<=`, inverted, or no-op) comparison. This test catches
+    exactly those: an inverted `>` would flip both assertions; a `<=` would
+    wrongly clear an exact tie (checked separately below).
+    """
+    metrics = {
+        "constant": {"log_loss": 0.693147},
+        "elo": {"log_loss": 0.70},
+        "glicko": {"log_loss": 0.65},
+    }
+    floor = floor_check(metrics)
+
+    assert floor["elo"]["cleared"] is False, "0.70 > 0.693147: elo is worse, must not clear"
+    assert floor["glicko"]["cleared"] is True, "0.65 < 0.693147: glicko is better, must clear"
+    assert floor["elo"]["diff"] == pytest.approx(0.70 - 0.693147)
+    assert floor["glicko"]["diff"] == pytest.approx(0.65 - 0.693147)
+    # The floor model can never clear its own bar -- a model "beating" itself
+    # is not a beat, and a bug that compared floor_name == floor_name loosely
+    # (e.g. `<=`) would wrongly mark this True.
+    assert floor["constant"]["cleared"] is False
+
+    # Exact tie: a `<=` comparison would wrongly clear this.
+    tied = floor_check({"constant": {"log_loss": 0.6931}, "elo": {"log_loss": 0.6931}})
+    assert tied["elo"]["cleared"] is False, "an exact tie is not a beat"
+
+
+def test_disqualified_final_model_writes_no_card_and_exits_with_the_floor_code(tmp_path):
+    """End-to-end: on data with zero true skill signal, Elo's out-of-sample
+    log loss is measurably worse than the constant floor (confirmed for this
+    fixture: 0.7185 vs 0.6931). `--final-model elo` pins the disqualified
+    model directly rather than relying on which model "auto" happens to pick.
+
+    Catches a runner that computes the floor table but never enforces it
+    (the bug this whole fix round exists to close): if `cli_d2` still wrote
+    `strengths.csv`/`recommended_card.json` and returned 0, this test fails.
+    """
+    store = tmp_path / "d2.sqlite"
+    noise_store(store)
+    out = tmp_path / "reports"
+    teams = write_team_config(tmp_path / "teams.yaml")
+
+    rc = d2_main([
+        "--store", str(store), "--out", str(out), "--min-train", "200",
+        "--teams", str(teams), "--final-model", "elo",
+    ])
+
+    assert rc == FLOOR_REFUSED_EXIT
+    assert rc != 0
+    assert not (out / "strengths.csv").exists()
+    assert not (out / "recommended_card.json").exists()
+    assert not (out / "duration_sensitivity.json").exists()
+
+    report = (out / "d2_gate.md").read_text()
+    assert "REFUSED" in report
+    assert "does not beat the constant floor" in report
+    assert "No card ships from our fit" in report
+    # The old bug this fix closes: Card and Consequence sections must not
+    # disagree about whether a card was produced.
+    assert "generated from elo strengths" not in report
 
 
 def test_duration_fit_is_written_and_differs_from_the_placeholder(tmp_path):

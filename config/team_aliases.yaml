@@ -59,16 +59,28 @@
 #   identical accounts already share one roster_version_id — no alias
 #   needed.
 # - Nigma Galaxy (7554697, 356 maps, ...-2026-05-08) vs a second "Nigma
-#   Galaxy" (10136357, 58 maps, 2026-05-09-...): NOT a duplicate — accounts
-#   differ (101356886, 138880576, 140297552, 152168157, 418942836 vs
-#   101356886, 111620041, 138880576, 152168157, 210053851), 3 of 5 shared.
-#   Same-day handoff (old id's last map 2026-05-08, new id's first map
-#   2026-05-09) plus a real roster change (2 of 5 accounts swapped) is
-#   exactly the rebrand/re-registration signature spec VI's methodology
-#   looks for, and independently corroborated: public reporting describes
-#   Nigma Galaxy's roster changing by exactly two players in this window
-#   (SumaiL's return, Lorenof's addition). Aliased below so Glicko-2's
-#   continuity-weighted inheritance (spec III) applies instead of the new
-#   roster starting cold at 1500/350.
-aliases:
-  - {from: 7554697, to: 10136357, note: "Nigma Galaxy: same-day team_id handoff 2026-05-08 -> 05-09, 3/5 roster continuity, matches public reporting of a 2-player change"}
+#   Galaxy" (10136357, 58 maps, 2026-05-09-...): CORRECTED 2026-08-02. An
+#   earlier version of this entry claimed a 3/5-continuity roster change
+#   at this handoff and added an alias below. That was wrong: measured
+#   directly (7554697's last map vs 10136357's FIRST map, not its most
+#   recent), continuity is 1.0 — the identical 5 accounts (101356886,
+#   138880576, 140297552, 152168157, 418942836; roster_version_id
+#   3e38bebcf099aea5) on both sides. This is a duplicate team_id, the same
+#   category as L1GA TEAM/HULIGANI and HEROIC/LGD Gaming above, not a
+#   rebrand. The GENUINE roster change is a separate, later event that
+#   never crosses a team_id boundary: entirely WITHIN 10136357, last map
+#   under 3e38bebcf099aea5 is 2026-06-03, first map under the new roster
+#   3ea16a8a0fbc3023 is 2026-06-21 (140297552 and 418942836 leave;
+#   111620041 and 210053851 join; continuity 0.6) — matching public
+#   reporting's ~06-08 date for the SumaiL/Lorenof change. No alias is
+#   needed for either event: the May handoff already shares one
+#   roster_version_id (ratings key off the account hash, never team_id,
+#   same as the duplicate-id cases above), and the June change is a
+#   same-team_id transition that `RosterIndex` already resolves from
+#   10136357's own history — nothing outside that team_id is involved.
+#   Verified empirically, not just argued: fitting `GlickoModel` over the
+#   full store with and without a 7554697->10136357 alias produces the
+#   IDENTICAL strength for 3ea16a8a0fbc3023 (2.324358513350741 either
+#   way). Declined; no alias. `config/ti2026_teams.yaml` uses 10136357
+#   (the current id) for display-name clarity only.
+aliases: []

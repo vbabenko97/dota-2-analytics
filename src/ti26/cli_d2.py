@@ -26,6 +26,34 @@ from ti26.roster import RosterIndex, load_aliases
 from ti26.rules import load_rules
 from ti26.teams import load_teams, resolve_rosters, team_strengths
 
+# Distinct from 0 (success) and from the plain `raise SystemExit(str)` paths
+# elsewhere in this module (which exit 1): a caller that only checks "did
+# this fail" still sees failure, but a caller that cares WHY can tell "the
+# spec V floor was not cleared, so no card was written" apart from every
+# other error in this file.
+FLOOR_REFUSED_EXIT = 3
+
+
+def floor_check(metrics: dict[str, dict], floor_name: str = "constant") -> dict[str, dict]:
+    """Spec V: every rating model must beat the constant 50/50 floor.
+
+    Compares each model's out-of-sample log loss against `floor_name`'s on
+    the identical prediction population. A model "clears" the floor only
+    if its log loss is STRICTLY lower -- a tie is not a beat, and the floor
+    model can never clear its own bar. Returns, per model name, its log
+    loss, the signed difference from the floor (positive = worse), and
+    whether it cleared.
+    """
+    floor_loss = metrics[floor_name]["log_loss"]
+    return {
+        name: {
+            "log_loss": m["log_loss"],
+            "diff": m["log_loss"] - floor_loss,
+            "cleared": name != floor_name and m["log_loss"] < floor_loss,
+        }
+        for name, m in metrics.items()
+    }
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="D2: fit ratings and evaluate the gate")
@@ -87,6 +115,12 @@ def main(argv: list[str] | None = None) -> int:
         for name in models:
             writer.writerow([name, *(metrics[name][k] for k in sorted(metrics[name]))])
 
+    # Spec V: each rating model must beat the constant floor on rolling
+    # out-of-sample log loss to be trusted as a strength source, independent
+    # of whether Glicko beats Elo below. Computed on the SAME metrics as the
+    # table above, so it can never disagree with what the report prints.
+    floor = floor_check(metrics)
+
     result = evaluate_gate(predictions["elo"], predictions["glicko"], rows, config)
 
     # --- Final fit on everything, then the card -------------------------------
@@ -126,50 +160,64 @@ def main(argv: list[str] | None = None) -> int:
     card_status = "skipped (--skip-card)"
     sweep: list[dict] = []
     prior_driven: list[str] = []
+    floor_refused = False
     if not args.skip_card:
-        teams = load_teams(args.teams)
-        if len(teams) != rules.n_teams:
-            raise SystemExit(
-                f"{args.teams} lists {len(teams)} teams but the rules require "
-                f"{rules.n_teams}; populate it or pass --skip-card"
+        if not floor[selected]["cleared"]:
+            # Spec V: a model that loses to a coin flip is not a strength
+            # source. No card is written from it, and no OTHER model is
+            # silently substituted -- the user picked (or "auto" picked)
+            # `selected`, and if it fails the floor the run refuses rather
+            # than second-guessing that choice.
+            floor_refused = True
+            card_status = (
+                f"REFUSED: {selected} log loss {floor[selected]['log_loss']:.5f} does not "
+                f"beat the constant floor {floor['constant']['log_loss']:.5f} (spec V "
+                "rung 1); no card written from our fit"
             )
-        resolved = resolve_rosters(rows, teams, aliases)
-        strengths, prior_driven = team_strengths(resolved, fitted)
-
-        strengths_path = out / "strengths.csv"
-        with strengths_path.open("w", newline="") as fh:
-            writer = csv.writer(fh)
-            writer.writerow(["team", "strength", "roster_version_id", "prior_driven"])
-            for name in sorted(strengths):
-                writer.writerow(
-                    [name, f"{strengths[name]:.6f}", resolved[name], name in prior_driven]
+        else:
+            teams = load_teams(args.teams)
+            if len(teams) != rules.n_teams:
+                raise SystemExit(
+                    f"{args.teams} lists {len(teams)} teams but the rules require "
+                    f"{rules.n_teams}; populate it or pass --skip-card"
                 )
+            resolved = resolve_rosters(rows, teams, aliases)
+            strengths, prior_driven = team_strengths(resolved, fitted)
 
-        # The card comes from the D1 generator, fed OUR fitted strengths --
-        # not from its synthetic fallback ladder.
-        card_rc = cli_main(
-            [
-                "--strengths", str(strengths_path),
-                "--rules", args.rules,
-                "--n-sims", str(args.card_sims),
-                "--seed", str(args.card_seed),
-                "--out", str(out),
-            ]
-        )
-        if card_rc != 0:
-            raise SystemExit(f"card generation failed with exit code {card_rc}")
-        card_status = f"generated from {selected} strengths ({len(strengths)} teams)"
+            strengths_path = out / "strengths.csv"
+            with strengths_path.open("w", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(["team", "strength", "roster_version_id", "prior_driven"])
+                for name in sorted(strengths):
+                    writer.writerow(
+                        [name, f"{strengths[name]:.6f}", resolved[name], name in prior_driven]
+                    )
 
-        # Spec XII: report how much the card depends on the duration parameter.
-        sweep = sensitivity_sweep(
-            strengths,
-            replace(rules, duration_log_sigma=duration_fit.log_sigma),
-            [duration_fit.log_sigma, duration_fit.log_sigma * 0.5,
-             duration_fit.log_sigma * 1.5, 0.25],
-            n_sims=max(20_000, args.card_sims // 10),
-            seed=args.card_seed,
-        )
-        (out / "duration_sensitivity.json").write_text(json.dumps(sweep, indent=2) + "\n")
+            # The card comes from the D1 generator, fed OUR fitted strengths --
+            # not from its synthetic fallback ladder.
+            card_rc = cli_main(
+                [
+                    "--strengths", str(strengths_path),
+                    "--rules", args.rules,
+                    "--n-sims", str(args.card_sims),
+                    "--seed", str(args.card_seed),
+                    "--out", str(out),
+                ]
+            )
+            if card_rc != 0:
+                raise SystemExit(f"card generation failed with exit code {card_rc}")
+            card_status = f"generated from {selected} strengths ({len(strengths)} teams)"
+
+            # Spec XII: report how much the card depends on the duration parameter.
+            sweep = sensitivity_sweep(
+                strengths,
+                replace(rules, duration_log_sigma=duration_fit.log_sigma),
+                [duration_fit.log_sigma, duration_fit.log_sigma * 0.5,
+                 duration_fit.log_sigma * 1.5, 0.25],
+                n_sims=max(20_000, args.card_sims // 10),
+                seed=args.card_seed,
+            )
+            (out / "duration_sensitivity.json").write_text(json.dumps(sweep, indent=2) + "\n")
 
     verdict = "PASS" if result.passed else "FAIL"
     lines = [
@@ -215,13 +263,50 @@ def main(argv: list[str] | None = None) -> int:
             "scoring rule."
         ),
         "",
+        "## Floor check (spec V)",
+        "",
+        (
+            "Spec V: each rating model must beat the constant 50/50 floor on rolling "
+            "out-of-sample log loss to be trusted as a strength source. Checked here "
+            "independently of the Elo-vs-Glicko significance gate above -- a model can "
+            "lose that comparison and still clear the floor, or win it and still lose to "
+            "a coin flip."
+        ),
+        "",
+        "| model | log loss | vs floor | cleared |",
+        "|---|---|---|---|",
+    ]
+    for name in models:
+        f = floor[name]
+        cleared_cell = "-- (floor)" if name == "constant" else ("yes" if f["cleared"] else "**NO**")
+        diff_cell = "--" if name == "constant" else f"{f['diff']:+.5f}"
+        lines.append(f"| {name} | {f['log_loss']:.5f} | {diff_cell} | {cleared_cell} |")
+    lines += [
+        "",
+        (
+            f"**Selected model for the card: {selected}. Floor cleared: "
+            f"{'YES' if floor[selected]['cleared'] else 'NO'}.**"
+        ),
+    ]
+    if floor_refused:
+        lines += [
+            "",
+            (
+                f"**No card ships from our fit.** {selected} does not beat the constant "
+                "floor, so per spec V rung 1 it is disqualified as a strength source, and "
+                "no other model is silently substituted in its place. Spec X rung 3: use "
+                "public ratings (Noxville/datdota) instead -- write a `team,strength` CSV "
+                "and run `python -m ti26.cli --strengths <file>`."
+            ),
+        ]
+    lines += [
+        "",
         "## Consequence",
         "",
         (
             "Proceed to D3 dynamic Bradley-Terry development."
             if result.passed
-            else "**Do not proceed to D3.** Ship the public-rating fallback (spec X, rung 3). "
-            "Reasons: " + "; ".join(result.reasons)
+            else "**Do not proceed to D3.** Reasons: " + "; ".join(result.reasons)
         ),
         "",
         "## Duration model (spec XII)",
@@ -237,25 +322,13 @@ def main(argv: list[str] | None = None) -> int:
         "",
         "## Card",
         "",
-        (
-            f"Status: {card_status}. Final model: **{selected}** "
-            f"({'gate passed' if result.passed else 'gate failed — Elo is the shipped fit'})."
-        ),
+        f"Status: {card_status}.",
     ]
     if not args.skip_card and prior_driven:
         lines += [
             "",
             f"**Prior-driven teams ({len(prior_driven)}):** " + ", ".join(prior_driven)
             + ". These carry the average-team prior, not a fitted rating.",
-        ]
-    if not result.passed:
-        lines += [
-            "",
-            (
-                "Spec §X rung 3 makes public ratings the default when this gate fails. "
-                "To ship that instead, write a `team,strength` CSV and run "
-                "`python -m ti26.cli --strengths <file>`."
-            ),
         ]
     if sweep:
         lines += [
@@ -278,8 +351,9 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"gate: {verdict} (margin {result.margin:.5f}, CI [{result.ci_low:.5f}, "
           f"{result.ci_high:.5f}], {result.method})")
+    print(f"floor: {selected} cleared={floor[selected]['cleared']}")
     print(f"card: {card_status}")
-    return 0
+    return FLOOR_REFUSED_EXIT if floor_refused else 0
 
 
 if __name__ == "__main__":
