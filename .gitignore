@@ -26,6 +26,11 @@ reports/
 .claude/
 .claude-plugin/
 .codex/
+.mcp.json
+AGENTS.md
+
+# Working notes — kept locally, not published
+gpt-pro-output.md
 
 # macOS
 .DS_Store
