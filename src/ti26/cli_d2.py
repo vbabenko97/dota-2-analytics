@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ti26.backtest import (
@@ -24,7 +25,14 @@ from ti26.ratings.glicko import GlickoModel
 from ti26.ratings.simple import ConstantModel, EwmaModel
 from ti26.roster import RosterIndex, load_aliases
 from ti26.rules import load_rules
-from ti26.teams import UnresolvedTeamError, load_teams, resolve_rosters, team_strengths
+from ti26.teams import (
+    RosterStaleness,
+    UnresolvedTeamError,
+    check_roster_staleness,
+    load_teams,
+    resolve_rosters,
+    team_strengths,
+)
 
 # Distinct from 0 (success) and from the plain `raise SystemExit(str)` paths
 # elsewhere in this module (which exit 1): a caller that only checks "did
@@ -162,12 +170,32 @@ def main(argv: list[str] | None = None) -> int:
     sweep_strengths_note = ""
     prior_driven: list[str] = []
     floor_refused = False
+    staleness: list[RosterStaleness] = []
     if not args.skip_card:
         teams = load_teams(args.teams)
         if len(teams) != rules.n_teams:
             raise SystemExit(
                 f"{args.teams} lists {len(teams)} teams but the rules require "
                 f"{rules.n_teams}; populate it or pass --skip-card"
+            )
+
+        # Time-critical (TI 2026 Swiss locks 2026-08-13): detect a configured
+        # team whose org has moved to a new, unaliased team_id since the
+        # configured id's last map -- run on every invocation, not gated on
+        # the floor verdict, since this affects the sweep's diagnostic
+        # strengths too. WARN, never hard-fail: several already-confirmed
+        # duplicate team_id registrations (Xtreme Gaming, HULIGANI, Team
+        # Resilience) produce the IDENTICAL signature as a genuine migration
+        # (same roster, later map, different unaliased id) and this store
+        # has no way to tell them apart from account/team_id data alone --
+        # hard-failing would block a correct run on those every time.
+        staleness = check_roster_staleness(rows, teams, aliases)
+        migrations = [c for c in staleness if c.migrated_to is not None]
+        if migrations:
+            names = ", ".join(f"{c.name} (team_id={c.team_id} -> {c.migrated_to})" for c in migrations)
+            print(
+                f"WARNING: {len(migrations)} configured team(s) may have migrated to an "
+                f"unaliased team_id -- check before the card ships: {names}"
             )
 
         if not floor[selected]["cleared"]:
@@ -361,6 +389,56 @@ def main(argv: list[str] | None = None) -> int:
             f"**Prior-driven teams ({len(prior_driven)}):** " + ", ".join(prior_driven)
             + ". These carry the average-team prior, not a fitted rating.",
         ]
+    if staleness:
+        migrations = [c for c in staleness if c.migrated_to is not None]
+        lines += [
+            "",
+            "## Roster staleness (spec III)",
+            "",
+            (
+                "Two independent checks per configured team: does the SAME roster appear "
+                "later under a different, unaliased team_id (a possible migration -- this "
+                "is exactly how the Tundra Esports/1win entry went stale until a human "
+                "fact-check caught it), and how long since this roster's last map relative "
+                "to the store's own most recent map. A migration hit does not by itself mean "
+                "the entry is wrong: several configured teams are already-confirmed "
+                "duplicate team_id registrations for the SAME org (Xtreme Gaming, HULIGANI, "
+                "Team Resilience -- see `ti2026_teams.yaml`'s ledger) and produce this "
+                "identical signature. This check WARNS rather than hard-failing `cli_d2` "
+                "for exactly that reason: a hard fail would block a correct run on those "
+                "every time. Every hit below needs a human cross-check against what is "
+                "already documented before being treated as new news."
+            ),
+            "",
+            "| team | team_id | last map | stale (days) | possible migration |",
+            "|---|---|---|---|---|",
+        ]
+        for c in sorted(staleness, key=lambda c: c.name):
+            last_date = datetime.fromtimestamp(c.last_map_at, UTC).date()
+            if c.migrated_to is not None:
+                migrated_date = datetime.fromtimestamp(c.migrated_at, UTC).date()
+                migration_cell = (
+                    f"**team_id={c.migrated_to} on {migrated_date} "
+                    f"({c.migrated_overlap}/5 accounts)**"
+                )
+            else:
+                migration_cell = "--"
+            lines.append(
+                f"| {c.name} | {c.team_id} | {last_date} | {c.stale_days:.1f} | "
+                f"{migration_cell} |"
+            )
+        if migrations:
+            names = ", ".join(f"{c.name} (team_id={c.team_id} -> {c.migrated_to})" for c in migrations)
+            lines += [
+                "",
+                (
+                    f"**{len(migrations)} configured team(s) show a possible migration: "
+                    f"{names}.** Check each against `ti2026_teams.yaml`'s ledger before "
+                    "the card ships."
+                ),
+            ]
+        else:
+            lines += ["", "No migrations detected against any configured team this run."]
     if sweep:
         lines += [
             "",

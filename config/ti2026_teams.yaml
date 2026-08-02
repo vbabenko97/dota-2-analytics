@@ -41,6 +41,13 @@
 # - HEROIC -> LGD Gaming (South America): full 5/5 roster continuity
 #   (confirmed), sequential non-overlapping dates (2026-04-24 -> 05-26).
 #   No alias needed: identical accounts already share one roster_version_id.
+# - LGD Gaming (10150538) vs a fourth duplicate id, 10208068 "LGD.Pinghu"
+#   (2026-07-31 -> 2026-08-01, 6 maps): found 2026-08-02 by
+#   `check_roster_staleness` (teams.py), not by name search. IDENTICAL 5/5
+#   roster (81306398, 105045291, 177203952, 292921272, 1026694469),
+#   confirmed by direct comparison -- same category as Xtreme
+#   Gaming/HULIGANI/Team Resilience above, not a migration. No alias
+#   needed.
 # - Tundra Esports -> 1win: corrected 2026-08-02, then RE-corrected same
 #   day after a mixed-population error (below). Public reporting says
 #   Tundra Esports exited competitive Dota 2 on 2026-06-01 and the roster

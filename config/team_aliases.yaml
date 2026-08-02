@@ -38,6 +38,19 @@
 #   concurrent-coexistence pattern with a shared stand-in, not a rebrand —
 #   exactly the case `test_predecessor_ignores_a_different_team_with_a_similar_roster`
 #   guards against. Declined; no alias.
+#   UPDATE 2026-08-02, found by `check_roster_staleness` (teams.py): PVISION
+#   changed its own 5th account on 2026-05-26, from 56351509 to 195108598 --
+#   from that date PVISION fields the BIT-FOR-BIT IDENTICAL roster as Team
+#   Vision (rvid c298aa3eb4837f25 either way), through PVISION's last map
+#   2026-07-19. The "differing only in the 5th account" description above
+#   is accurate for the period it was written from but is now stale for
+#   2026-05-26 onward. This does not change the conclusion or require an
+#   alias: `ti2026_teams.yaml` already configures Team Vision at 9572001,
+#   whose own last map (2026-06-25) already resolves to this exact roster,
+#   and ratings merge automatically by roster hash regardless of team_id --
+#   the same reasoning as the duplicate-id cases above. Recorded because a
+#   ledger entry should say what is true NOW, not just what was true when
+#   it was written -- the same principle the Nigma correction above rests on.
 #
 # Task 8 ledger (2026-08-02), resolving TI 2026's 16 Swiss-stage teams
 # (config/ti2026_teams.yaml) against the store from snapshot

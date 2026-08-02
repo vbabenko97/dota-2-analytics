@@ -154,6 +154,44 @@ def test_the_card_is_built_from_fitted_strengths_not_the_synthetic_ladder(tmp_pa
     )
 
 
+def test_a_roster_migration_is_warned_about_not_hard_failed(tmp_path, capsys):
+    """Fix round 3: the exact Tundra Esports/1win failure mode -- a
+    configured team's roster reappears later under a brand-new, unaliased
+    team_id -- must be surfaced prominently but must NOT hard-fail
+    `cli_d2`. Several already-confirmed duplicate team_id registrations
+    (Xtreme Gaming, HULIGANI, Team Resilience) produce this identical
+    signature for a harmless reason, so a hard fail would block a correct
+    run on those every time; catches a detector that's wired in but
+    ignored, or one that crashes/exits nonzero instead of warning.
+    """
+    store = tmp_path / "d2.sqlite"
+    conn = seeded_store(store)
+    # Team00's exact roster (team_id 1000, accounts 0-4) reappears under a
+    # brand-new, unaliased team_id (9999), well after any existing map.
+    later = 3600 * 600 + 100_000
+    insert_rows(conn, [
+        row(999_999, later, 999, [0, 1, 2, 3, 4], [5, 6, 7, 8, 9], True,
+            r_team=9999, d_team=1001, series_id=99_999),
+    ])
+    out = tmp_path / "reports"
+    teams = write_team_config(tmp_path / "teams.yaml")
+
+    rc = d2_main([
+        "--store", str(store), "--out", str(out), "--min-train", "200",
+        "--teams", str(teams), "--card-sims", "3000",
+    ])
+    assert rc == 0, "a migration hit must WARN, not hard-fail cli_d2"
+
+    captured = capsys.readouterr()
+    assert "WARNING" in captured.out
+    assert "Team00" in captured.out
+
+    report = (out / "d2_gate.md").read_text()
+    assert "Roster staleness" in report
+    assert "Team00" in report
+    assert "9999" in report
+
+
 def test_missing_teams_fail_loudly_rather_than_shipping_a_partial_card(tmp_path):
     store = tmp_path / "d2.sqlite"
     seeded_store(store)
