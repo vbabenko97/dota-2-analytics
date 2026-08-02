@@ -83,6 +83,41 @@ def test_gap_effect_is_reported_immaterial_when_it_is_noise():
     assert fit.material is False
 
 
+def test_log_sigma_is_marginal_not_residual_and_n_is_the_regression_sample():
+    """DurationResolver (tiebreak.py) draws lognormvariate(log_mean,
+    log_sigma) with no gap term, so log_sigma must be the unconditional
+    dispersion of the rows the fit used -- not the residual dispersion left
+    over after conditioning on gap, which is a materiality diagnostic, never
+    a simulation parameter. `n` must count only the rows the regression ran
+    on (`paired`), not every row that merely cleared the duration bounds.
+
+    Fixture: the same material=True gap-conditioned rows as above, plus 500
+    identical-duration rows that clear the bounds but carry no gap entry.
+    Those 500 are `usable` but never enter the regression, so a correct
+    implementation must exclude them from both `log_sigma` and `n`; if it put
+    the residual sigma back in `log_sigma`, or computed `log_sigma`/`n` over
+    every usable row instead of the fitted `paired` subset, this fails.
+    """
+    rng = np.random.default_rng(23)
+    gaps, rows = {}, []
+    for i in range(20000):
+        gap = float(rng.uniform(0, 2.0))
+        duration = math.exp(7.6 - 0.15 * gap + rng.normal(0, 0.25))
+        if MIN_DURATION_SECONDS < duration < MAX_DURATION_SECONDS:
+            gaps[i] = gap
+            rows.append(row(i, int(duration)))
+    ungapped = [row(90000 + i, 2000) for i in range(500)]
+
+    fit = fit_duration_model(rows + ungapped, gaps=gaps)
+
+    assert fit.material is True
+    assert fit.n == len(rows), "n must be the regression sample, not every usable row"
+
+    expected_marginal_sigma = float(np.std(np.log([r.duration for r in rows]), ddof=1))
+    assert fit.log_sigma == pytest.approx(expected_marginal_sigma, abs=1e-9)
+    assert fit.log_sigma > fit.residual_log_sigma
+
+
 def test_rating_gaps_are_computed_before_the_result_is_known():
     """Predict-then-update. If the model were updated first, the gap for a map
     would encode that map's own outcome and the duration fit would be
@@ -108,6 +143,44 @@ def test_rating_gaps_are_computed_before_the_result_is_known():
     assert set(gaps) == {r.match_id for r in rows}
 
 
+def test_rating_gaps_use_chronological_order_when_match_id_disagrees():
+    """The fixture above uses start_time = 100 + match_id, so a sort on
+    match_id alone gives the identical order as a sort on start_time and
+    cannot be told apart from the correct implementation. This fixture makes
+    the two orders disagree: match_id 5 is played first chronologically
+    (smallest start_time) but has the largest match_id of the three. Sorting
+    by match_id alone would walk it last and give it a contaminated, nonzero
+    gap instead of the empty-history gap of 0 a correct chronological walk
+    gives it.
+
+    Verified by mutation: changing the sort key in `rating_gaps` from
+    `(r.start_time, r.match_id)` to `r.match_id` makes both assertions below
+    fail (documented in the task report).
+    """
+    from ti26.duration import rating_gaps
+    from ti26.ratings.elo import EloModel
+
+    A, B = [1, 2, 3, 4, 5], [6, 7, 8, 9, 10]
+
+    def make(match_id, start_time):
+        return MapRow(
+            match_id=match_id, start_time=start_time, duration=2000, radiant_win=True,
+            league_id=1, tier="professional", radiant_team_id=10, dire_team_id=20,
+            series_id=1, series_type=1, patch="7.41",
+            radiant_accounts=tuple(A), dire_accounts=tuple(B),
+            radiant_heroes=(1, 2, 3, 4, 5), dire_heroes=(6, 7, 8, 9, 10),
+            has_null_team=False, has_bad_roster=False,
+        )
+
+    rows = [make(5, 100), make(1, 200), make(3, 300)]
+    gaps = rating_gaps(rows, EloModel())
+
+    assert gaps[5] == pytest.approx(0.0), (
+        "match 5 has the earliest start_time; a chronological walk gives it no prior evidence"
+    )
+    assert gaps[5] < gaps[1] < gaps[3], "gap must widen in start_time order, not match_id order"
+
+
 def test_sensitivity_sweep_reports_zero_delta_for_its_own_baseline():
     from ti26.duration import sensitivity_sweep
     from ti26.rules import load_rules
@@ -117,7 +190,8 @@ def test_sensitivity_sweep_reports_zero_delta_for_its_own_baseline():
     result = sensitivity_sweep(strengths, rules, [0.25, 0.45], n_sims=2000, seed=3)
     assert result[0]["is_baseline"] is True
     assert result[0]["max_abs_delta"] == 0.0
-    assert result[1]["max_abs_delta"] >= 0.0
+    assert result[1]["log_sigma"] == 0.45, "each entry must carry its own sigma, not the baseline's"
+    assert result[1]["is_baseline"] is False
 
 
 def test_sensitivity_sweep_reports_a_noise_floor_and_resolvability():
