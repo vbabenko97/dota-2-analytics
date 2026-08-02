@@ -119,17 +119,38 @@ def sensitivity_sweep(
 ) -> list[dict]:
     """How far does the card move across plausible `log_sigma` values?
 
-    Spec XII: the duration parameter steers ~30% of every ranking, so the
-    honest report is not just a point estimate but how much the answer depends
-    on it. Compares each sigma's category marginals against the first sigma in
-    the list, which the caller passes as the fitted value.
+    Spec XII: the resolver is consulted on ~30% of every ranking, but that
+    high consultation rate does not by itself mean this parameter moves the
+    card -- it only means the resolver is asked often. Whether the answer
+    actually depends on `log_sigma` has to be checked against this
+    statistic's own resampling noise, not assumed.
+
+    `noise_floor` measures that noise: it is the max-abs-delta between two
+    runs of the *same* baseline sigma (the first entry in `sigmas`) under
+    seeds `seed` and `seed + 1`, so it is a property of the sweep's sample
+    size, not of any particular sigma -- the same value is reported on every
+    returned entry. A `max_abs_delta` at or below `noise_floor` is NOT
+    evidence that sigma moved anything; it is exactly what pure resampling
+    noise looks like. Only `resolvable=True` (`max_abs_delta > noise_floor`)
+    entries indicate a change distinguishable from noise. Measured for this
+    model (tied and spread strengths, sigma 0.05 vs 1.20, n_sims=20000):
+    every sigma-varying delta fell inside or below the noise-floor range, so
+    the honest reading is that `log_sigma` does not move the card resolvably
+    at the sample sizes checked so far, even though the resolver itself is
+    consulted constantly. See spec XII for the fuller writeup.
     """
     from dataclasses import replace
 
     from ti26.montecarlo import category_marginals
     from ti26.types import Category
 
+    def _max_abs_delta(a: dict[str, dict], b: dict[str, dict]) -> float:
+        return max(
+            abs(a[team][category] - b[team][category]) for team in a for category in Category
+        )
+
     baseline: dict[str, dict] | None = None
+    noise_floor = 0.0
     out: list[dict] = []
     for sigma in sigmas:
         marginals = category_marginals(
@@ -137,12 +158,31 @@ def sensitivity_sweep(
         )
         if baseline is None:
             baseline = marginals
-            out.append({"log_sigma": sigma, "max_abs_delta": 0.0, "is_baseline": True})
+            repeat = category_marginals(
+                dict(strengths),
+                replace(rules, duration_log_sigma=sigma),
+                n_sims=n_sims,
+                seed=seed + 1,
+            )
+            noise_floor = _max_abs_delta(baseline, repeat)
+            out.append(
+                {
+                    "log_sigma": sigma,
+                    "max_abs_delta": 0.0,
+                    "is_baseline": True,
+                    "noise_floor": noise_floor,
+                    "resolvable": False,
+                }
+            )
             continue
-        delta = max(
-            abs(marginals[team][category] - baseline[team][category])
-            for team in baseline
-            for category in Category
+        delta = _max_abs_delta(marginals, baseline)
+        out.append(
+            {
+                "log_sigma": sigma,
+                "max_abs_delta": float(delta),
+                "is_baseline": False,
+                "noise_floor": noise_floor,
+                "resolvable": bool(delta > noise_floor),
+            }
         )
-        out.append({"log_sigma": sigma, "max_abs_delta": float(delta), "is_baseline": False})
     return out
