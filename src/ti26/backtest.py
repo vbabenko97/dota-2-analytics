@@ -71,6 +71,12 @@ def assert_fold_integrity(folds: Sequence[Fold], rows: Sequence[MapRow]) -> None
             raise FoldIntegrityError(
                 f"fold {fold.fold_id}: n_test={fold.n_test} but {len(test_rows)} rows match"
             )
+        train_rows = [r for r in rows if r.start_time <= fold.as_of]
+        if fold.n_train != len(train_rows):
+            raise FoldIntegrityError(
+                f"fold {fold.fold_id}: n_train={fold.n_train} but {len(train_rows)} "
+                "rows precede as_of"
+            )
 
 
 @dataclass(frozen=True)
@@ -82,6 +88,7 @@ class GateResult:
     method: str
     n_maps: int
     reasons: list[str] = field(default_factory=list)
+    excluded: dict[str, int] = field(default_factory=dict)
 
 
 def rolling_folds(rows: Sequence[MapRow], min_train: int = 500) -> list[Fold]:
@@ -156,10 +163,25 @@ def _aligned(predictions: Sequence[Prediction], rows: Sequence[MapRow]) -> tuple
     outcomes = {r.match_id: r.radiant_win for r in rows}
     ps, ys = [], []
     for prediction in predictions:
-        if prediction.match_id in outcomes:
+        if prediction.match_id in outcomes and prediction.rated:
             ps.append(min(max(prediction.p_radiant, EPS), 1.0 - EPS))
             ys.append(1.0 if outcomes[prediction.match_id] else 0.0)
     return np.asarray(ps), np.asarray(ys)
+
+
+def excluded_by_reason(predictions: Sequence[Prediction]) -> dict[str, int]:
+    """Tally of `rated=False` predictions by `reason`.
+
+    Exposed so a report can show what was excluded from scoring rather than
+    silently dropping it: the gate scores only what the model was willing to
+    train on (`rated=True`), and that exclusion should be visible, not mute.
+    """
+    counts: dict[str, int] = {}
+    for prediction in predictions:
+        if not prediction.rated:
+            key = prediction.reason if prediction.reason is not None else "unknown"
+            counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def per_map_log_loss(predictions: Sequence[Prediction], rows: Sequence[MapRow]) -> np.ndarray:
@@ -188,7 +210,10 @@ def calibration(
     """Logistic recalibration: fit y ~ intercept + slope * logit(p).
 
     Slope 1 / intercept 0 is perfect. Slope < 1 means over-dispersion — the
-    failure mode spec VI names as the one to hunt.
+    failure mode spec VI names as the one to hunt. Returns (nan, nan) if the
+    Newton-Raphson hits a singular Hessian or fails to converge within the
+    iteration cap: a bailed-out or partial fit is not a fit, and (1.0, 0.0)
+    would silently read as a perfectly calibrated forecaster.
     """
     ps, ys = _aligned(predictions, rows)
     x = np.log(ps / (1 - ps))
@@ -204,12 +229,12 @@ def calibration(
         try:
             step = np.linalg.solve(hessian, gradient)
         except np.linalg.LinAlgError:
-            break
+            return float("nan"), float("nan")
         intercept += step[0]
         slope += step[1]
         if np.max(np.abs(step)) < 1e-10:
-            break
-    return float(slope), float(intercept)
+            return float(slope), float(intercept)
+    return float("nan"), float("nan")
 
 
 class MisalignedPredictionsError(ValueError):
@@ -226,6 +251,11 @@ def paired_differences(
     Positional alignment is a silent corruption waiting to happen: the moment
     one model skips a row the other rates, every subsequent pair is mismatched
     and the gate compares unrelated maps while looking perfectly healthy.
+
+    Only `rated=True` predictions are scored: the pre-registered gate should
+    decide on the same population the model was willing to train on, so a
+    row the model itself refused (`null_team`, `bad_roster`) is excluded from
+    both sides rather than scored on a sentinel roster.
     """
     outcomes = {r.match_id: r.radiant_win for r in rows}
 
@@ -235,7 +265,7 @@ def paired_differences(
         # subsequent pairing by one -- silently, and only sometimes.
         out = {}
         for prediction in predictions:
-            if prediction.match_id not in outcomes:
+            if prediction.match_id not in outcomes or not prediction.rated:
                 continue
             p = min(max(prediction.p_radiant, EPS), 1.0 - EPS)
             y = 1.0 if outcomes[prediction.match_id] else 0.0
@@ -254,9 +284,12 @@ def paired_differences(
     cluster = {p.match_id: (p.league_id, p.series_id) for p in predictions_a}
     match_ids = sorted(loss_a)
     diff = np.asarray([loss_a[m] - loss_b[m] for m in match_ids], dtype=float)
-    tournament = np.asarray([cluster[m][0] if cluster[m][0] is not None else -1 for m in match_ids])
-    # A null series_id would silently merge unrelated maps into one cluster,
-    # so fall back to the match's own id: a singleton cluster, never a merge.
+    # A null league_id or series_id would silently merge unrelated maps into
+    # one shared cluster, so both fall back to the match's own id: a
+    # singleton cluster, never a merge.
+    tournament = np.asarray(
+        [cluster[m][0] if cluster[m][0] is not None else -m for m in match_ids]
+    )
     series = np.asarray(
         [cluster[m][1] if cluster[m][1] is not None else -m for m in match_ids]
     )
@@ -305,12 +338,12 @@ def paired_cluster_bootstrap(
 
     tournament_keys, tournament_inverse = np.unique(series_tournament, return_inverse=True)
     n_tournaments = len(tournament_keys)
-    rng = np.random.default_rng(seed)
     alpha = (1.0 - ci) / 2.0
     means: list[np.ndarray] = []
 
     if n_tournaments >= MIN_TOURNAMENTS_FOR_SINGLE_STAGE:
         method = f"cluster bootstrap over {n_tournaments} tournaments"
+        rng = np.random.default_rng(seed)
         t_sum = np.bincount(tournament_inverse, weights=series_sum)
         t_cnt = np.bincount(tournament_inverse, weights=series_cnt)
         batch = max(1, memory_budget // max(n_tournaments, 1))
@@ -334,14 +367,26 @@ def paired_cluster_bootstrap(
             padded_sum[t, : len(members)] = series_sum[members]
             padded_cnt[t, : len(members)] = series_cnt[members]
 
+        # Two INDEPENDENT generators, one per kind of draw. A single shared
+        # generator interleaves rng.integers (t_idx) and rng.random (s_idx)
+        # once per batch, so splitting `draws` across batches shifts where
+        # each call lands in the stream and the result becomes batch-size
+        # dependent -- verified empirically: the same seed and data gave a
+        # different CI at memory_budget=50 than at memory_budget=2_000_000.
+        # Two streams, each consuming only its own kind of call in a fixed
+        # order regardless of batching, make this provably batch-invariant --
+        # the same property the single-stage branch gets for free from using
+        # only one kind of call.
+        rng_t = np.random.default_rng(seed)
+        rng_s = np.random.default_rng(seed + 1)
         batch = max(1, memory_budget // max(n_tournaments * width, 1))
         positions = np.arange(width)[None, None, :]
         remaining = draws
         while remaining > 0:
             b = min(batch, remaining)
-            t_idx = rng.integers(0, n_tournaments, size=(b, n_tournaments))
+            t_idx = rng_t.integers(0, n_tournaments, size=(b, n_tournaments))
             counts = n_series[t_idx][..., None]
-            s_idx = (rng.random((b, n_tournaments, width)) * counts).astype(np.int64)
+            s_idx = (rng_s.random((b, n_tournaments, width)) * counts).astype(np.int64)
             mask = positions < counts
             sums = np.take_along_axis(padded_sum[t_idx], s_idx, axis=2) * mask
             cnts = np.take_along_axis(padded_cnt[t_idx], s_idx, axis=2) * mask
@@ -369,8 +414,13 @@ def evaluate_gate(
         reasons.append(
             f"margin {margin:.5f} < pre-registered {config.min_margin_nats} nats/map"
         )
-    if lo <= 0.0:
+    if lo <= 0.0 <= hi:
         reasons.append(f"bootstrap {config.bootstrap_ci:.0%} CI [{lo:.5f}, {hi:.5f}] includes 0")
+    elif hi < 0.0:
+        reasons.append(
+            f"bootstrap {config.bootstrap_ci:.0%} CI [{lo:.5f}, {hi:.5f}] is entirely "
+            "negative (the comparator is significantly better)"
+        )
     return GateResult(
         margin=margin,
         ci_low=lo,
@@ -379,4 +429,8 @@ def evaluate_gate(
         reasons=reasons,
         method=method,
         n_maps=len(diff),
+        # `rated` is a property of the row (`skip_reason`), not the model, so
+        # elo and glicko agree on it whenever paired_differences didn't
+        # already raise for a disagreement -- either side's tally is complete.
+        excluded=excluded_by_reason(predictions_elo),
     )
