@@ -136,6 +136,28 @@ The held-out split is not incidental. Fitting the correction on *in-sample* trai
 
 **If this gate fails:** ship the rung-3 public-rating card (§X), and do not proceed to a custom Bradley-Terry model. Two failed gates on the same data is evidence about the data, not a reason for a third attempt with a looser bar.
 
+### D3b: the multiplicity-corrected Glicko gate
+
+**Registered 2026-08-03, after the Elo gate above FAILED on all three conditions and before Glicko's confidence interval was computed.**
+
+The Elo gate failed: margin 0.00191 against 0.003, CI [−0.00046, 0.00500] including 0, slope 0.6569 outside [0.9, 1.1]. Calibrated Glicko was computed alongside as a registered diagnostic and its measured values are **already known**: log loss 0.686439 against the constant floor's 0.693147, margin **0.00671**, slope **0.9049**.
+
+Be exact about what is and is not still open. Two of the three conditions are already measured and already pass. The only quantity not yet computed is Glicko's bootstrap interval. **So this is a one-condition test, and calling it a three-condition gate would overstate it.** That is recorded here rather than glossed, because the whole point of registering in advance is defeated by pretending an already-known value was under test.
+
+Why run it at all, given the Elo gate's stated consequence: refusing to look at a computed diagnostic is not rigour, it is discarding data. What would be dishonest is looking and then not paying for the multiplicity. Two candidates were computed, so the family-wise error rate is corrected:
+
+```
+mean(LL_constant − LL_glicko_calibrated) ≥ 0.003 nats/map     [already measured: 0.00671, passes]
+AND paired cluster bootstrap CI excludes 0 at 97.5%, not 95%   [NOT YET COMPUTED — the actual test]
+AND calibration slope ∈ [0.9, 1.1]                             [already measured: 0.9049, passes]
+```
+
+Bonferroni for the two candidates actually computed: family-wise α = 0.05 over 2 comparisons gives per-comparison α = 0.025, hence a 97.5% two-sided interval. This bar is **stricter** than the Elo gate's, not looser, so it does not fall foul of the prohibition above — that prohibition exists to stop a bar being relaxed until something passes.
+
+The slope band is **not** widened, tightened, or given its own interval. It is the band this spec already set for D3 before any of this ran. But note that 0.9049 clears the lower bound by only 0.0049, which is fragile; the report must state that margin of compliance so a reader can judge it rather than seeing a bare PASS.
+
+**No third candidate.** If this fails, the rung-3 card ships and D3 is over. There is no D3c.
+
 ---
 
 ## III. Dataset
