@@ -1,0 +1,106 @@
+# The 16 teams in the TI 2026 Swiss stage, with their OpenDota team_ids.
+#
+# Populated 2026-08-02 after the real ingest (snapshot 20260802T165535Z,
+# 41,140 maps). The 16-team field itself (7 direct invites + 9 regional
+# qualifier winners) is corroborated across multiple independent outlets
+# (dotesports, gosugamers, hotspawn — cross-checked 2026-08-02); team_ids
+# were resolved against our own store by matching org name to the most
+# active/most recent team_id fielding a 5-account roster, since several
+# orgs are recorded under more than one OpenDota team_id (see notes below).
+#
+# Ambiguous resolutions, evidence recorded here rather than assumed:
+# - Xtreme Gaming, HULIGANI, Team Resilience: each has 2-3 OpenDota
+#   team_ids in our store with IDENTICAL 5-account rosters (a data
+#   duplicate, not a roster change) -- confirmed by direct account
+#   comparison. Any of the duplicate ids resolves to the same
+#   roster_version_id, so the choice below (favoring the id whose own
+#   `name` field matches, or the one with the longest history) is cosmetic.
+# - HULIGANI: team_id 10149530 is OpenDota's own "HULIGANI"-named id
+#   (active 2026-06-01 to 2026-06-28, the EU qualifier window); the
+#   organization's much larger history (463 maps) sits under 9303383,
+#   labeled "L1GA TEAM" (their pre-rebrand name, per public reporting) --
+#   same 5 accounts throughout, confirmed by direct comparison.
+# - Nigma Galaxy: team_id 7554697's last map (2026-05-08) and 10136357's
+#   first map (2026-05-09) are the IDENTICAL 5-account roster
+#   (3e38bebcf099aea5, continuity 1.0) -- a duplicate team_id, same
+#   category as the three above, corrected 2026-08-02 after an earlier
+#   version of this note wrongly attributed a 3/5-continuity figure to
+#   this handoff. The GENUINE roster change happens later, entirely
+#   WITHIN team_id 10136357: last map under 3e38bebcf099aea5 is
+#   2026-06-03, first map under the new roster 3ea16a8a0fbc3023 is
+#   2026-06-21 (continuity 0.6; 140297552 and 418942836 leave,
+#   111620041 and 210053851 join), matching public reporting's ~06-08
+#   date for the SumaiL/Lorenof change. No alias needed for either event:
+#   the May handoff already shares one roster_version_id, and the June
+#   change never crosses a team_id boundary, so `RosterIndex` resolves
+#   its predecessor from 10136357's own history alone. Confirmed
+#   empirically -- fitting GlickoModel over the full store with and
+#   without a 7554697->10136357 alias produces the IDENTICAL strength for
+#   3ea16a8a0fbc3023 (2.324358513350741 either way). See
+#   config/team_aliases.yaml for the corrected ledger entry (alias removed).
+# - HEROIC -> LGD Gaming (South America): full 5/5 roster continuity
+#   (confirmed), sequential non-overlapping dates (2026-04-24 -> 05-26).
+#   No alias needed: identical accounts already share one roster_version_id.
+# - LGD Gaming (10150538) vs a fourth duplicate id, 10208068 "LGD.Pinghu"
+#   (2026-07-31 -> 2026-08-01, 6 maps): found 2026-08-02 by
+#   `check_roster_staleness` (teams.py), not by name search. IDENTICAL 5/5
+#   roster (81306398, 105045291, 177203952, 292921272, 1026694469),
+#   confirmed by direct comparison -- same category as Xtreme
+#   Gaming/HULIGANI/Team Resilience above, not a migration. No alias
+#   needed.
+# - Tundra Esports -> 1win: corrected 2026-08-02, then RE-corrected same
+#   day after a mixed-population error (below). Public reporting says
+#   Tundra Esports exited competitive Dota 2 on 2026-06-01 and the roster
+#   moved to sponsor "1win" (itself possibly renamed again for TI, the
+#   same gambling-sponsorship restriction that forced BetBoom -> BoomBoys).
+#   An org-NAME search for "1win"/"tundra" missed this, but querying by
+#   ACCOUNTS instead of by name shows the identical 5-account roster
+#   (86698277, 93618577, 136829091, 331855530, 346412363 -> rvid
+#   e0492e01c08d07f5) recorded under three sequential, non-overlapping
+#   team_ids. Figures below are THIS ROSTER's maps specifically (filtered
+#   by rvid), verified directly against the store -- the first version of
+#   this note quoted 8291895's ALL-ROSTERS total (447) as if it were this
+#   roster's count, the same mixed-population mistake just caught and
+#   fixed in the Nigma entry above:
+#     - 8291895 "Tundra Esports": 189 maps of THIS roster (2025-10-14 ->
+#       2026-05-18). This team_id's own total across every roster it has
+#       ever fielded is 447 maps (2025-02-08 -> 2026-05-18) -- kept here
+#       only to label it explicitly as a DIFFERENT, team_id-level count,
+#       not to be added into the roster total below.
+#     - 10150413 "Iron Wing": 24 maps (2026-05-19 -> 2026-05-30) -- this
+#       id's entire history is this roster, so no mixed-population risk
+#       here. Note this is the SAME 10150413 Task 3's alias ledger already
+#       investigated as a candidate HULIGANI predecessor and correctly
+#       declined, since HULIGANI's roster shares nothing with it; this is
+#       an unrelated, separate identity for the same team_id.
+#     - 10182357 "1w": 21 maps (2026-07-07 -> 2026-08-02, running up to
+#       the snapshot edge) -- also this id's entire history.
+#   This roster's total: 189 + 24 + 21 = 234 maps across all three
+#   team_ids, merged into one rating for e0492e01c08d07f5 regardless of
+#   which id is configured below (ratings key off the roster hash, never
+#   team_id) -- `reports/strengths.csv` already carries this rvid with
+#   `prior_driven=False`. Only the DISPLAY NAME/team_id below were stale.
+#   Using 10182357 (the current, most-recent id) with display name "1win"
+#   per public reporting. LIMITATION: this org-name-first resolution
+#   method (name -> team_id -> that id's latest roster) only found the
+#   right roster here because it did not change again after 2026-05-18;
+#   it does not follow a roster forward across a LABEL change the way
+#   an account-keyed search does, so the TI-facing name for this entry
+#   should be re-checked before the card is published.
+teams:
+  - {name: Aurora Gaming, team_id: 9467224}
+  - {name: Team Liquid, team_id: 2163}
+  - {name: BoomBoys, team_id: 8255888}
+  - {name: Xtreme Gaming, team_id: 8261500}
+  - {name: Team Falcons, team_id: 9247354}
+  - {name: Team Yandex, team_id: 9823272}
+  - {name: "1win", team_id: 10182357}
+  - {name: Team Spirit, team_id: 7119388}
+  - {name: Team Vision, team_id: 9572001}
+  - {name: HULIGANI, team_id: 10149530}
+  - {name: Nigma Galaxy, team_id: 10136357}
+  - {name: Team Resilience, team_id: 5017210}
+  - {name: Vici Gaming, team_id: 726228}
+  - {name: OG, team_id: 2586976}
+  - {name: LGD Gaming, team_id: 10150538}
+  - {name: GamerLegion, team_id: 9964962}

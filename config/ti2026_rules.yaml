@@ -24,8 +24,14 @@ rounds:
   max_distance_when_loser_eliminated: [5]
 
 duration_model:
-  log_mean: 7.65      # exp(7.65) ~ 2100s ~ 35 min
-  log_sigma: 0.25
+  # Fitted in D2 from real map durations (reports/duration_fit.json).
+  # log_sigma is the MARGINAL sd of log-duration -- what DurationResolver
+  # actually samples from, since it draws with no gap term of its own. The
+  # fit's rating-gap coefficient was not material (see the D2 gate report)
+  # and is not applied here; see spec XII / task-8 known limitations.
+  log_mean: 7.579288849767151      # exp(7.579...) ~ 1953s ~ 32.6 min
+  log_sigma: 0.2805980274352356
+  fitted_from_n_maps: 41082
 
 provenance:
   n_teams: official
@@ -46,5 +52,4 @@ provenance:
   coin_toss_resolution: arbitrary
   # Repeat avoidance is "where possible" per the official text.
   repeat_avoidance_is_soft: official
-  # Duration distribution is our own placeholder, not a Valve statement.
-  duration_model: arbitrary
+  duration_model: empirical   # fitted in D2; see reports/duration_fit.json

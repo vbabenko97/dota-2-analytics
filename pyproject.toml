@@ -17,7 +17,16 @@ packages = ["src/ti26"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-markers = ["slow: Monte Carlo convergence tests; run at final verification"]
+markers = [
+    """slow: disproportionately slow for a dev loop (Monte Carlo convergence, \
+full cli_d2 end-to-end runs, or anything else that costs 30s+); always run at \
+final verification. Final verification MUST run the full suite with NO marker \
+filter (no `-m "not slow"`, no `-k` exclusion) -- a slow-marked Task 7 test \
+failure was once excluded from a verification run by a `-m` filter and went \
+unnoticed for an entire fix round because nothing re-ran it unfiltered. \
+Marking a test slow shrinks the dev loop; it must never shrink what final \
+verification actually checks.""",
+]
 
 [tool.ruff]
 line-length = 100

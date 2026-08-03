@@ -267,3 +267,44 @@ independent system. Concretely:
   run as a baseline sanity check, unmodified.
 - `git status --short src tests` — empty, confirmed before writing this
   report.
+
+---
+
+## Addendum, 2026-08-02: what D2 superseded
+
+Dated record. The findings above stand as written for the D1 tree they
+audited; this note exists so a later reader does not act on two statements
+that D2 has since made false.
+
+**The duration model is no longer `arbitrary`.** Row 8 of the differential
+table and the "Not checked" list both describe `DurationResolver`'s
+log-normal as "explicitly tagged `arbitrary` by the repo itself", with
+parameters `log_mean=7.65`, `log_sigma=0.25`. The D2 branch
+(`d2-ingestion-ratings`) fits those parameters from 41,082 real professional
+map durations and rewrites them in `config/ti2026_rules.yaml` as
+`log_mean=7.5793`, `log_sigma=0.2806`, provenance `empirical` — a fifth
+provenance tag added to spec §XII for exactly this case. The audit's
+reasoning for not checking it was correct at the time and remains correct as
+a scoping decision; only the tag and the numbers have moved.
+
+Two things the audit could not check are now measured, and one of them
+contradicts an assumption the spec carried:
+
+- `log_sigma` does **not** measurably move the card. The resolver is
+  consulted on roughly 30% of rankings, which spec §XII had treated as
+  implying the parameter was load-bearing. Measured against its own
+  resampling noise floor, every sigma-varying delta falls inside the noise.
+  `log_mean` still matters; `log_sigma` is low-risk. See spec §XII's dated
+  correction.
+- **Real strength data now exists** and the audit's "no ingestion path yet"
+  limitation is closed: 41,140 maps under `data/processed/d2.sqlite`. It did
+  not, however, produce a usable card. No rating model beats the spec §V
+  constant floor (elo +0.00131, glicko +0.00514, ewma +0.01340 nats/map
+  worse than a coin flip), so `cli_d2` refuses to ship a card from our fit
+  and falls back to spec §X rung 3, public ratings. The models rank better
+  than chance (accuracy 0.5363 elo, 0.5439 glicko) but are overconfident
+  (calibration slopes 0.44 and 0.40 against 1.0), which is how a forecaster
+  loses to a coin flip on log loss while beating it on accuracy.
+
+Nothing in the D1 rules engine this audit examined was found wrong by D2.
+The two confirmed disagreements recorded above are unaffected.

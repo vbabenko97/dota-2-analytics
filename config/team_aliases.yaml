@@ -1,0 +1,99 @@
+# Historical team_id -> canonical team_id.
+#
+# An empty list is the CORRECT starting state: an alias is a claim that two
+# distinct OpenDota team_ids are the same organization, and inventing one
+# silently merges two teams' histories. Step 5 resolves the four re-brands
+# spec VI names, against real data, before any entry appears here.
+#
+# Provenance for every entry: inferred (a reading of org identity, not an
+# official statement).
+#
+# Investigation ledger (2026-08-02), spec VI's four named orgs, checked
+# against the live OpenDota explorer API (team_id, name, date range, and
+# per-team_id top account_ids):
+#
+# - BoomBoys (8255888, 1218 maps, 1610118122-1785596952) vs a second
+#   "BoomBoys" (10163435, 7 maps, 1780234395-1780856017): date ranges
+#   overlap (the second id's whole window sits inside the first's much
+#   longer one), and the two ids share zero top account_ids. Not a rebrand;
+#   declined.
+# - Iron Wing (10150413, 1779187621-1780151101) vs HULIGANI (10149530,
+#   1780318808-1782653592): dates are non-overlapping and sequential
+#   (~46.6h gap), which looks like a rebrand signature, but the two rosters
+#   share zero account_ids. Coincidental temporal adjacency, not a rebrand;
+#   declined. (This was the one case where the date-range heuristic alone
+#   would have been misleading.)
+# - Night Vision (9005364, 1677168629-1781053181) vs TEAM VISION (9572001,
+#   1729605519-1782408313): date ranges overlap heavily and the two rosters
+#   share zero account_ids. Distinct orgs that happen to both contain
+#   "Vision" in the name; declined.
+# - TEAM VISION (9572001) vs PVISION (9824702, 1751999928-1784483341):
+#   settled, not just declined on date overlap. No head-to-head match
+#   between the two team_ids (0 rows). Boundary check: PVISION's earliest
+#   matches (from 1751999928) run concurrently with, not after, Team
+#   Vision's latest matches (up to 1782408313) — about 352 days of overlap,
+#   not a hand-off. Rosters across that overlap window are stable and share
+#   4 of 5 accounts (73401082, 106573901, 164199202, 1044002267), differing
+#   only in the 5th (Team Vision: 195108598; PVISION: 56351509). This is a
+#   concurrent-coexistence pattern with a shared stand-in, not a rebrand —
+#   exactly the case `test_predecessor_ignores_a_different_team_with_a_similar_roster`
+#   guards against. Declined; no alias.
+#   UPDATE 2026-08-02, found by `check_roster_staleness` (teams.py): PVISION
+#   changed its own 5th account on 2026-05-26, from 56351509 to 195108598 --
+#   from that date PVISION fields the BIT-FOR-BIT IDENTICAL roster as Team
+#   Vision (rvid c298aa3eb4837f25 either way), through PVISION's last map
+#   2026-07-19. The "differing only in the 5th account" description above
+#   is accurate for the period it was written from but is now stale for
+#   2026-05-26 onward. This does not change the conclusion or require an
+#   alias: `ti2026_teams.yaml` already configures Team Vision at 9572001,
+#   whose own last map (2026-06-25) already resolves to this exact roster,
+#   and ratings merge automatically by roster hash regardless of team_id --
+#   the same reasoning as the duplicate-id cases above. Recorded because a
+#   ledger entry should say what is true NOW, not just what was true when
+#   it was written -- the same principle the Nigma correction above rests on.
+#
+# Task 8 ledger (2026-08-02), resolving TI 2026's 16 Swiss-stage teams
+# (config/ti2026_teams.yaml) against the store from snapshot
+# 20260802T165535Z:
+#
+# - L1GA TEAM (9303383, 463 maps, ...-2026-05-09) vs HULIGANI (10149530,
+#   2026-06-01 to 2026-06-28) vs a third id also named "L1GA TEAM"
+#   (10208009, 2026-07-31 to 2026-08-01): all three share the IDENTICAL
+#   5-account roster (92487440, 123787715, 140251702, 145065875, 320017600).
+#   This is a duplicate-id case, not a rebrand needing an alias: every map
+#   under any of the three already hashes to the same roster_version_id, so
+#   Elo/Glicko already merge their history (ratings key off the account
+#   hash, never team_id). No alias added; `ti2026_teams.yaml` uses 10149530
+#   (OpenDota's own "HULIGANI"-named id) for display-name clarity only.
+# - HEROIC (9303484, 2025-02-16 to 2026-04-24) vs LGD Gaming (10150538,
+#   2026-05-26 to 2026-08-01): sequential, non-overlapping, and the last
+#   HEROIC roster (81306398, 105045291, 177203952, 292921272, 1026694469)
+#   is bit-for-bit the first LGD Gaming roster. Same conclusion as above —
+#   identical accounts already share one roster_version_id — no alias
+#   needed.
+# - Nigma Galaxy (7554697, 356 maps, ...-2026-05-08) vs a second "Nigma
+#   Galaxy" (10136357, 58 maps, 2026-05-09-...): CORRECTED 2026-08-02. An
+#   earlier version of this entry claimed a 3/5-continuity roster change
+#   at this handoff and added an alias below. That was wrong: measured
+#   directly (7554697's last map vs 10136357's FIRST map, not its most
+#   recent), continuity is 1.0 — the identical 5 accounts (101356886,
+#   138880576, 140297552, 152168157, 418942836; roster_version_id
+#   3e38bebcf099aea5) on both sides. This is a duplicate team_id, the same
+#   category as L1GA TEAM/HULIGANI and HEROIC/LGD Gaming above, not a
+#   rebrand. The GENUINE roster change is a separate, later event that
+#   never crosses a team_id boundary: entirely WITHIN 10136357, last map
+#   under 3e38bebcf099aea5 is 2026-06-03, first map under the new roster
+#   3ea16a8a0fbc3023 is 2026-06-21 (140297552 and 418942836 leave;
+#   111620041 and 210053851 join; continuity 0.6) — matching public
+#   reporting's ~06-08 date for the SumaiL/Lorenof change. No alias is
+#   needed for either event: the May handoff already shares one
+#   roster_version_id (ratings key off the account hash, never team_id,
+#   same as the duplicate-id cases above), and the June change is a
+#   same-team_id transition that `RosterIndex` already resolves from
+#   10136357's own history — nothing outside that team_id is involved.
+#   Verified empirically, not just argued: fitting `GlickoModel` over the
+#   full store with and without a 7554697->10136357 alias produces the
+#   IDENTICAL strength for 3ea16a8a0fbc3023 (2.324358513350741 either
+#   way). Declined; no alias. `config/ti2026_teams.yaml` uses 10136357
+#   (the current id) for display-name clarity only.
+aliases: []
