@@ -22,10 +22,14 @@ from ti26.cli import main as cli_main
 from ti26.data.opendota import TEAM_RATING_QUERY, explorer_query, http_transport
 from ti26.data.store import load_rows, open_store
 from ti26.public_ratings import (
+    DAILY_DRIFT_RATING_POINTS,
     LOGIT_PER_ELO,
     OBSERVED_FORM_WINDOW_DAYS,
     STALE_DAYS_THRESHOLD,
     THIN_GAMES_THRESHOLD,
+    NullRatingFieldError,
+    boundary_proximity,
+    deviation_summary,
     observed_recent_form,
     parse_ratings,
     scale_sensitivity_sweep,
@@ -121,7 +125,16 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
     team_ids = [t.team_id for t in teams]
     sql = TEAM_RATING_QUERY.format(team_ids=",".join(str(i) for i in team_ids))
     rows = explorer_query(sql, transport)
-    by_id = parse_ratings(rows)
+    try:
+        by_id = parse_ratings(rows)
+    except NullRatingFieldError as exc:
+        name = next((t.name for t in teams if t.team_id == exc.team_id), None)
+        who = f"{name} (team_id={exc.team_id})" if name else f"team_id={exc.team_id}"
+        raise SystemExit(
+            f"{who} has a null {exc.field!r} team_rating field -- refusing to "
+            "fabricate a default strength; a card built on a fabricated strength "
+            "is worse than no card"
+        ) from exc
 
     missing = [t for t in teams if t.team_id not in by_id]
     if missing:
@@ -187,6 +200,13 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
     form_below = sum(1 for f in observed_form.values() if f.verdict == "form BELOW implied")
     form_no_data = sum(1 for f in observed_form.values() if f.verdict == "no data")
 
+    # --- 3(e). Boundary-proximity diagnostic (day-to-day drift, not gated) ----
+    # `team_rating` is a live, continuously updated table: nothing before
+    # this reported that the snapshot behind this card is a moving target,
+    # or how close any card-boundary-adjacent pair sits to a plausible
+    # single-match swap (see FIX D, 2026-08-02 rung-3 review, Finding 4).
+    boundary_gaps = boundary_proximity(strengths, ordered)
+
     # --- 4. Provenance report ---------------------------------------------------
     lines = [
         "# Rung 3 provenance: OpenDota `team_rating` fallback",
@@ -208,6 +228,16 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
             f"{LOGIT_PER_ELO:.8f}`, is INFERRED by convention (it matches this repo's "
             "own `EloModel.strengths()`), not a documented constant. Every number "
             "below derived from it inherits that inference."
+        ),
+        "",
+        (
+            f"**Ratings snapshot valid as of: {now.isoformat()} (UTC).** Every "
+            "strength, rating, and probability in this report is a read of "
+            "OpenDota's `team_rating` table at this exact moment. `team_rating` "
+            "updates continuously as new matches are recorded, so a re-run even "
+            "hours later can report different numbers for the same teams -- see "
+            "the boundary-proximity diagnostic near the end of this report for "
+            "how much that has already moved a card-adjacent pair in practice."
         ),
         "",
         "## Per-team ratings",
@@ -325,13 +355,7 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
             "override a rating on its own."
         ),
         "",
-        (
-            "**All five current deviations point the same way** (form above "
-            "implied, all in the bottom half) with none below. Noise would be "
-            "roughly symmetric, so this is systematic -- but it is ambiguous "
-            "between the `/400` divisor over-spreading strengths and the "
-            "schedule confound above, and this data cannot separate them."
-        ),
+        deviation_summary(observed_form, ordered),
         "",
         "| team | strength | implied | observed | n | 95% Wilson CI | verdict |",
         "|---|---|---|---|---|---|---|",
@@ -353,6 +377,37 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
             + (f", {form_no_data} no data" if form_no_data else "")
             + "."
         ),
+        "",
+        "## Boundary-proximity diagnostic (day-to-day drift, not gated)",
+        "",
+        (
+            "`team_rating` is live and continuously updated (see the fetch "
+            "timestamp above), so the strength gap behind any card boundary can "
+            "move between the day a card is generated and the day it is used. "
+            "On 2026-08-02, a single head-to-head result moved two teams "
+            "(BoomBoys, Team Falcons) by exactly +/-17.74 rating points each "
+            "(equal and opposite -- the signature of a head-to-head result) in "
+            "a matter of hours, collapsing their strength gap from 0.2189 to "
+            "0.0146 logits while they sat across the 4-1/elim_win card "
+            "boundary. Every ADJACENT pair below is flagged when its gap is "
+            f"smaller than that observed {DAILY_DRIFT_RATING_POINTS:.2f}-rating-"
+            "point movement -- meaning one more match result could plausibly "
+            "swap their order. Diagnostic only: reported, not gated on, and "
+            "never changes a strength or the card."
+        ),
+        "",
+        "| team A (stronger) | team B (weaker) | gap (logits) | gap (rating points) | flagged |",
+        "|---|---|---|---|---|",
+    ]
+    for gap in boundary_gaps:
+        lines.append(
+            f"| {gap['team_a']} | {gap['team_b']} | {gap['gap_logit']:.4f} | "
+            f"{gap['gap_points']:.2f} | {'YES' if gap['flagged'] else 'no'} |"
+        )
+    flagged_count = sum(1 for g in boundary_gaps if g["flagged"])
+    lines += [
+        "",
+        f"**{flagged_count} of {len(boundary_gaps)} adjacent pair(s) flagged.**",
     ]
     (out / "rung3_provenance.md").write_text("\n".join(lines) + "\n")
 

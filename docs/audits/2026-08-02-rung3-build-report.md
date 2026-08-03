@@ -413,3 +413,165 @@ two direct checks were run instead:
    report: each `observed` figure is against whatever that roster actually
    played, not the TI field. This diagnostic is not a ranking and was never
    used to override any strength, the divisor, or the card.
+
+## Update 2026-08-03 (2): independent-review fix round (branch `d3-rung3-public-ratings`, `1e85f7c` -> this commit)
+
+Independent review (`docs/audits/2026-08-02-rung3-review.md`) returned
+**CORRECTNESS: FAIL, QUALITY: CHANGES REQUESTED**, six findings. All six
+addressed; no strength, divisor, or card logic touched (verified below).
+
+### FIX A (Critical) -- hardcoded deviation-summary prose
+
+The "Observed recent form" section's interpretive paragraph was a fixed
+literal ("All five current deviations point the same way ... none below"),
+disconnected from the computed `form_above`/`form_below` counts -- provably
+false against the branch's own fixture (real distribution 16 consistent / 0
+above / 0 below). Fixed by adding `deviation_summary()` in
+`public_ratings.py`, which reads the real verdict counts and bottom/top-half
+clustering out of `observed_form` and `ordered_by_strength` on every call,
+and covers four cases: no deviations, both directions (noise-like), one
+direction clustered in a half (systematic, ambiguous between divisor and
+schedule confound), and one direction NOT clustered (systematic, cause not
+identified). `cli_rung3.py` now calls this instead of embedding a literal.
+5 new unit tests in `test_public_ratings.py` cross-check the prose against
+the actual counts/direction for each branch; the stale
+`"All five current deviations..."` assertion in `test_cli_rung3.py` was
+replaced with one asserting the fixture's real `"No deviations this run:**
+all 16 team(s)"` text.
+
+### FIX B (Important) -- Elo-anchor test could not fail
+
+`test_elo_anchor_reports_a_real_rank_correlation_and_top4_overlap` asserted
+`0 <= top4_overlap <= 4`, satisfied by a hardcoded `0`. `small_store` +
+`full_rating_rows` is a fully deterministic fixture, so the real values are
+computable: rank correlation `0.4000`, top-4 overlap `2` (public top-4
+Team12-15 vs Elo top-4 Team08/10/12/14, overlapping in Team12 and Team14).
+Both assertions now pin these exact values.
+
+### FIX C (Important) -- null rating field crashed instead of refusing
+
+A present-but-null `rating`/`wins`/`losses`/`last_match_time` field raised an
+unhandled `TypeError` in `parse_ratings` instead of the designed refusal.
+Added `NullRatingFieldError` (names the `team_id` and the null `field`);
+`parse_ratings` now checks all four fields explicitly and raises it;
+`cli_rung3.main` catches it and re-raises `SystemExit` in the same voice as
+the missing-row refusal, resolving the team name when possible. New tests:
+a parametrized unit test (`test_public_ratings.py`, all four fields) and an
+integration test (`test_cli_rung3.py`) confirming `SystemExit`, no card, and
+no `strengths_public.csv`.
+
+### FIX D (Important) -- no drift/boundary-proximity warning
+
+Added (1) a fetch timestamp printed plainly in the report
+(`"Ratings snapshot valid as of: {iso} (UTC)"`, captured immediately after
+the live fetch) and (2) a new "Boundary-proximity diagnostic" section:
+`boundary_proximity()` in `public_ratings.py` reports every ADJACENT pair's
+gap in logits and converted rating points (`gap_logit / logit_per_elo`),
+flagging pairs below `DAILY_DRIFT_RATING_POINTS = 17.74` -- the exact,
+cited magnitude the review measured between two live runs hours apart
+(BoomBoys/Team Falcons, equal-and-opposite `+/-17.74` points, a head-to-head
+signature). Diagnostic only: reported, never gated, never changes a
+strength or the card. New unit test with hand-computed literals
+(`logit_per_elo=0.01` for exact arithmetic) and a deterministic integration
+test (`full_rating_rows`' constant `+15`-per-index step makes every
+adjacent gap exactly `15.00` points, all flagged).
+
+### FIX E (Minor) -- docstring overclaim
+
+`test_logit_per_elo_matches_the_repo_own_elo_convention`'s docstring is
+corrected: `elo.py` has no separately named `/400` constant to reference
+(`EloModel.strengths()` computes `math.log(10) / self._scale`, an instance
+attribute defaulting to `400.0`). The test itself was already sound (a
+literal, not a tautology); only the docstring's claim was wrong.
+
+### FIX F (Minor) -- window boundary untested
+
+Added `test_observed_recent_form_respects_the_window_cutoff_at_the_exact_
+boundary`: a map dated exactly `window_days` back must still count
+(`window_start <= start_time` is inclusive). Previously only 89/91 days
+either side were covered.
+
+### Test results
+
+- New/changed: 5 (`deviation_summary`) + 1 (`boundary_proximity`) + 1
+  (window boundary) + 1 parametrized x4 (`NullRatingFieldError`) in
+  `test_public_ratings.py`; 2 rewritten assertions + 2 new integration tests
+  in `test_cli_rung3.py`.
+- Full suite, **no marker filter**: `.venv/bin/python -m pytest -q` ->
+  **630 passed, 0 failed**.
+- `.venv/bin/python -m ruff check .` -> **All checks passed.**
+
+### Mutation proofs (required: FIX A and FIX B)
+
+Both performed against an in-repo scratch copy (`.mutscratch/src/ti26/...`,
+never `/tmp`), sanity-checked live first (a `raise RuntimeError` at module
+scope in the scratch copy reproduced exactly under `-o
+pythonpath=.mutscratch/src`), reverted and re-verified clean between the
+two mutations, then fully removed via explicit non-recursive `rm`/`rmdir`
+(every path named individually) -- `git status --short` confirmed no
+residue and no tracked file touched.
+
+**FIX A**: `deviation_summary()` mutated to return the ORIGINAL hardcoded
+literal ("All five current deviations point the same way ... none below"),
+ignoring its arguments entirely. Command:
+`.venv/bin/python -m pytest -q -o pythonpath=.mutscratch/src
+tests/test_public_ratings.py`. Result: **4 failed, 21 passed** -- exactly
+the four `deviation_summary` tests (`..._reports_no_deviations_when_none_
+are_flagged`, `..._reports_both_directions_when_mixed`,
+`..._one_directional_clustered_in_bottom_half`,
+`..._one_directional_but_not_clustered`), each failing because the fixed
+literal no longer matches the real, per-case computed text.
+
+**FIX B**: `cli_rung3.py`'s `top4_overlap = len(top4_public & top4_elo)`
+mutated to `top4_overlap = 0`. Command: `.venv/bin/python -m pytest -q -o
+pythonpath=.mutscratch/src tests/test_cli_rung3.py`. Result: **1 failed, 8
+passed** -- exactly `test_elo_anchor_reports_a_real_rank_correlation_and_
+top4_overlap`, failing on `assert 0 == 2`. (Confirmed this test's OLD range
+assertion, `0 <= x <= 4`, would NOT have caught this same mutation --
+`0` satisfies it.)
+
+### Card confirmation (no strength, divisor, or card logic changed)
+
+1. `git diff 1e85f7c -- src/ti26/cli_rung3.py src/ti26/public_ratings.py`:
+   only two deleted lines in the whole diff -- `by_id = parse_ratings(rows)`
+   (replaced by the FIX C try/except wrapper, same call, same assignment)
+   and the FIX A hardcoded paragraph (replaced by the `deviation_summary()`
+   call). Nothing touching `ratings`, `strengths`, `strengths_path`, or the
+   `cli_main(...)` invocation.
+2. Controlled A/B: pre-fix-round code (`git show 1e85f7c:...`, in an in-repo
+   scratch copy, same non-recursive cleanup as the mutation exercise) and
+   the current code were each run with an IDENTICAL fixed, synthetic
+   (non-network) rating payload against the same real local store.
+   `recommended_card.json` and `strengths_public.csv` from both runs are
+   **sha256-identical** (`22250c72...6b267` and `a2f82e43...ca8911`
+   respectively -- the SAME hashes as the previous fix round's equivalent
+   check, since the underlying computation has not changed across either
+   round).
+
+### The real run (live, for FIX D's timestamp)
+
+`.venv/bin/python -m ti26.cli_rung3` (live network call, real local store):
+
+```
+rung3: 16 teams rated, 6 thin, 3 stale
+rung3: Elo rank correlation 0.9000, top-4 overlap 4/4
+rung3: scale sweep resolvable=True
+rung3: observed form 11 consistent, 5 above implied, 0 below implied
+rung3: card written to reports/recommended_card.json
+```
+
+Ratings moved again since the prior run (expected, live table): `strength`/
+`implied` differ (e.g. Team Falcons now strictly above BoomBoys), while
+`observed`/`n`/CI (from the frozen local store) are unchanged. Same 5 teams
+flagged (OG, LGD Gaming, Nigma Galaxy, Team Resilience, HULIGANI), but the
+deviation-summary paragraph now correctly reports **"not clustered in
+either half of the field"** rather than "all in the bottom half" -- OG's
+rank moved from 9th to 8th (into the top half by an 8/8 split) since the
+brief was written, which is exactly the kind of stale-conclusion risk FIX A
+exists to prevent: a hardcoded "all bottom-half" claim would now be
+actively wrong. The new boundary-proximity table found several genuinely
+tight adjacent pairs this run (e.g. Aurora Gaming/Team Liquid: 0.78 rating
+points; LGD Gaming/Vici Gaming: 0.61 points), both correctly flagged.
+`recommended_card.json`'s hash changed from the prior run's snapshot
+(`bc8a04f5...` -> `bc884ba4...`), attributable entirely to this same live
+drift per the card-confirmation checks above, not to any code change.

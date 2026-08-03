@@ -6,8 +6,12 @@ import pytest
 from ti26.data.schema import MapRow
 from ti26.public_ratings import (
     LOGIT_PER_ELO,
+    NullRatingFieldError,
+    ObservedForm,
     PublicRating,
+    boundary_proximity,
     classify_form_verdict,
+    deviation_summary,
     observed_recent_form,
     parse_ratings,
     scale_sensitivity_sweep,
@@ -46,6 +50,31 @@ def test_parse_ratings_casts_bigint_strings_defensively():
     assert r.wins == 329
     assert r.losses == 172
     assert r.last_match_time == 1782408313 and isinstance(r.last_match_time, int)
+
+
+@pytest.mark.parametrize("null_field", ["rating", "wins", "losses", "last_match_time"])
+def test_parse_ratings_refuses_a_present_row_with_a_null_field(null_field):
+    """FIX C (2026-08-02 rung-3 review, Finding 3): a row can be PRESENT for
+    a team_id but carry a null numeric field -- a different case from the
+    row being absent entirely (covered by `cli_rung3`'s missing-row
+    refusal). Before this fix, `float(None)`/`int(None)` raised an
+    unhandled `TypeError` here instead of a named, catchable refusal.
+    Parametrized over all four numeric fields so each one is independently
+    proven to raise, not just `rating`.
+    """
+    row = {
+        "team_id": "555",
+        "rating": 1300.0,
+        "wins": 10,
+        "losses": 5,
+        "last_match_time": "1000",
+    }
+    row[null_field] = None
+    with pytest.raises(NullRatingFieldError) as excinfo:
+        parse_ratings([row])
+    assert excinfo.value.team_id == 555
+    assert excinfo.value.field == null_field
+    assert null_field in str(excinfo.value)
 
 
 def test_is_thin_boundary_exactly_at_the_threshold():
@@ -202,9 +231,18 @@ def test_scale_sensitivity_sweep_each_entry_carries_its_own_divisor():
 
 
 def test_logit_per_elo_matches_the_repo_own_elo_convention():
-    """Pins the constant itself against ti26.ratings.elo's own /400
-    convention, so a future edit to either side that silently diverges them
-    is caught here rather than only by inspection."""
+    """Pins the constant itself against the classic Elo `/400` scale that
+    `ti26.ratings.elo.EloModel.strengths()` also uses (computed there as
+    `math.log(10) / self._scale`, an instance attribute defaulting to 400.0
+    -- there is no separate named `/400` constant in `elo.py` to import and
+    compare against directly; FIX E, 2026-08-02 rung-3 review Finding 5,
+    corrects this docstring's prior overclaim that one exists). This is a
+    literal, independent of the module's own `LOGIT_PER_ELO`, so a future
+    edit that silently diverges the two `/400` conventions is caught here
+    rather than only by inspection -- effectively the same check as the
+    spacing assertion in
+    `test_strengths_from_ratings_centres_scales_and_preserves_order`.
+    """
     assert LOGIT_PER_ELO == pytest.approx(math.log(10) / 400.0)
 
 
@@ -347,3 +385,152 @@ def test_observed_recent_form_implied_averages_over_other_teams_excluding_self()
     strengths = {"Self": 0.5, "Other1": 0.0, "Other2": 1.5, "Other3": -1.0}
     result = observed_recent_form(rows, resolved, strengths, reference_time=0, window_days=90.0)
     assert result["Self"].implied == pytest.approx(0.5696584096, abs=1e-9)
+
+
+def test_observed_recent_form_respects_the_window_cutoff_at_the_exact_boundary():
+    """FIX F (2026-08-02 rung-3 review, Finding 6): the window cutoff was
+    only tested 1 day either side of `window_days`, never at the exact
+    boundary where the inclusive `window_start <= start_time` comparison in
+    `_roster_record` is actually exercised. A map dated EXACTLY
+    `window_days` back must still count -- an off-by-one mutation to a
+    strict `>` there (excluding the boundary) would drop it and this would
+    fail.
+    """
+    roster_x = (11, 12, 13, 14, 15)
+    opponent = (91, 92, 93, 94, 95)
+    rvid_x = roster_version_id(roster_x)
+    reference_time = 90 * 86400
+    exactly_at_boundary = reference_time - 90 * 86400  # exactly window_days back -> 0
+
+    rows = [
+        _row(1, exactly_at_boundary, roster_x, opponent, radiant_win=True, r_team=100, d_team=200),
+    ]
+    resolved = {"Foo": rvid_x}
+    strengths = {"Foo": 0.0, "Bar": 0.0}
+    result = observed_recent_form(rows, resolved, strengths, reference_time, window_days=90.0)
+
+    foo = result["Foo"]
+    assert (foo.wins, foo.losses, foo.n) == (1, 0, 1), (
+        "a map dated exactly window_days back sits ON the boundary and must "
+        "still be counted (window_start <= start_time is inclusive)"
+    )
+
+
+def test_boundary_proximity_reports_adjacent_gaps_in_logits_and_rating_points():
+    """FIX D (2026-08-02 rung-3 review, Finding 4): the gap between each
+    ADJACENT pair in the strength ordering, converted back to rating points
+    by dividing by `logit_per_elo` (the inverse of `strengths_from_ratings`'
+    multiply), and flagged when smaller than a supplied threshold. Uses a
+    clean, non-default `logit_per_elo=0.01` so the points conversion is
+    exact by hand, not a re-run of the same division this test is checking:
+    gap_logit 0.10 -> 10.0 points; 0.001 -> 0.1 points; 0.099 -> 9.9 points.
+    Threshold 5.0 flags only the middle (smallest) gap.
+    """
+    strengths = {"A": 0.20, "B": 0.10, "C": 0.099, "D": 0.00}
+    ordered = ["A", "B", "C", "D"]
+    result = boundary_proximity(strengths, ordered, logit_per_elo=0.01, threshold_points=5.0)
+
+    assert len(result) == 3, "4 teams -> 3 adjacent pairs"
+    ab, bc, cd = result
+
+    assert (ab["team_a"], ab["team_b"]) == ("A", "B")
+    assert ab["gap_logit"] == pytest.approx(0.10)
+    assert ab["gap_points"] == pytest.approx(10.0)
+    assert ab["flagged"] is False
+
+    assert (bc["team_a"], bc["team_b"]) == ("B", "C")
+    assert bc["gap_logit"] == pytest.approx(0.001)
+    assert bc["gap_points"] == pytest.approx(0.1)
+    assert bc["flagged"] is True, "0.1 points is far below the 5.0-point threshold"
+
+    assert (cd["team_a"], cd["team_b"]) == ("C", "D")
+    assert cd["gap_points"] == pytest.approx(9.9)
+    assert cd["flagged"] is False
+
+
+def _form(verdict: str) -> ObservedForm:
+    """Minimal `ObservedForm` fixture for `deviation_summary` tests -- only
+    `verdict` is read by that function, so the rest are placeholders."""
+    return ObservedForm(
+        wins=1, losses=1, n=2, rate=0.5, ci_low=0.1, ci_high=0.9, implied=0.5, verdict=verdict
+    )
+
+
+def test_deviation_summary_reports_no_deviations_when_none_are_flagged():
+    """The exact fixture the rung-3 review reproduced (FIX A, Finding 1):
+    real distribution 16 consistent / 0 above / 0 below. The paragraph must
+    say so in the actual numbers, never the literal "five ... none below"
+    text a prior hardcoded version shipped regardless of the real counts.
+    """
+    observed = {f"T{i}": _form("consistent") for i in range(16)}
+    ordered = [f"T{i}" for i in range(16)]
+    text = deviation_summary(observed, ordered)
+    assert "No deviations this run" in text
+    assert "16 team(s)" in text
+    assert "form ABOVE" not in text
+    assert "form BELOW" not in text
+
+
+def test_deviation_summary_reports_both_directions_when_mixed():
+    """2 above, 1 below, 1 consistent -- the one-directional "systematic"
+    claim must NOT appear; a bug that always renders the one-directional
+    branch (ignoring the case where both directions occur) would emit
+    "point the same way" here instead, and this fails on that number
+    disagreement.
+    """
+    observed = {
+        "A": _form("form ABOVE implied"),
+        "B": _form("form ABOVE implied"),
+        "C": _form("form BELOW implied"),
+        "D": _form("consistent"),
+    }
+    ordered = ["A", "B", "C", "D"]
+    text = deviation_summary(observed, ordered)
+    assert "point BOTH ways" in text
+    assert "2 form ABOVE implied" in text
+    assert "1 form BELOW implied" in text
+    assert "point the same way" not in text
+
+
+def test_deviation_summary_one_directional_clustered_in_bottom_half():
+    """3 teams, all in the bottom half of `ordered`, all "form ABOVE
+    implied", none below -- the divisor/schedule-confound interpretation
+    must appear, and the count/direction must be the real 3, not a stale
+    literal.
+    """
+    ordered = ["A", "B", "C", "D", "E", "F"]  # bottom half (weaker) = D, E, F
+    observed = {
+        "A": _form("consistent"),
+        "B": _form("consistent"),
+        "C": _form("consistent"),
+        "D": _form("form ABOVE implied"),
+        "E": _form("form ABOVE implied"),
+        "F": _form("form ABOVE implied"),
+    }
+    text = deviation_summary(observed, ordered)
+    assert "All 3 current deviation(s) point the same way" in text
+    assert "form ABOVE implied" in text
+    assert "all in the bottom half" in text
+    assert "systematic" in text
+    assert "point BOTH ways" not in text
+    assert "No deviations" not in text
+
+
+def test_deviation_summary_one_directional_but_not_clustered():
+    """A single "form ABOVE implied" team that sits in the TOP half (not the
+    bottom) must not be described as "all in the bottom half" -- that would
+    be a false empirical claim about this specific data. A bug that always
+    asserted bottom-half clustering for the ABOVE direction, regardless of
+    where the flagged team actually sits, would fail this.
+    """
+    ordered = ["A", "B", "C", "D"]  # top half = A, B; bottom half = C, D
+    observed = {
+        "A": _form("form ABOVE implied"),
+        "B": _form("consistent"),
+        "C": _form("consistent"),
+        "D": _form("consistent"),
+    }
+    text = deviation_summary(observed, ordered)
+    assert "All 1 current deviation(s) point the same way" in text
+    assert "not clustered in either half" in text
+    assert "all in the bottom half" not in text

@@ -3,6 +3,7 @@ import json
 import math
 import re
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -149,6 +150,36 @@ def test_missing_team_rating_stops_without_writing_a_card(tmp_path):
     assert not (out / "strengths_public.csv").exists()
 
 
+def test_null_rating_field_stops_without_writing_a_card(tmp_path):
+    """FIX C (2026-08-02 rung-3 review, Finding 3): a team_rating row that IS
+    present but carries a null field (as opposed to Finding 3's sibling
+    case, the row being absent entirely -- see
+    `test_missing_team_rating_stops_without_writing_a_card` above) must stop
+    the run the same way: `SystemExit`, no card, no fabricated strength, and
+    -- unlike before this fix -- a message naming the team and the null
+    field rather than an unhandled `TypeError` stack trace.
+    """
+    small_store(tmp_path / "d2.sqlite")
+    teams = write_team_config(tmp_path / "teams.yaml")
+    out = tmp_path / "reports"
+
+    rows = full_rating_rows()
+    null_team_id = TEAM_ID_BASE + 5
+    for r in rows:
+        if int(r["team_id"]) == null_team_id:
+            r["rating"] = None
+
+    with pytest.raises(SystemExit, match="Team05.*null 'rating'"):
+        rung3_main(
+            [
+                "--teams", str(teams), "--store", str(tmp_path / "d2.sqlite"),
+                "--out", str(out), "--card-sims", "3000", "--sweep-sims", "2000",
+            ],
+            transport=fake_transport(rows),
+        )
+    assert not (out / "strengths_public.csv").exists()
+
+
 @pytest.mark.slow
 def test_thin_and_stale_teams_are_flagged_in_the_provenance_report(tmp_path):
     """Catches a runner that computes the thin/stale flags but never
@@ -189,6 +220,18 @@ def test_elo_anchor_reports_a_real_rank_correlation_and_top4_overlap(tmp_path):
     runner that never computes the anchor, or that reports a placeholder
     (e.g. nan or a hardcoded 0) instead of a real correlation from the
     locally-fitted Elo model.
+
+    Both assertions pin the ACTUAL value for this deterministic fixture, not
+    a range: `0 <= overlap <= 4` is satisfied by a hardcoded `0` (this was
+    the rung-3 review's Finding 2 -- confirmed by mutation: hardcoding
+    `top4_overlap = 0` in `cli_rung3.py` still passed the old range
+    assertion). `small_store`'s round-robin Elo fit and `full_rating_rows`'
+    monotonic-in-index public ratings are both fully deterministic, so the
+    correlation and overlap are fixed for this fixture: public rating orders
+    the field purely by index (Team12..Team15 top-4), while the round-robin
+    Elo fit does not fully agree with that ordering (rank correlation 0.40;
+    top-4 by Elo is Team08/Team10/Team12/Team14, overlapping the public
+    top-4 in exactly Team12 and Team14).
     """
     small_store(tmp_path / "d2.sqlite")
     teams = write_team_config(tmp_path / "teams.yaml")
@@ -207,10 +250,71 @@ def test_elo_anchor_reports_a_real_rank_correlation_and_top4_overlap(tmp_path):
     m = re.search(r"rank correlation.*?\*\*(-?[\d.]+)\*\*", provenance)
     assert m is not None, "the report must state a numeric rank correlation"
     assert not math.isnan(float(m.group(1)))
+    assert float(m.group(1)) == pytest.approx(0.4000, abs=1e-4), (
+        "this fixture's Elo fit and public ratings are both deterministic -- "
+        "the rank correlation must be the actual computed 0.4000, not any "
+        "other placeholder value"
+    )
 
     m2 = re.search(r"Top-4 overlap: \*\*(\d) of 4\*\*", provenance)
     assert m2 is not None
-    assert 0 <= int(m2.group(1)) <= 4
+    assert int(m2.group(1)) == 2, (
+        "must be the actual overlap between Team12-Team15 (public top-4) and "
+        "Team08/Team10/Team12/Team14 (Elo top-4) -- exactly 2 -- not a "
+        "hardcoded value that merely happens to satisfy 0 <= x <= 4"
+    )
+
+
+@pytest.mark.slow
+def test_boundary_proximity_and_fetch_timestamp_appear_in_the_report(tmp_path):
+    """FIX D (2026-08-02 rung-3 review, Finding 4): the report must state
+    plainly when the ratings snapshot was fetched, and must surface a
+    boundary-proximity table so a reader knows the card is a moving target.
+    `full_rating_rows`' rating is a constant +15.0-per-index step, so EVERY
+    adjacent pair in the (rating-order-preserving) strength ordering has an
+    identical, exactly-computable 15.00-rating-point gap -- below the
+    17.74-point threshold, so all 15 adjacent pairs (16 teams) must be
+    flagged.
+    """
+    small_store(tmp_path / "d2.sqlite")
+    teams = write_team_config(tmp_path / "teams.yaml")
+    out = tmp_path / "reports"
+
+    before = datetime.now(UTC)
+    rc = rung3_main(
+        [
+            "--teams", str(teams), "--store", str(tmp_path / "d2.sqlite"),
+            "--out", str(out), "--card-sims", "3000", "--sweep-sims", "2000",
+        ],
+        transport=fake_transport(full_rating_rows()),
+    )
+    after = datetime.now(UTC)
+    assert rc == 0
+
+    provenance = (out / "rung3_provenance.md").read_text()
+
+    m = re.search(r"Ratings snapshot valid as of: (\S+) \(UTC\)", provenance)
+    assert m is not None, "the report must state the fetch timestamp plainly"
+    fetched_at = datetime.fromisoformat(m.group(1))
+    assert before <= fetched_at <= after, (
+        "the stated timestamp must be a real capture from during this run, "
+        "not a placeholder or a stale wall-clock read from outside it"
+    )
+
+    section_idx = provenance.find("## Boundary-proximity diagnostic")
+    assert section_idx != -1
+    section = provenance[section_idx:]
+    gap_lines = [
+        line for line in section.splitlines()
+        if line.startswith("| Team")
+    ]
+    assert len(gap_lines) == N_TEAMS - 1, "16 teams -> 15 adjacent pairs"
+    for line in gap_lines:
+        cols = [c.strip() for c in line.strip("|").split("|")]
+        assert cols[2] == "0.0863", f"constant +15-per-index rating step: {line}"
+        assert cols[3] == "15.00", f"constant +15-per-index rating step: {line}"
+        assert cols[4] == "YES", "15.00 < 17.74-point threshold must be flagged"
+    assert f"**{N_TEAMS - 1} of {N_TEAMS - 1} adjacent pair(s) flagged.**" in provenance
 
 
 def test_anchor_k_comes_from_the_gate_config_not_a_hardcoded_default(tmp_path):
@@ -272,7 +376,13 @@ def test_observed_recent_form_section_appears_with_caveats_and_reconciling_count
     provenance = (out / "rung3_provenance.md").read_text()
     assert "## Observed recent form" in provenance
     assert "Opposition strength is not controlled" in provenance
-    assert "All five current deviations point the same way" in provenance
+    # This fixture's implied/observed rates coincide for every team (see
+    # test_elo_anchor_reports_a_real_rank_correlation_and_top4_overlap's
+    # docstring for why the fixture is fully deterministic), so the real,
+    # computed distribution is 16 consistent / 0 above / 0 below -- the
+    # rendered paragraph must say so, not a stale literal from a past run
+    # (rung-3 review Finding 1 / FIX A).
+    assert "No deviations this run:** all 16 team(s)" in provenance
     assert "| team | strength | implied | observed | n | 95% Wilson CI | verdict |" in provenance
 
     captured = capsys.readouterr()

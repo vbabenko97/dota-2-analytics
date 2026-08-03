@@ -24,6 +24,7 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import pairwise
 
 from ti26.data.schema import MapRow
 from ti26.roster import roster_version_id
@@ -59,6 +60,17 @@ OBSERVED_FORM_WINDOW_DAYS = 90.0
 
 # Standard two-sided 95% Wilson score z-score.
 WILSON_Z_95 = 1.96
+
+# Observed magnitude of same-day OpenDota `team_rating` drift, in rating
+# points -- measured directly (2026-08-02 rung-3 review, Finding 4) between
+# two live runs hours apart: a single head-to-head result moved two teams
+# (BoomBoys, Team Falcons) by exactly +/-17.74 rating points each (equal and
+# opposite -- the signature of a head-to-head result), collapsing their
+# strength gap from 0.2189 to 0.0146 logits while they sat across a card
+# category boundary. A citation of an OBSERVED magnitude, not a tuned
+# constant: an adjacent pair in the strength ordering separated by less
+# than this is one plausible match result away from swapping order.
+DAILY_DRIFT_RATING_POINTS = 17.74
 
 
 @dataclass(frozen=True)
@@ -99,6 +111,25 @@ class PublicRating:
         return self.stale_days(now) >= threshold
 
 
+class NullRatingFieldError(ValueError):
+    """A `team_rating` row for `team_id` is present but has a null `field`.
+
+    A different failure mode from the row being absent entirely (the
+    "missing team_rating row" refusal in `cli_rung3.py`): OpenDota can return
+    a row for a `team_id` with one of its numeric columns set to `null`
+    (confirmed foreseeable, per the 2026-08-02 rung-3 review, Finding 3).
+    Raised instead of letting the bare `float()`/`int()` cast below raise an
+    unhandled `TypeError` deep in the parser -- this still halts the run
+    (via `cli_rung3.main`'s refusal path) with no fabricated strength, but
+    with a message that names the team and the field, not a stack trace.
+    """
+
+    def __init__(self, team_id: int, field: str):
+        self.team_id = team_id
+        self.field = field
+        super().__init__(f"team_id={team_id}'s team_rating row has a null {field!r} field")
+
+
 def parse_ratings(rows: Sequence[Mapping]) -> dict[int, PublicRating]:
     """Parse `TEAM_RATING_QUERY` explorer rows into `PublicRating` by team_id.
 
@@ -108,10 +139,18 @@ def parse_ratings(rows: Sequence[Mapping]) -> dict[int, PublicRating]:
     field is cast defensively with `int()` rather than assumed to already be
     a Python int; `int()` accepts both a numeric string and a native int
     unchanged, so this is safe either way the explorer happens to encode it.
+
+    A row can also be present but carry a null `rating`/`wins`/`losses`/
+    `last_match_time` -- checked explicitly and raised as
+    `NullRatingFieldError`, naming the team_id and field, rather than
+    letting the cast below raise an unhandled `TypeError`.
     """
     out: dict[int, PublicRating] = {}
     for row in rows:
         team_id = int(row["team_id"])
+        for field in ("rating", "wins", "losses", "last_match_time"):
+            if row.get(field) is None:
+                raise NullRatingFieldError(team_id, field)
         out[team_id] = PublicRating(
             team_id=team_id,
             rating=float(row["rating"]),
@@ -137,6 +176,39 @@ def strengths_from_ratings(
         return {}
     mean = sum(r.rating for r in ratings.values()) / len(ratings)
     return {name: (r.rating - mean) * logit_per_elo for name, r in ratings.items()}
+
+
+def boundary_proximity(
+    strengths: Mapping[str, float],
+    ordered_by_strength: Sequence[str],
+    logit_per_elo: float = LOGIT_PER_ELO,
+    threshold_points: float = DAILY_DRIFT_RATING_POINTS,
+) -> list[dict]:
+    """Gap between each ADJACENT pair in the strength ordering, in logits AND
+    converted back to rating points (`gap_logit / logit_per_elo` -- the
+    inverse of the conversion `strengths_from_ratings` applies), flagged
+    when that gap is smaller than `threshold_points` of observed same-day
+    drift (see `DAILY_DRIFT_RATING_POINTS`).
+
+    `ordered_by_strength` must already be sorted descending (strongest
+    first) -- this function does not sort, so a caller passing an unsorted
+    sequence would silently get nonsense adjacent pairs. Diagnostic only:
+    reported, never gated on, never feeds back into a strength or the card.
+    """
+    out = []
+    for a, b in pairwise(ordered_by_strength):
+        gap_logit = strengths[a] - strengths[b]
+        gap_points = gap_logit / logit_per_elo
+        out.append(
+            {
+                "team_a": a,
+                "team_b": b,
+                "gap_logit": gap_logit,
+                "gap_points": gap_points,
+                "flagged": gap_points < threshold_points,
+            }
+        )
+    return out
 
 
 def scale_sensitivity_sweep(
@@ -365,3 +437,70 @@ def observed_recent_form(
             implied=implied, verdict=verdict,
         )
     return out
+
+
+def deviation_summary(
+    observed_form: Mapping[str, ObservedForm], ordered_by_strength: Sequence[str]
+) -> str:
+    """Prose interpretation of `observed_form`'s verdict counts.
+
+    Computed from `observed_form` on every call -- FIX A in the 2026-08-02
+    rung-3 review found a version of this paragraph that hardcoded one run's
+    specific finding ("five deviations, all bottom-half, none below") as
+    permanent boilerplate; it stayed on the page verbatim even against a
+    fixture whose real distribution was 16 consistent / 0 above / 0 below.
+    Every number and direction claim below is read back out of
+    `observed_form` and `ordered_by_strength`, never out of a prior run.
+
+    `ordered_by_strength` must be every team in strength order, descending
+    (strongest first) -- used only to test whether a one-directional set of
+    deviations clusters in the bottom (weaker) or top (stronger) half, which
+    is the specific pattern the `/400` divisor's over-spreading would
+    produce. A `"no data"` verdict does not count as either direction.
+    """
+    above = sorted(n for n, f in observed_form.items() if f.verdict == "form ABOVE implied")
+    below = sorted(n for n, f in observed_form.items() if f.verdict == "form BELOW implied")
+    consistent = sum(1 for f in observed_form.values() if f.verdict == "consistent")
+
+    if not above and not below:
+        return (
+            f"**No deviations this run:** all {consistent} team(s) with observed "
+            "data fall inside their implied rate's 95% CI. This is weak evidence "
+            "either way at these map counts -- the absence of a flagged "
+            "deviation is not confirmation the strengths are correct."
+        )
+    if above and below:
+        return (
+            f"**Deviations point BOTH ways this run** ({len(above)} form ABOVE "
+            f"implied, {len(below)} form BELOW implied) -- not the "
+            "one-directional signature a systematic divisor or schedule bias "
+            "would produce. More consistent with sampling noise across small "
+            "map counts than with a shared cause."
+        )
+
+    half_size = len(ordered_by_strength) // 2
+    bottom_half = set(ordered_by_strength[half_size:])
+    top_half = set(ordered_by_strength[:half_size])
+    direction, names, relevant_half, half_name = (
+        ("ABOVE", above, bottom_half, "bottom") if above else ("BELOW", below, top_half, "top")
+    )
+    clustered = bool(names) and set(names) <= relevant_half
+    if clustered:
+        where = f"all in the {half_name} half"
+        mechanism = (
+            "ambiguous between the `/400` divisor over-spreading strengths and "
+            "the schedule confound above, and this data cannot separate them."
+        )
+    else:
+        where = "not clustered in either half of the field"
+        mechanism = (
+            "not explained by either the divisor over-spreading or the "
+            "schedule confound above on its own; this data does not identify "
+            "the cause."
+        )
+    return (
+        f"**All {len(names)} current deviation(s) point the same way** (form "
+        f"{direction} implied, {where}) with none the other way. Noise would be "
+        f"roughly symmetric, so a one-directional pattern like this is "
+        f"systematic -- but it is {mechanism}"
+    )
