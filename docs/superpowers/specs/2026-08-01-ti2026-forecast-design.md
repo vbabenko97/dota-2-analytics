@@ -126,6 +126,14 @@ All three conditions, not any. The margin and the bootstrap match D2's gate exac
 
 The calibration must be fitted **inside each backtest fold**, from that fold's training data only. Fitting it on the full history and then scoring the folds would leak the test outcomes into the correction and produce a number that cannot fail.
 
+**Two further choices, registered here 2026-08-03 before any calibration code was written, because either could move the verdict and picking after seeing a result would void the gate:**
+
+*Which model is under test.* **Elo is the primary and only gated candidate.** It had the lower uncalibrated out-of-sample log loss (0.6944614 vs Glicko's 0.6982921), and log loss is this gate's own metric, so it is the better base model by the standard being applied. Calibrated Glicko is computed and reported as a diagnostic but is **not** gated: putting two candidates through one gate roughly doubles the probability of a false pass, and choosing the winner afterwards is the multiple-comparisons version of moving the margin.
+
+*How the in-fold calibration is fitted.* Within each fold's training window, hold out the most recent **20%** of training rows as a calibration set: fit the base model on the first 80%, predict the held-out 20%, and fit the logistic slope and intercept on those held-out predictions. Then refit the base model on the full 100% of training rows and apply that correction when predicting the fold's tournament.
+
+The held-out split is not incidental. Fitting the correction on *in-sample* training predictions would estimate the wrong slope — a model scores its own training data with different overconfidence than genuinely unseen data — and the resulting correction would be systematically mis-sized. A nested rolling backtest inside every fold would be the fully correct estimator; a single recent hold-out is the cheap approximation of it, chosen deliberately and recorded as an approximation rather than presented as exact.
+
 **If this gate fails:** ship the rung-3 public-rating card (§X), and do not proceed to a custom Bradley-Terry model. Two failed gates on the same data is evidence about the data, not a reason for a third attempt with a looser bar.
 
 ---
