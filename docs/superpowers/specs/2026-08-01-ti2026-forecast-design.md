@@ -409,6 +409,8 @@ The bound is stated in units the reader can feel, because "bounded" adjustments 
 
 Every rung produces a valid card. The simulator is the component that must not fail — which is why it is built first, on synthetic ratings, before any data exists.
 
+**Correction, 2026-08-02 (D3 rung-3 build).** Rung 3 fired: the D2 forecast-value gate failed and, separately, no rating model cleared the spec V floor (see `docs/audits/2026-08-02-d2-build-ledger.md`). Rung 3's named source, "Noxville, datdota", is UNREACHABLE from this environment — HTTP 403 to every access path tried, including the Internet Archive's own crawler, and Noxville's public dataset dead since 2020-12-29 (full survey: `docs/audits/2026-08-02-rung3-source-research.md`). Built instead from OpenDota's own `team_rating` table, via the existing `explorer_query` seam — no new network path. The scale conversion from that table's raw `rating` column to a logit (`math.log(10) / 400`, matching this repo's own Elo convention) is tagged **`inferred`**: OpenDota documents no divisor for this specific table, and unlike Elo/Glicko a public rating snapshot cannot be backtested to check it. See `reports/rung3_provenance.md` for the per-team ratings, the scale-sensitivity sweep with its noise floor, and the Elo-ordering sanity anchor.
+
 ---
 
 ## XI. Monitoring

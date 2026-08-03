@@ -32,6 +32,21 @@ group by 1,2,3,4,5,6,7,8,9,10,11
 """
 
 
+# `team_rating` is a SEPARATE table from `teams` (which carries no rating
+# columns at all -- confirmed 2026-08-02, see
+# docs/audits/2026-08-02-rung3-source-research.md). This is the table
+# backing OpenDota's public, documented `GET /teams` REST endpoint.
+# `wins`/`losses`/`last_match_time` are as of that team_id's most recent
+# recorded match. Like MAP_QUERY, bigint columns (`team_id`,
+# `last_match_time`) come back as JSON strings, so callers must cast
+# defensively rather than assume an int.
+TEAM_RATING_QUERY = """
+select team_id, rating, wins, losses, last_match_time
+from team_rating
+where team_id in ({team_ids})
+"""
+
+
 class ExplorerError(RuntimeError):
     """Explorer request failed, or returned a server-side SQL error."""
 
