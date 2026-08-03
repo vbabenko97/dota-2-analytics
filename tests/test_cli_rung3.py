@@ -3,6 +3,7 @@ import json
 import math
 import re
 import time
+from pathlib import Path
 
 import pytest
 
@@ -210,6 +211,41 @@ def test_elo_anchor_reports_a_real_rank_correlation_and_top4_overlap(tmp_path):
     m2 = re.search(r"Top-4 overlap: \*\*(\d) of 4\*\*", provenance)
     assert m2 is not None
     assert 0 <= int(m2.group(1)) <= 4
+
+
+def test_anchor_k_comes_from_the_gate_config_not_a_hardcoded_default(tmp_path):
+    """The Elo anchor is only a valid comparison against D2's backtest if it
+    uses the SAME k that backtest used, and that value lives in the gate
+    config. Catches a runner that hardcodes a numeric default: this config
+    says 37.5, so a hardcoded 20.0 would be reported instead and the anchor
+    would silently be against a model we never evaluated.
+
+    Asserts the k is READ, not that it equals the repo's current 20.0 --
+    otherwise the test would pass against exactly the hardcoded default it
+    exists to forbid.
+    """
+    small_store(tmp_path / "d2.sqlite")
+    teams = write_team_config(tmp_path / "teams.yaml")
+    gate = tmp_path / "gate.yaml"
+    gate.write_text(
+        (Path("config/d2_gate.yaml").read_text()).replace("elo_k: 20.0", "elo_k: 37.5")
+    )
+    assert "37.5" in gate.read_text(), "fixture must actually differ from the default"
+    out = tmp_path / "reports"
+
+    rc = rung3_main(
+        [
+            "--teams", str(teams), "--store", str(tmp_path / "d2.sqlite"),
+            "--gate-config", str(gate), "--out", str(out),
+            "--card-sims", "3000", "--sweep-sims", "2000",
+        ],
+        transport=fake_transport(full_rating_rows()),
+    )
+    assert rc == 0
+
+    provenance = (out / "rung3_provenance.md").read_text()
+    assert "elo_k=37.5" in provenance, "the anchor must use the k from the gate config"
+    assert "elo_k=20.0" not in provenance
 
 
 def test_team_count_mismatch_fails_loudly(tmp_path):

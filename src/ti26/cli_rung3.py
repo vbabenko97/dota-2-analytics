@@ -29,6 +29,7 @@ from ti26.public_ratings import (
     scale_sensitivity_sweep,
     strengths_from_ratings,
 )
+from ti26.ratings import load_gate_config
 from ti26.ratings.elo import EloModel
 from ti26.roster import load_aliases
 from ti26.rules import load_rules
@@ -85,7 +86,12 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
     parser.add_argument("--aliases", default="config/team_aliases.yaml")
     parser.add_argument("--rules", default="config/ti2026_rules.yaml")
     parser.add_argument("--store", default="data/processed/d2.sqlite")
-    parser.add_argument("--elo-k", type=float, default=20.0)
+    parser.add_argument("--gate-config", default="config/d2_gate.yaml")
+    # No numeric default: the Elo anchor is only a valid comparison against
+    # D2's backtest if it uses the SAME k that backtest used, and that value
+    # lives in the gate config. A hardcoded default here would match today
+    # and drift silently the moment the config changed.
+    parser.add_argument("--elo-k", type=float, default=None)
     parser.add_argument("--card-sims", type=int, default=250_000)
     parser.add_argument("--card-seed", type=int, default=1)
     parser.add_argument("--sweep-sims", type=int, default=20_000)
@@ -95,6 +101,7 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
 
     teams = load_teams(args.teams)
     rules = load_rules(args.rules)
+    elo_k = args.elo_k if args.elo_k is not None else load_gate_config(args.gate_config).elo_k
     if len(teams) != rules.n_teams:
         raise SystemExit(
             f"{args.teams} lists {len(teams)} teams but the rules require {rules.n_teams}"
@@ -144,7 +151,7 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
 
     # --- 3(b). Elo-ordering sanity anchor (spec V rung 6) ---------------------
     aliases = load_aliases(args.aliases)
-    elo_strengths = _elo_anchor_strengths(args.store, teams, aliases, args.elo_k)
+    elo_strengths = _elo_anchor_strengths(args.store, teams, aliases, elo_k)
     rank_corr = _rank_correlation(strengths, elo_strengths)
     top4_public = _top_n(strengths, 4)
     top4_elo = _top_n(elo_strengths, 4)
@@ -246,6 +253,12 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
             "-- see `docs/audits/2026-08-02-d2-build-ledger.md`) but its ORDERING is "
             "still a valid consistency check: it would catch a sign error or a wildly "
             "wrong scale in the conversion above."
+        ),
+        "",
+        (
+            f"Anchor fitted with `elo_k={elo_k}`, read from the gate config so it "
+            "matches the k D2's backtest actually used. A different k here would "
+            "make this comparison an anchor against a model we never evaluated."
         ),
         "",
         (
