@@ -259,3 +259,157 @@ source, tests, docs and the config-adjacent spec correction were.
    `test_strengths_from_ratings_centres_scales_and_preserves_order` --
    documented above as a real vacuous-test bug, found and fixed during this
    build via the required mutation exercise, not merely by inspection.
+
+## Update 2026-08-03: observed-recent-form diagnostic (branch `d3-rung3-public-ratings`)
+
+### Why this exists
+
+A user challenge on one card assignment (Xtreme Gaming at 1-4) exposed that
+this report had no independent read on whether the public ratings are sane:
+the Elo anchor (section above) compares a rating to a rating, and it missed
+the problem because our own Elo also underrates thin-history rosters. A
+direct observation of what each roster has actually been doing catches what
+a rating-vs-rating comparison cannot.
+
+### What was built
+
+- `src/ti26/public_ratings.py`: `ObservedForm` (frozen dataclass: `wins,
+  losses, n, rate, ci_low, ci_high, implied, verdict`), `wilson_interval`
+  (95% Wilson score CI, `z` overridable), `classify_form_verdict` (strict
+  `<`/`>` against the CI bounds; `"no data"` when `n == 0`), and
+  `observed_recent_form` (ties it together: counts a roster's maps by
+  `roster_version_id` -- never `team_id` -- within a `window_days` window
+  measured back from a passed-in `reference_time`, never `datetime.now()`).
+  `implied` is the mean of `ti26.series.map_win_prob(s_self, s_other)` over
+  the other 15 teams' strengths -- the existing logistic is reused, not
+  reimplemented.
+- `src/ti26/cli_rung3.py`: a new step 3(d) computes `observed_recent_form`
+  over the full local store (`resolve_rosters`, the same resolution
+  `teams.py`'s other callers use), renders a new "## Observed recent form
+  (diagnostic only)" section in `reports/rung3_provenance.md` (table +
+  the two mandated caveat paragraphs: opposition strength not controlled,
+  and that all current deviations point one way and are ambiguous between
+  the `/400` divisor and the schedule confound), and prints one stdout
+  summary line (`rung3: observed form N consistent, N above implied, N
+  below implied`).
+- No existing line computing `ratings`, `strengths`, `strengths_path`, or
+  the `cli_main(...)` card invocation was touched -- confirmed by `git diff
+  211ee4a -- src/ti26/cli_rung3.py src/ti26/public_ratings.py`: zero deleted
+  or modified lines in either file, only additions.
+- `tests/test_public_ratings.py`: 6 new tests. `tests/test_cli_rung3.py`: 1
+  new test (report wiring + stdout reconciliation).
+
+### Test results
+
+- New: 6 (`test_public_ratings.py`) + 1 (`test_cli_rung3.py`) = 7 added.
+- Full suite, **no marker filter**: `.venv/bin/python -m pytest -q` ->
+  **618 passed, 0 failed**.
+- `.venv/bin/python -m ruff check .` -> **All checks passed.**
+
+### Mutation proofs (required four)
+
+All four performed against an in-repo scratch copy of the real source
+(`.mutscratch/src/ti26/...`, never `/tmp`), with the pythonpath-override
+sanity check run first (a `raise RuntimeError("scratch-copy-live-sanity-
+check")` inserted at the top of the scratch copy's `public_ratings.py`
+reproduced exactly that error at collection under `-o
+pythonpath=.mutscratch/src`, proving the override was live before any
+mutation was trusted). Each mutation was applied, tested, reverted, and the
+scratch copy re-verified clean (15 passed) before moving to the next.
+Command for all four: `.venv/bin/python -m pytest -q -o
+pythonpath=.mutscratch/src tests/test_public_ratings.py`. The scratch
+directory was fully removed afterward via explicit non-recursive `rm`
+(every file named individually, no glob/loop) and `rmdir`; `git status
+--short` showed no residue and no tracked file touched.
+
+1. **Wilson interval -- wrong `z`** (`WILSON_Z_95 = 1.0` instead of `1.96`):
+   `test_wilson_interval_matches_hand_verified_values` failed --
+   `wilson_interval(50, 100)`'s low bound came out `0.4502481404895005`
+   instead of the hand-verified `0.4038298286`. **1 failed, 14 passed.**
+2. **Verdict boundary -- `<` to `<=`** (`classify_form_verdict`'s `if
+   implied <= ci_low` instead of `<`): `test_classify_form_verdict_boundary_
+   and_label_swap` failed at the exact-boundary case --
+   `classify_form_verdict(0.60, 0.60, 0.80, n=10)` returned `"form ABOVE
+   implied"` instead of `"consistent"`. **1 failed, 14 passed.**
+3. **Roster-following count -- by `team_id` instead of `roster_version_id`**
+   (`_roster_record` rewritten to match `r.radiant_team_id == 100` /
+   `r.dire_team_id == 100`, the fixture's configured id, instead of the
+   roster hash): `test_observed_recent_form_counts_by_roster_version_id_
+   not_team_id` failed -- the fixture (current roster X spans team_ids 99
+   -> 100; a different, older roster Y also played under the current id
+   100) came out `(0, 3, 3)` instead of the correct `(2, 1, 3)`: it missed
+   roster X's two wins recorded under the OLD id 99 and wrongly counted
+   roster Y's two losses recorded under the current id. **1 failed, 14
+   passed.**
+4. **Window cutoff ignored** (the `start_time` bounds check in
+   `_roster_record` replaced with `if False: continue`):
+   `test_observed_recent_form_respects_the_window_cutoff` failed -- a map 91
+   days back (outside the 90-day window) was wrongly counted, giving `(2,
+   0, 2)` instead of the correct `(1, 0, 1)`. **1 failed, 14 passed.**
+
+### The real run
+
+`.venv/bin/python -m ti26.cli_rung3` (live network call to
+`api.opendota.com/api/explorer`, real local store
+`data/processed/d2.sqlite`):
+
+```
+rung3: 16 teams rated, 6 thin, 3 stale
+rung3: Elo rank correlation 0.9088, top-4 overlap 4/4
+rung3: scale sweep resolvable=True
+rung3: observed form 11 consistent, 5 above implied, 0 below implied
+rung3: card written to reports/recommended_card.json
+```
+
+**Table matches the brief's reference numbers.** The `observed`/`n`/`95%
+Wilson CI` columns -- computed only from the frozen local store -- are
+byte-for-byte identical to the brief's table for all 16 teams (e.g. Team
+Vision: `0.762, 80, [0.659, 0.842]`; HULIGANI: `0.487, 39, [0.339, 0.638]`).
+The **verdict** column and the 11/5/0 summary also match exactly, including
+which five teams are flagged (OG, LGD Gaming, Nigma Galaxy, Team Resilience,
+HULIGANI, all "form ABOVE implied", none below).
+
+**`strength`/`implied` differ slightly from the brief's literal numbers**
+(e.g. BoomBoys strength 0.748 here vs 0.842 in the brief; Vici Gaming -0.136
+vs -0.009) -- traced to live OpenDota data drift between the brief's
+2026-08-02 snapshot and this 2026-08-03 run, not to this change: the
+regenerated "Per-team ratings" table shows BoomBoys' games moved
+1218(687/531) -> 1219(687/532), Team Falcons 858(555/303) -> 859(556/303),
+Vici Gaming 2622(1561/1061) -> 2624(1562/1062) -- new matches were recorded
+upstream in the intervening day. `strength`/`implied` depend on the live
+`team_rating` call; `observed`/`n`/CI depend only on the unchanged local
+store, which is exactly why the latter match exactly and the former don't.
+
+**Card confirmation.** A literal live-vs-live byte comparison of
+`recommended_card.json`/`strengths_public.csv` against the copies already
+sitting in `reports/` (gitignored, generated the day before) is NOT
+byte-identical, for the same data-drift reason. To isolate the actual
+question -- did THIS CHANGE alter the strength/divisor/card computation --
+two direct checks were run instead:
+1. `git diff 211ee4a -- src/ti26/cli_rung3.py src/ti26/public_ratings.py`
+   contains zero deleted or modified lines in either file; every change is
+   an addition.
+2. A controlled A/B: the pre-change code (`git show 211ee4a:...`, in an
+   in-repo scratch copy) and the current code were each run with an
+   IDENTICAL fixed, synthetic (non-network) rating payload against the same
+   real local store. `recommended_card.json` and `strengths_public.csv`
+   from both runs are **sha256-identical**
+   (`22250c72...6b267` and `a2f82e43...ca8911` respectively, matching on
+   both sides). This proves the card/strength/divisor computation is
+   unchanged by this diagnostic; the scratch copy was removed the same way
+   as the mutation exercise, confirmed by `git status --short`.
+
+### Concerns
+
+1. **Same scale-conversion risk as before, now with a second, independent
+   signal pointing at it.** All five current "form ABOVE implied" teams sit
+   in the bottom half of the field and none point the other way -- exactly
+   the asymmetric pattern the `/400` divisor's over-spreading of strengths
+   would produce (an over-spread bottom half would be rated too far below
+   its true relative strength). It is equally consistent with the schedule
+   confound (bottom-half teams facing weaker regional circuits). This data
+   cannot separate the two explanations, and the report says so explicitly.
+2. **Opposition strength is not controlled**, by design and as stated in the
+   report: each `observed` figure is against whatever that roster actually
+   played, not the TI field. This diagnostic is not a ranking and was never
+   used to override any strength, the divisor, or the card.

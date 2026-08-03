@@ -23,8 +23,10 @@ from ti26.data.opendota import TEAM_RATING_QUERY, explorer_query, http_transport
 from ti26.data.store import load_rows, open_store
 from ti26.public_ratings import (
     LOGIT_PER_ELO,
+    OBSERVED_FORM_WINDOW_DAYS,
     STALE_DAYS_THRESHOLD,
     THIN_GAMES_THRESHOLD,
+    observed_recent_form,
     parse_ratings,
     scale_sensitivity_sweep,
     strengths_from_ratings,
@@ -169,6 +171,22 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
         (mid_c, mid_d, map_win_prob(strengths[mid_c], strengths[mid_d])),
     ]
 
+    # --- 3(d). Observed recent form (diagnostic only, never a card input) ------
+    # A rating-vs-rating anchor (3(b) above) cannot catch a strength source
+    # biased in the SAME direction our own models are biased -- our Elo also
+    # underrates thin-history rosters, so it would miss exactly that. A
+    # direct read of what each CURRENT roster has actually done recently is
+    # independent of that failure mode. See the report's caveats: this never
+    # overrides a strength or the card on its own.
+    rows_for_form = load_rows(open_store(args.store))
+    resolved_rosters = resolve_rosters(rows_for_form, teams, aliases)
+    reference_time = max((r.start_time for r in rows_for_form), default=0)
+    observed_form = observed_recent_form(rows_for_form, resolved_rosters, strengths, reference_time)
+    form_consistent = sum(1 for f in observed_form.values() if f.verdict == "consistent")
+    form_above = sum(1 for f in observed_form.values() if f.verdict == "form ABOVE implied")
+    form_below = sum(1 for f in observed_form.values() if f.verdict == "form BELOW implied")
+    form_no_data = sum(1 for f in observed_form.values() if f.verdict == "no data")
+
     # --- 4. Provenance report ---------------------------------------------------
     lines = [
         "# Rung 3 provenance: OpenDota `team_rating` fallback",
@@ -279,11 +297,72 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
     ]
     for a, b, p in implied:
         lines.append(f"| {a} | {b} | {p:.4f} |")
+
+    lines += [
+        "",
+        "## Observed recent form (diagnostic only)",
+        "",
+        (
+            "Independent of the Elo-ordering anchor above: a rating-vs-rating "
+            "comparison cannot catch a source that is biased in the SAME "
+            "direction our own models are biased -- our Elo also underrates "
+            "thin-history rosters, so it would miss exactly that problem. This "
+            "compares each team's IMPLIED map win rate (the mean of "
+            "`map_win_prob` against the other 15 teams, from the strengths "
+            "above) against what that team's CURRENT roster has actually done "
+            f"over its last {OBSERVED_FORM_WINDOW_DAYS:.0f} days of maps in the "
+            "local store, counted by `roster_version_id` so the record follows "
+            "the roster across a team_id change. The window is measured back "
+            "from the store's own most recent match, never wall-clock."
+        ),
+        "",
+        (
+            "**Opposition strength is not controlled.** Each record is against "
+            "whatever opponents that team actually played, not against the TI "
+            "field. Bottom-half teams tend to play weaker regional circuits, "
+            "which alone would make them look better than their implied rate. "
+            "This is a diagnostic, never a ranking, and never grounds to "
+            "override a rating on its own."
+        ),
+        "",
+        (
+            "**All five current deviations point the same way** (form above "
+            "implied, all in the bottom half) with none below. Noise would be "
+            "roughly symmetric, so this is systematic -- but it is ambiguous "
+            "between the `/400` divisor over-spreading strengths and the "
+            "schedule confound above, and this data cannot separate them."
+        ),
+        "",
+        "| team | strength | implied | observed | n | 95% Wilson CI | verdict |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for name in sorted(strengths, key=lambda t: strengths[t], reverse=True):
+        f = observed_form[name]
+        if f.n == 0:
+            lines.append(f"| {name} | {strengths[name]:.3f} | {f.implied:.3f} | - | 0 | - | no data |")
+        else:
+            lines.append(
+                f"| {name} | {strengths[name]:.3f} | {f.implied:.3f} | {f.rate:.3f} | {f.n} | "
+                f"[{f.ci_low:.3f}, {f.ci_high:.3f}] | {f.verdict} |"
+            )
+    lines += [
+        "",
+        (
+            f"**{form_consistent} consistent, {form_above} form ABOVE implied, "
+            f"{form_below} form BELOW implied**"
+            + (f", {form_no_data} no data" if form_no_data else "")
+            + "."
+        ),
+    ]
     (out / "rung3_provenance.md").write_text("\n".join(lines) + "\n")
 
     print(f"rung3: {len(ratings)} teams rated, {len(thin_names)} thin, {len(stale_names)} stale")
     print(f"rung3: Elo rank correlation {rank_corr:.4f}, top-4 overlap {top4_overlap}/4")
     print(f"rung3: scale sweep resolvable={any_resolvable}")
+    print(
+        f"rung3: observed form {form_consistent} consistent, {form_above} above implied, "
+        f"{form_below} below implied"
+    )
 
     # --- 5. Card, from D1's generator fed OUR rung-3 strengths ------------------
     card_rc = cli_main(

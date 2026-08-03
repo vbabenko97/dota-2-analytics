@@ -25,6 +25,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from ti26.data.schema import MapRow
+from ti26.roster import roster_version_id
+from ti26.series import map_win_prob
+
 # Inferred, NOT documented by OpenDota for `team_rating` (see the module
 # docstring and `docs/audits/2026-08-02-rung3-source-research.md` section
 # 4). Matches `math.log(10) / self._scale` in `EloModel.strengths()` at the
@@ -46,6 +50,15 @@ THIN_GAMES_THRESHOLD = 200
 STALE_DAYS_THRESHOLD = 30.0
 
 _DAY_SECONDS = 86400.0
+
+# Window length for the observed-recent-form diagnostic (see
+# `observed_recent_form` below). 90 days is a window long enough to
+# accumulate a usable map count for most rosters without reaching so far
+# back that it stops describing the CURRENT roster's form.
+OBSERVED_FORM_WINDOW_DAYS = 90.0
+
+# Standard two-sided 95% Wilson score z-score.
+WILSON_Z_95 = 1.96
 
 
 @dataclass(frozen=True)
@@ -202,5 +215,153 @@ def scale_sensitivity_sweep(
                 "noise_floor": noise_floor,
                 "resolvable": bool(delta > noise_floor),
             }
+        )
+    return out
+
+
+@dataclass(frozen=True)
+class ObservedForm:
+    """One team's observed-vs-implied recent form (see `observed_recent_form`).
+
+    `rate`/`ci_low`/`ci_high` are `None` when `n == 0` -- there is no rate to
+    report or bound in that case, and `verdict` is `"no data"`.
+
+    Diagnostic only: nothing here feeds back into a strength, the `/400`
+    divisor, or the card. See `reports/rung3_provenance.md`'s "Observed
+    recent form" section for the caveats this must always carry.
+    """
+
+    wins: int
+    losses: int
+    n: int
+    rate: float | None
+    ci_low: float | None
+    ci_high: float | None
+    implied: float
+    verdict: str
+
+
+def wilson_interval(wins: int, n: int, z: float = WILSON_Z_95) -> tuple[float, float]:
+    """95% (at the default `z`) Wilson score interval on `wins / n`.
+
+    The classic closed form (Wilson 1927): centred on `phat + z**2/(2n)`
+    rather than `phat` alone, and both the centring and the half-width carry
+    a `z**2/n`-scale continuity term -- dropping those terms (i.e. falling
+    back to the naive `phat +/- z*sqrt(phat*(1-phat)/n)` normal-approximation
+    interval) changes the bounds measurably, especially at small `n`.
+    """
+    if n <= 0:
+        raise ValueError(f"wilson_interval requires n > 0, got {n}")
+    phat = wins / n
+    z2 = z * z
+    denom = 1.0 + z2 / n
+    centre = phat + z2 / (2.0 * n)
+    adjustment = z * math.sqrt(phat * (1.0 - phat) / n + z2 / (4.0 * n * n))
+    return (centre - adjustment) / denom, (centre + adjustment) / denom
+
+
+def classify_form_verdict(
+    implied: float, ci_low: float | None, ci_high: float | None, n: int
+) -> str:
+    """`"form ABOVE implied"` when the field's own implied rate sits BELOW
+    the observed CI's low end (the team is doing better than its strength
+    says it should), `"form BELOW implied"` for the opposite, else
+    `"consistent"`. `"no data"` when `n == 0` -- there is no CI to compare
+    against.
+    """
+    if n == 0:
+        return "no data"
+    if implied < ci_low:
+        return "form ABOVE implied"
+    if implied > ci_high:
+        return "form BELOW implied"
+    return "consistent"
+
+
+def _implied_map_win_rate(name: str, strengths: Mapping[str, float]) -> float:
+    """Mean of `map_win_prob(s_self, s_other)` over every OTHER team in
+    `strengths` -- what `name`'s own strength implies its map win rate
+    against this field should be. Excludes `name` itself: including it would
+    silently pull every implied rate toward 0.5 by `1/len(strengths)`.
+    """
+    s_self = strengths[name]
+    others = [s for other, s in strengths.items() if other != name]
+    if not others:
+        raise ValueError(f"cannot compute an implied rate for {name!r} against an empty field")
+    return sum(map_win_prob(s_self, s_other) for s_other in others) / len(others)
+
+
+def _roster_record(
+    rows: Sequence[MapRow], rvid: str, window_start: int, window_end: int
+) -> tuple[int, int]:
+    """(wins, losses) for the roster `rvid`, counted by matching the ROSTER
+    hash on either side of each map -- never by `team_id` -- so the record
+    follows the roster across a team_id change (org rebrand, sponsor
+    rename). Only maps with `window_start <= start_time <= window_end` count.
+    """
+    wins = losses = 0
+    for r in rows:
+        if r.start_time < window_start or r.start_time > window_end:
+            continue
+        if roster_version_id(r.radiant_accounts) == rvid:
+            if r.radiant_win:
+                wins += 1
+            else:
+                losses += 1
+        elif roster_version_id(r.dire_accounts) == rvid:
+            if r.radiant_win:
+                losses += 1
+            else:
+                wins += 1
+    return wins, losses
+
+
+def observed_recent_form(
+    rows: Sequence[MapRow],
+    resolved: Mapping[str, str],
+    strengths: Mapping[str, float],
+    reference_time: int,
+    window_days: float = OBSERVED_FORM_WINDOW_DAYS,
+) -> dict[str, ObservedForm]:
+    """Each configured team's CURRENT roster's observed map record over the
+    last `window_days`, measured back from `reference_time` -- always a
+    parameter (typically the store's own most recent `start_time`), never
+    `datetime.now()` or any other wall-clock read, so this is testable and
+    means the same thing on any day this runs against a fixed snapshot.
+
+    `resolved` must come from `ti26.teams.resolve_rosters` (team name ->
+    current `roster_version_id`); this function does not re-resolve rosters,
+    it only counts maps that hash to the given rvid via `_roster_record` --
+    see that function's docstring for why that must be roster-keyed, not
+    team_id-keyed.
+
+    Compares each team's `implied` rate (from `_implied_map_win_rate`,
+    computed from `strengths` regardless of `n`) against a 95% Wilson CI on
+    the observed `rate`. This is a DIAGNOSTIC only: a rating-vs-rating
+    anchor (like the Elo ordering check elsewhere in `cli_rung3`) cannot
+    catch a strength source that is biased in the same direction our own
+    models are biased; a direct read of actual recent results can. It must
+    never be read as a ranking or as grounds to override a strength or the
+    card on its own -- opposing strength is not controlled for (see the
+    provenance report's caveats).
+    """
+    window_start = reference_time - round(window_days * _DAY_SECONDS)
+    out: dict[str, ObservedForm] = {}
+    for name, rvid in resolved.items():
+        wins, losses = _roster_record(rows, rvid, window_start, reference_time)
+        n = wins + losses
+        implied = _implied_map_win_rate(name, strengths)
+        if n == 0:
+            out[name] = ObservedForm(
+                wins=0, losses=0, n=0, rate=None, ci_low=None, ci_high=None,
+                implied=implied, verdict="no data",
+            )
+            continue
+        rate = wins / n
+        ci_low, ci_high = wilson_interval(wins, n)
+        verdict = classify_form_verdict(implied, ci_low, ci_high, n)
+        out[name] = ObservedForm(
+            wins=wins, losses=losses, n=n, rate=rate, ci_low=ci_low, ci_high=ci_high,
+            implied=implied, verdict=verdict,
         )
     return out

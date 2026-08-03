@@ -248,6 +248,45 @@ def test_anchor_k_comes_from_the_gate_config_not_a_hardcoded_default(tmp_path):
     assert "elo_k=20.0" not in provenance
 
 
+@pytest.mark.slow
+def test_observed_recent_form_section_appears_with_caveats_and_reconciling_counts(tmp_path, capsys):
+    """Wiring smoke test: catches a report writer that computes the observed-
+    recent-form diagnostic but never renders it (the "instrument built,
+    never consumed" pattern this codebase's own reports repeatedly flag), or
+    that drops either mandated caveat paragraph, or whose printed one-line
+    stdout summary doesn't reconcile with the table it just wrote.
+    """
+    small_store(tmp_path / "d2.sqlite")
+    teams = write_team_config(tmp_path / "teams.yaml")
+    out = tmp_path / "reports"
+
+    rc = rung3_main(
+        [
+            "--teams", str(teams), "--store", str(tmp_path / "d2.sqlite"),
+            "--out", str(out), "--card-sims", "3000", "--sweep-sims", "2000",
+        ],
+        transport=fake_transport(full_rating_rows()),
+    )
+    assert rc == 0
+
+    provenance = (out / "rung3_provenance.md").read_text()
+    assert "## Observed recent form" in provenance
+    assert "Opposition strength is not controlled" in provenance
+    assert "All five current deviations point the same way" in provenance
+    assert "| team | strength | implied | observed | n | 95% Wilson CI | verdict |" in provenance
+
+    captured = capsys.readouterr()
+    m = re.search(
+        r"observed form (\d+) consistent, (\d+) above implied, (\d+) below implied", captured.out
+    )
+    assert m is not None, "must print the one-line observed-form stdout summary"
+    consistent, above, below = (int(x) for x in m.groups())
+    assert consistent + above + below == N_TEAMS, (
+        "every team in this fixture plays maps, so the printed verdict counts "
+        "must add up to all 16 configured teams with none left as 'no data'"
+    )
+
+
 def test_team_count_mismatch_fails_loudly(tmp_path):
     """Catches a runner that silently proceeds (or crashes obscurely) when
     the teams file does not have as many entries as the rules require,
