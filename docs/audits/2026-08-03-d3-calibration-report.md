@@ -133,3 +133,70 @@ a third attempt with a looser bar.
   choice (spec: "so the two results are directly comparable"), and the
   slope band is unchanged from this spec's own D3 target set before any
   numbers existed.
+
+---
+
+## Addendum: D3b, the multiplicity-corrected Glicko gate — PASS
+
+Registered 2026-08-03 at `5f8e590`, after the Elo gate above failed and
+**before** Glicko's bootstrap interval was computed (spec §II, "D3b: the
+multiplicity-corrected Glicko gate"). Implementation commit `37a252f`;
+gate-run commit follows this addendum.
+
+**This was a ONE-condition test, not three**, and is reported as such.
+Calibrated Glicko's margin and slope were already measured in the D3 run
+above and already passed; only its bootstrap interval was open, corrected
+for the multiplicity of having computed two candidates (Bonferroni:
+family-wise α 0.05 / 2 comparisons = 0.025 per side → a 97.5% two-sided
+interval, stricter than the Elo gate's 95%). `config/d2_gate.yaml` was not
+edited — the 97.5% level was applied to an in-memory `dataclasses.replace()`
+copy only; confirmed by a test that reads the file's bytes before and after
+a run, and by `git diff config/d2_gate.yaml` showing no change after the
+real run.
+
+| condition | measured | required | result |
+|---|---|---|---|
+| margin: mean(LL_constant − LL_glicko_calibrated) | 0.00671 nats/map | ≥ 0.003 | PASS (already known) |
+| calibration slope | 0.9049 | [0.9, 1.1] | PASS (already known) — clears the 0.9 lower bound by only **0.0049**, a fragile margin |
+| paired cluster bootstrap **97.5%** CI excludes 0 | [0.00230, 0.01301] | excludes 0 | **PASS** |
+
+**Overall D3b verdict: PASS.** Same scored population as the Elo gate (191
+tournaments, 26,830 maps, 2,093 `null_team` excluded), confirming the two
+intervals are directly comparable as required.
+
+**Consequence, as written into `reports/d3b_gate.md`:** calibrated Glicko is
+a backtested strength source, and the card *can* be built from it instead of
+rung 3's unverifiable public-rating divisor — but this rests on a
+one-condition test whose other two conditions were already known before this
+run, so it is weaker evidence than the Elo gate would have been had Elo
+itself passed all three conditions fresh. **No Glicko card was built in this
+task** — that is a separate decision, deliberately not made here.
+
+### Test summary (D3b)
+
+- New: 6 tests in `tests/test_cli_d3b.py`.
+- Full suite: 663 passed, 0 failed, unfiltered (~5 minutes). `ruff check .`:
+  clean.
+- The required test for the 97.5% code path
+  (`test_cli_d3b_passes_the_975_ci_level_through_not_hardcoded_or_ignored`)
+  spies on the actual `ci` argument `paired_cluster_bootstrap` receives and
+  pins it to 0.975, rather than asserting "97.5% CI is wider than 95%" —
+  true by construction for any correct implementation and therefore
+  near-vacuous, as flagged in the follow-up instructions. This test would
+  catch both a forgotten override (silently passing D2/D3's 0.95 through)
+  and a 97.5% literal that never actually reaches the bootstrap call.
+
+### Concerns (D3b)
+
+- The PASS is real but fragile on two fronts simultaneously: the slope
+  clears its band by 0.0049 (about 5% of the band's own half-width), and the
+  CI's lower bound (0.00230) sits well above zero but is not far above it
+  relative to the interval's own width (~0.0107). A reader treating this as
+  strong evidence for Glicko would be overstating it; the report says so
+  directly rather than leaving it to a bare PASS.
+- This gate is, by its own registration, evidence of a lower standard than
+  the Elo gate would have provided had Elo passed fresh on all three
+  conditions — two of Glicko's three numbers were already known and only
+  restated here, not newly at risk of failing. That asymmetry is the reason
+  the spec insists on calling this a one-condition test rather than
+  presenting it as equivalent to D3.
