@@ -108,6 +108,26 @@ Both conditions, not either. With ~40k maps the significance test alone would pa
 
 **Diagnostic, not a gate:** whether the custom model materially changes at least one card slot relative to the public-rating fallback. A difference establishes that the custom model *matters*, not that it is *better*. If the log-loss gate fails and this diagnostic passes, investigate — but ship the fallback. A card that differs without demonstrated out-of-sample skill is noise with extra steps.
 
+### D3 calibration gate
+
+**Pre-registered, 2026-08-02, before any calibration was fitted or scored.**
+
+The D2 gate above failed, and worse: *no* rating model beat the rung-1 constant floor (elo +0.0013142, glicko +0.0051449, ewma +0.0133990 nats/map worse than a coin flip — see `docs/audits/2026-08-02-d2-build-ledger.md`). The measured diagnosis is miscalibration, not absent signal: accuracy exceeded 50% for all three models (elo 0.5363, glicko 0.5439) while calibration slopes sat at 0.2126 / 0.4448 / 0.4023 against a target of 1.0, i.e. the predicted logits are roughly 2.2× too wide. `backtest.calibration()` already computes the correcting slope and intercept on every run and nothing applies them.
+
+Applying that correction and re-running the D2 gate would be post-hoc: the D2 gate was registered against uncalibrated models, and re-using it after seeing which way the models failed is exactly what pre-registration exists to prevent. So D3 gets its own gate, registered here first:
+
+```
+mean(LL_constant − LL_calibrated) ≥ 0.003 nats/map
+AND paired cluster bootstrap 95% CI on that difference excludes 0
+AND calibration slope of the calibrated model ∈ [0.9, 1.1]
+```
+
+All three conditions, not any. The margin and the bootstrap match D2's gate exactly — same value, same clustered method over tournaments then series, so the two results are directly comparable. The slope band is the target this spec's own build plan already set for D3, and it is included because a model can clear a log-loss floor while remaining badly calibrated, and calibration quality is the entire claim under test.
+
+The calibration must be fitted **inside each backtest fold**, from that fold's training data only. Fitting it on the full history and then scoring the folds would leak the test outcomes into the correction and produce a number that cannot fail.
+
+**If this gate fails:** ship the rung-3 public-rating card (§X), and do not proceed to a custom Bradley-Terry model. Two failed gates on the same data is evidence about the data, not a reason for a third attempt with a looser bar.
+
 ---
 
 ## III. Dataset
