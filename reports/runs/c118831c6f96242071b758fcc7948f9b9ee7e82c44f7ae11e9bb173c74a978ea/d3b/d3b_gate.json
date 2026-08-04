@@ -1,0 +1,48 @@
+{
+  "conditions": {
+    "ci": {
+      "excludes": 0.0,
+      "open_for_test": true,
+      "passed": true,
+      "value": [
+        0.002301749629720904,
+        0.01300716200189499
+      ]
+    },
+    "margin": {
+      "open_for_test": false,
+      "passed": true,
+      "threshold": 0.003,
+      "value": 0.006708546945126945
+    },
+    "slope": {
+      "band": [
+        0.9,
+        1.1
+      ],
+      "open_for_test": false,
+      "passed": true,
+      "value": 0.9049231041813276
+    }
+  },
+  "config": {
+    "bootstrap_ci": 0.975,
+    "bootstrap_draws": 10000,
+    "min_train": 500,
+    "seed": 20260802,
+    "slope_band": [
+      0.9,
+      1.1
+    ]
+  },
+  "excluded": {
+    "null_team": 2093
+  },
+  "exit_code": 0,
+  "gate": "d3b",
+  "method": "cluster bootstrap over 191 tournaments",
+  "n_maps": 26830,
+  "registration": "docs/superpowers/specs/2026-08-01-ti2026-forecast-design.md section II, D3b multiplicity-corrected Glicko gate",
+  "schema": "ti26.gate-result.v1",
+  "verdict": "PASS"
+}
