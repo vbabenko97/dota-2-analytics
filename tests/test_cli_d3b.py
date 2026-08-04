@@ -102,6 +102,80 @@ def test_reported_verdict_agrees_with_the_measured_conditions(tmp_path):
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("passed", [True, False], ids=["passed", "failed"])
+def test_report_and_exit_code_are_derived_from_the_gate_result(tmp_path, monkeypatch, passed):
+    """The self-consistency test above can only catch a report that
+    contradicts its own numbers; it would pass for any fixed, internally
+    consistent PASS (or FAIL) tuple. This test instead controls the gate
+    result directly: `evaluate_d3_gate` is monkeypatched to return a
+    `D3GateResult` this test builds with sentinel numbers the real
+    seeded_store fixture could never produce (margin=13.57913,
+    slope=3.14159, n_maps=424242, a fabricated method name, etc.), and
+    margin_passed/slope_passed/ci_passed set opposite of each other so no
+    single boolean could satisfy every assertion by coincidence.
+
+    Kills: hardcoding `verdict = "PASS"` in `cli_d3b.main` regardless of
+    `result.passed` (fails the passed=False case on the `**Verdict:**` /
+    `**Overall D3b verdict:**` assertions), and hardcoding `main()`'s return
+    value to `0` regardless of `result.passed` (fails the passed=False case
+    on the `rc == expected_exit` assertion). The CLI still does its real I/O
+    and report rendering against the existing deterministic `seeded_store`
+    fixture; only the gate evaluation itself is replaced.
+    """
+    from ti26 import cli_d3b as cli_d3b_module
+    from ti26.calibrate import D3GateResult
+
+    store = tmp_path / "d2.sqlite"
+    seeded_store(store)
+    out = tmp_path / "reports"
+
+    sentinel = D3GateResult(
+        margin=13.57913,
+        ci_low=8.14159,
+        ci_high=9.26535,
+        calibration_slope=3.14159,
+        calibration_intercept=-2.71828,
+        slope_band=(0.9, 1.1),
+        method="sentinel-bootstrap-method",
+        n_maps=424242,
+        margin_passed=True,
+        ci_passed=True,
+        slope_passed=False,
+        passed=passed,
+        reasons=["sentinel reason A"],
+        excluded={"sentinel_excluded_reason": 17},
+    )
+
+    monkeypatch.setattr(cli_d3b_module, "evaluate_d3_gate", lambda *a, **kw: sentinel)
+
+    rc = cli_d3b_module.main(
+        ["--store", str(store), "--out", str(out), "--min-train", "150"]
+    )
+    report = (out / "d3b_gate.md").read_text()
+
+    expected_verdict = "PASS" if passed else "FAIL"
+    expected_exit = 0 if passed else GATE_FAIL_EXIT
+
+    assert rc == expected_exit
+    assert f"**Verdict: {expected_verdict}**" in report
+    assert f"**Overall D3b verdict: {expected_verdict}**" in report
+
+    # Fields the report renders straight from the sentinel result, not
+    # recomputed or ignored.
+    assert f"{sentinel.margin:.5f}" in report
+    assert "PASS (already known) |" in report  # margin_passed=True
+    assert "FAIL (already known) |" in report  # slope_passed=False
+    assert f"{sentinel.calibration_slope:.4f}" in report
+    assert (
+        f"[{sentinel.ci_low:.5f}, {sentinel.ci_high:.5f}] | excludes 0 | PASS |" in report
+    )  # ci_passed=True
+    assert (
+        f"Interval method: {sentinel.method}. Maps compared: {sentinel.n_maps}." in report
+    )
+    assert "Excluded from scoring: 17 maps (17 sentinel_excluded_reason)" in report
+
+
+@pytest.mark.slow
 def test_cli_d3b_passes_the_975_ci_level_through_not_hardcoded_or_ignored(tmp_path, monkeypatch):
     """The required test for the code path computing the 97.5% interval.
 

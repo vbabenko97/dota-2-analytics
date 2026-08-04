@@ -19,6 +19,7 @@ from ti26.public_ratings import (
     wilson_interval,
 )
 from ti26.roster import roster_version_id
+from ti26.types import Category
 
 
 def test_parse_ratings_casts_bigint_strings_defensively():
@@ -175,25 +176,63 @@ def test_strengths_from_ratings_accepts_an_overridden_divisor():
     assert doubled["B"] == pytest.approx(default["B"] * 2.0)
 
 
-@pytest.mark.slow
-def test_scale_sensitivity_sweep_reports_a_noise_floor_and_resolvability():
-    """Mirrors ti26.duration.sensitivity_sweep's own test of the same shape:
-    a magnitude assertion here would measure Monte Carlo noise, not an
-    effect, so check the structural contract instead -- a hardcoded-zero
-    noise_floor would make every delta look resolvable, and computing it
-    fresh per multiplier instead of once from the baseline would break the
-    "one shared value" contract.
+def test_scale_sensitivity_sweep_reports_a_noise_floor_and_resolvability(monkeypatch):
+    """A hardcoded-constant `scale_sensitivity_sweep` (fixed max_abs_delta=0.0,
+    a fixed positive noise_floor, resolvable=False everywhere) satisfies
+    every assertion the old version of this test made -- audit finding
+    (`gpt-5-6-sol-ultra-audit.md`): "passes if the function returns fixed
+    max_abs_delta=0, positive shared noise and resolvable=False". Fixed here
+    by replacing the live Monte Carlo call with a SCRIPTED
+    `category_marginals` (monkeypatched on `ti26.montecarlo`, since
+    `scale_sensitivity_sweep` re-imports the name fresh from that module on
+    every call -- see its `from ti26.montecarlo import category_marginals`),
+    so `max_abs_delta` and `noise_floor` are KNOWN numbers computed by hand
+    from the scripted marginals, not live Monte Carlo noise: noise_floor
+    must land at exactly 0.01 (the largest pairwise gap among the three
+    scripted baseline-seed runs), the 0.5x-divisor entry's delta must land
+    at exactly 0.20 (clearly above the floor -> resolvable=True), and the
+    2.0x-divisor entry's delta must land at exactly 0.008 (clearly below the
+    floor -> resolvable=False). A stub that zeroes every `max_abs_delta`
+    still passes the old assertions but fails the exact 0.20/0.008 checks
+    here; a stub that hardcodes `resolvable=False` everywhere (replacing
+    `delta > noise_floor`) still passes the old assertions but fails the
+    `result[1]["resolvable"] is True` check here.
     """
     from ti26.rules import load_rules
 
     rules = load_rules("config/ti2026_rules.yaml")
     ratings = {
-        f"t{i:02d}": PublicRating(
-            team_id=i, rating=1500.0 + (i - 7.5) * 40.0, wins=500, losses=400, last_match_time=0
-        )
-        for i in range(16)
+        "A": PublicRating(team_id=1, rating=1500.0, wins=500, losses=400, last_match_time=0),
+        "B": PublicRating(team_id=2, rating=1300.0, wins=500, losses=400, last_match_time=0),
     }
-    result = scale_sensitivity_sweep(ratings, rules, [1.0, 0.5, 2.0], n_sims=3000, seed=3)
+
+    def _marginals(a_w4_0: float) -> dict[str, dict]:
+        zeros = {c: 0.0 for c in Category if c is not Category.W4_0}
+        return {
+            "A": {Category.W4_0: a_w4_0, **zeros},
+            "B": {Category.W4_0: 0.0, **zeros},
+        }
+
+    # scale_sensitivity_sweep makes exactly 5 category_marginals calls for
+    # divisor_multipliers=[1.0, 0.5, 2.0]: baseline @ seed, @ seed+1, @ seed+2
+    # (the 3 runs the noise floor is computed from), then 0.5x @ seed, then
+    # 2.0x @ seed -- each compared back against the FIRST (baseline @ seed) run.
+    scripted = iter(
+        [
+            _marginals(0.50),  # baseline @ seed        -- the reference "baseline" dict
+            _marginals(0.505),  # baseline @ seed + 1
+            _marginals(0.495),  # baseline @ seed + 2   -- pairwise deltas 0.005 / 0.005 / 0.01
+            _marginals(0.70),  # 0.5x @ seed             -- delta vs baseline = 0.20
+            _marginals(0.508),  # 2.0x @ seed            -- delta vs baseline = 0.008
+        ]
+    )
+
+    def fake_category_marginals(strengths, _rules, n_sims, seed, policy=None):
+        return next(scripted)
+
+    monkeypatch.setattr("ti26.montecarlo.category_marginals", fake_category_marginals)
+
+    result = scale_sensitivity_sweep(ratings, rules, [1.0, 0.5, 2.0], n_sims=10, seed=3)
 
     assert result[0]["is_baseline"] is True
     assert result[0]["max_abs_delta"] == 0.0
@@ -201,7 +240,22 @@ def test_scale_sensitivity_sweep_reports_a_noise_floor_and_resolvability():
 
     floors = {entry["noise_floor"] for entry in result}
     assert len(floors) == 1, "noise_floor must be one value shared by every entry"
-    assert next(iter(floors)) > 0.0, "a hardcoded-zero floor would make every delta look resolvable"
+    noise_floor = next(iter(floors))
+    assert noise_floor == pytest.approx(0.01), (
+        "the largest of the three scripted pairwise baseline deltas (0.005, "
+        "0.005, 0.01) must be the reported floor"
+    )
+
+    assert result[1]["max_abs_delta"] == pytest.approx(0.20), (
+        "0.5x's delta against the scripted baseline is a known 0.20, not live "
+        "Monte Carlo noise"
+    )
+    assert result[1]["resolvable"] is True, "0.20 is well above the 0.01 noise floor"
+
+    assert result[2]["max_abs_delta"] == pytest.approx(0.008), (
+        "2.0x's delta against the scripted baseline is a known 0.008"
+    )
+    assert result[2]["resolvable"] is False, "0.008 sits below the 0.01 noise floor"
 
     expected_keys = {
         "divisor_multiplier", "divisor", "max_abs_delta", "is_baseline", "noise_floor", "resolvable",
