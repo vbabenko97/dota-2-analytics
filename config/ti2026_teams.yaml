@@ -80,13 +80,59 @@
 #   which id is configured below (ratings key off the roster hash, never
 #   team_id) -- `reports/strengths.csv` already carries this rvid with
 #   `prior_driven=False`. Only the DISPLAY NAME/team_id below were stale.
-#   Using 10182357 (the current, most-recent id) with display name "1win"
-#   per public reporting. LIMITATION: this org-name-first resolution
-#   method (name -> team_id -> that id's latest roster) only found the
-#   right roster here because it did not change again after 2026-05-18;
-#   it does not follow a roster forward across a LABEL change the way
-#   an account-keyed search does, so the TI-facing name for this entry
-#   should be re-checked before the card is published.
+#   Using 10182357 (the current, most-recent id). LIMITATION: this
+#   org-name-first resolution method (name -> team_id -> that id's latest
+#   roster) only found the right roster here because it did not change
+#   again after 2026-05-18; it does not follow a roster forward across a
+#   LABEL change the way an account-keyed search does, so the TI-facing
+#   name for this entry needed a human re-check before publication.
+#   RESOLVED 2026-08-04, display name "1win" -> "Iron Wing", on the
+#   project owner's own TI-field name list (Tundra -> 1win -> Iron Wing).
+#   Note OpenDota's per-id labels do NOT agree with that chronology --
+#   each id keeps whatever name it was registered under, so the store
+#   shows 10150413 as "Iron Wing" (the MIDDLE id, 2026-05-19 -> 05-30)
+#   and the latest id 10182357 as "1w". The id labels are therefore not
+#   evidence about the current name and were not used as such. Rating
+#   impact: NONE. Re-verified 2026-08-04 that all three ids carry the
+#   identical roster e0492e01c08d07f5 (189 + 24 + 21 = 234 maps), and
+#   ratings key off that hash, never off team_id or display name.
+# 2026-08-04 identity re-verification, prompted by the project owner supplying
+# the authoritative TI-facing name list (old org -> TI name). Every entry below
+# was checked by ACCOUNT SET against the store, not by name. One display name
+# was wrong (1win -> Iron Wing, above); no team_id was wrong; no rating was
+# attached to the wrong entity. Specifically:
+# - PARIVISION -> TEAM VISION (9572001): renamed IN PLACE. A remote `teams`
+#   search for '%pari%' returns no PARIVISION id at all -- only unrelated
+#   teams (Pariah Caste, Pariente Gaming, Paris Saint-Germain). 9572001's own
+#   history is continuous and complete: 237 maps of one roster (2025-02-16 ->
+#   2026-01-05), then 97, then the current 80, each successor sharing 4/5
+#   accounts with its predecessor. This is the best-supported chain in the
+#   field, which matters because this entry holds the card's 4-0 slot.
+# - Apex Genesis -> GamerLegion (9964962): the 267-map Apex Genesis roster
+#   77aa9436a6f28e94 was fielded by team_id 9964962 ITSELF for 86 of those
+#   maps (2025-11-15 -> 2026-02-20) before two single-player swaps produced
+#   567fc3ef3c882d03 then the current 8f07578dc483e1ae. So `RosterIndex`'s
+#   predecessor chain -- which keys on the team's own roster SEQUENCE, not on
+#   account overlap -- resolves back through the Apex Genesis roster without
+#   an alias. Separate ids 9381678/9466753 named "Apex Genesis" hold the
+#   earlier part of that same rvid; irrelevant, since ratings key on rvid.
+# - OG (2586976) signed an entirely new SEA roster on 2025-11-08 (a 5/5
+#   replacement of the EU roster, confirmed: b6807127ad482080 ends 2025-10-21,
+#   cea28836f2f70903 begins 2025-11-15 sharing ZERO accounts). The current
+#   roster d8b9dd1522124292 (27 maps, the THINNEST in the field) chains back
+#   through ededc1aba09e25f0 to that SEA roster's 109 maps, sharing 4/5
+#   accounts each step, so its prior comes through the SEA side and never
+#   through the discarded EU roster.
+# - Two further duplicate team_ids found 2026-08-04 that the 2026-08-02 pass
+#   missed, both registered after it: 10208009 "L1GA TEAM" and 10207984
+#   "Team resilience". Both are the same category as the duplicates above --
+#   IDENTICAL 5/5 rosters to their configured counterparts, sharing rvid
+#   dbc6910c22be2655 (HULIGANI) and eac6601adfecb821 (Team Resilience)
+#   respectively -- so their maps ALREADY inform those ratings and the
+#   configured ids still resolve to the right roster. No alias, no config
+#   change. They do mean the roster totals are current through 2026-08-01/02
+#   rather than through the configured ids' own last maps (2026-06-28 and
+#   2026-06-18), so neither team is as idle as its configured id suggests.
 teams:
   - {name: Aurora Gaming, team_id: 9467224}
   - {name: Team Liquid, team_id: 2163}
@@ -94,7 +140,7 @@ teams:
   - {name: Xtreme Gaming, team_id: 8261500}
   - {name: Team Falcons, team_id: 9247354}
   - {name: Team Yandex, team_id: 9823272}
-  - {name: "1win", team_id: 10182357}
+  - {name: "Iron Wing", team_id: 10182357}
   - {name: Team Spirit, team_id: 7119388}
   - {name: Team Vision, team_id: 9572001}
   - {name: HULIGANI, team_id: 10149530}
