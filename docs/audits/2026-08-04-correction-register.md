@@ -71,6 +71,31 @@ simulation does not estimate. The numeric behaviour is unchanged; the
 documentation now states what the value is and what it is not, and that it buys
 reproducibility rather than accuracy.
 
+## Two published numbers the producers do not reproduce
+
+Regenerating the withdrawn D4 diagnostics from committed producers reproduced
+most of them exactly -- the observed score, the random baseline, the
+simulation-count sweep's nine scores in order, and the displacement partition.
+Two did not, and both are recorded here rather than silently replaced.
+
+**The random-card control.** The producer gives a different mean over 200,000
+samples than the document published. It is the same quantity estimated from a
+different RNG stream; both agree with the theoretical baseline, and neither is
+wrong. The original had no recorded seed because it had no producer. The current
+one does, so it is reproducible from now on.
+
+**The rank correlation.** The producer's value differs materially from the
+published one, and this is not a seeding difference. The committed producer
+computes Spearman with average tied ranks, which this data requires: five teams
+always share `elim_win`. The published figure came from an ad-hoc calculation
+whose tie convention was never written down, and the external auditor reproduced
+it only by independently making the same unstated choice.
+
+This is the clearest illustration in the project of what an unbound number costs.
+The statistic had a name, two defensible definitions, and no record of which one
+was meant. Agreement between two ad-hoc calculations looked like confirmation and
+was not.
+
 ## What is still unverified
 
 - The pre-registration timing of D3b as a one-condition test rests on commit
