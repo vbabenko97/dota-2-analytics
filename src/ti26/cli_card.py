@@ -57,6 +57,7 @@ from pathlib import Path
 from ti26.backtest import calibration, rolling_folds, run_model
 from ti26.cli import main as cli_main
 from ti26.data.store import load_rows, open_store
+from ti26.gate_artifacts import format_gate_lineage, load_frozen_gate_artifact
 from ti26.montecarlo import category_marginals, monte_carlo_stderr
 from ti26.optimize import solve_card
 from ti26.public_ratings import observed_recent_form
@@ -67,29 +68,16 @@ from ti26.rules import load_rules
 from ti26.series import map_win_prob
 from ti26.teams import load_teams, resolve_rosters, team_strengths
 
-# Gate lineage, per docs/audits/2026-08-03-d3-calibration-report.md. These are
-# HISTORICAL facts about gates already run and frozen on this branch -- not
-# something this module measures -- so they are literal, sourced text, not a
-# hardcoded input to any computation below.
-D2_GATE_SUMMARY = (
-    "D2 forecast-value gate FAILED (margin -0.00383 nats/map, CI "
-    "[-0.02055, 0.00614], includes 0) -- see docs/audits/2026-08-02-d2-build-ledger.md."
-)
-D3_ELO_GATE_SUMMARY = (
-    "D3 calibration gate (Elo, the primary gated candidate) FAILED on all three "
-    "pre-registered conditions: margin 0.00191 < 0.003, CI [-0.00046, 0.00500] "
-    "includes 0, calibration slope 0.6569 outside [0.9, 1.1] -- see "
-    "docs/audits/2026-08-03-d3-calibration-report.md."
-)
-D3B_GLICKO_GATE_SUMMARY = (
-    "D3b (the multiplicity-corrected Glicko gate) PASSED: margin 0.00671 nats/map "
-    "(>= 0.003), 97.5% bootstrap CI [0.00230, 0.01301] (excludes 0), calibration "
-    "slope 0.9049 (inside [0.9, 1.1], clearing the 0.9 lower bound by only "
-    "0.0049 -- a fragile margin). This was a ONE-CONDITION test: Glicko's margin "
-    "and slope were already measured and already passing before this run; only "
-    "the 97.5% bootstrap interval was newly computed. It is therefore WEAKER "
-    "evidence than a fresh three-condition pass would have been -- see the "
-    "addendum in docs/audits/2026-08-03-d3-calibration-report.md."
+# The gate lineage this report prints comes from a frozen-gate artifact built
+# by ti26.cli_gate_artifacts out of the three gate CLIs' own machine-readable
+# results. It used to be three string literals pasted here. They were accurate
+# when written and had no way of staying accurate: nothing recomputed them and
+# nothing checked them, so a re-ingest that moved a gate's numbers would have
+# left this report quoting the old ones forever.
+GATE_LINEAGE_MISSING = (
+    "**Gate lineage: not supplied for this run.** Pass `--frozen-gates` with the "
+    "artifact produced by `ti26.cli_gate_artifacts` to include D2/D3/D3b's "
+    "registered results. This report will not restate them from memory."
 )
 
 
@@ -232,6 +220,11 @@ def main(argv: list[str] | None = None) -> int:
         help="comma-separated seeds for the seed-stability diagnostic "
         "(default: card-seed, card-seed+1, card-seed+2)",
     )
+    parser.add_argument(
+        "--frozen-gates", default=None,
+        help="frozen-gate artifact from ti26.cli_gate_artifacts; without it the "
+        "report states that gate lineage was not supplied rather than restating it",
+    )
     parser.add_argument("--out", default="reports")
     args = parser.parse_args(argv)
 
@@ -326,6 +319,20 @@ def main(argv: list[str] | None = None) -> int:
 
     card_payload = json.loads((out / "recommended_card.json").read_text())
 
+    if args.frozen_gates:
+        artifact = load_frozen_gate_artifact(args.frozen_gates)
+        gate_lineage = [
+            *format_gate_lineage(artifact),
+            "",
+            (
+                f"Read from `{args.frozen_gates}` (frozen-gate artifact, source revision "
+                f"`{artifact['source_revision']}`). Every value above is that artifact's; "
+                "this module restates none of them from memory."
+            ),
+        ]
+    else:
+        gate_lineage = [GATE_LINEAGE_MISSING]
+
     lines = [
         "# Production card provenance -- calibrated Glicko (D3b)",
         "",
@@ -337,9 +344,7 @@ def main(argv: list[str] | None = None) -> int:
         "",
         "## Gate lineage",
         "",
-        f"- {D2_GATE_SUMMARY}",
-        f"- {D3_ELO_GATE_SUMMARY}",
-        f"- {D3B_GLICKO_GATE_SUMMARY}",
+        *gate_lineage,
         "",
         (
             "Building the production card from calibrated Glicko is a SEPARATE "
@@ -383,17 +388,23 @@ def main(argv: list[str] | None = None) -> int:
         ),
         "",
         (
-            "The approximation is justified here because `GlickoModel.expected_score`'s "
-            f"RD attenuation `g(phi)` is measured, over these 16 rosters' pairwise "
-            f"combined RDs, to span **{g_lo:.4f} to {g_hi:.4f}** (RD itself spans "
-            f"{rd_lo:.1f} to {rd_hi:.1f}) -- close enough to 1 that "
-            "`GlickoModel.strengths()` (which omits `g(phi)` entirely) tracks the raw "
-            "model's own `expected_score` closely. **This is an EMPIRICAL property of "
-            "this specific 16-team field, not a general guarantee** -- a field with "
-            "widely dispersed RDs (e.g. several qualifier teams with almost no "
-            "history) would make this approximation materially worse, and a re-run "
-            "against a different roster mix must re-check this range rather than "
-            "assume it."
+            "What is measured: `GlickoModel.expected_score`'s RD attenuation `g(phi)`, "
+            "over these 16 rosters' pairwise combined RDs, spans "
+            f"**{g_lo:.4f} to {g_hi:.4f}** (RD itself spans {rd_lo:.1f} to "
+            f"{rd_hi:.1f}). `GlickoModel.strengths()` omits `g(phi)` entirely, so the "
+            "narrower that range sits around 1, the less the omission can do."
+        ),
+        "",
+        (
+            "What is NOT measured: this range is not the error the approximation makes. "
+            "The quantity that would settle it -- the discrepancy between the pairwise "
+            "probabilities implied by these scalar strengths and the ones "
+            "`expected_score` returns -- is not computed by this run, so no claim is "
+            "made here about how closely the two track. **The range is also an "
+            "empirical property of this specific 16-team field, not a general "
+            "guarantee**: a field with widely dispersed RDs (several qualifier teams "
+            "with almost no history, say) would widen it, and a re-run against a "
+            "different roster mix must re-read this number rather than assume it."
         ),
         "",
         "## Seed-stability diagnostic",

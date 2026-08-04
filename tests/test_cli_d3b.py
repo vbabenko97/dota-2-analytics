@@ -1,3 +1,4 @@
+import json
 import re
 
 import pytest
@@ -173,6 +174,26 @@ def test_report_and_exit_code_are_derived_from_the_gate_result(tmp_path, monkeyp
         f"Interval method: {sentinel.method}. Maps compared: {sentinel.n_maps}." in report
     )
     assert "Excluded from scoring: 17 maps (17 sentinel_excluded_reason)" in report
+
+    # The machine-readable result must carry the same controlled values, and
+    # its exit_code must agree with its verdict -- the card report reads this
+    # file instead of restating D3b's numbers from a literal, so a result that
+    # disagreed with the process would publish the wrong lineage.
+    payload = json.loads((out / "d3b_gate.json").read_text())
+    assert payload["gate"] == "d3b"
+    assert payload["verdict"] == expected_verdict
+    assert payload["exit_code"] == expected_exit
+    assert payload["n_maps"] == sentinel.n_maps
+    assert payload["method"] == sentinel.method
+    assert payload["conditions"]["margin"]["value"] == sentinel.margin
+    assert payload["conditions"]["slope"]["value"] == sentinel.calibration_slope
+    assert payload["conditions"]["slope"]["passed"] is False
+    assert payload["conditions"]["ci"]["value"] == [sentinel.ci_low, sentinel.ci_high]
+    # Only the interval was open when D3b was registered; the other two were
+    # already measured. The artifact records which is which.
+    assert payload["conditions"]["ci"]["open_for_test"] is True
+    assert payload["conditions"]["margin"]["open_for_test"] is False
+    assert payload["conditions"]["slope"]["open_for_test"] is False
 
 
 @pytest.mark.slow

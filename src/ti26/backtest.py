@@ -89,6 +89,14 @@ class GateResult:
     n_maps: int
     reasons: list[str] = field(default_factory=list)
     excluded: dict[str, int] = field(default_factory=dict)
+    # Per-condition outcomes, exposed so a machine-readable result can record
+    # which condition failed without re-deriving the gate's own predicates
+    # elsewhere (or, worse, parsing them back out of `reasons`). They default
+    # to True so an explicitly constructed passing result stays consistent;
+    # `evaluate_gate` always sets both. `passed` remains their conjunction and
+    # is unchanged by their presence.
+    margin_passed: bool = True
+    ci_passed: bool = True
 
 
 def rolling_folds(rows: Sequence[MapRow], min_train: int = 500) -> list[Fold]:
@@ -410,13 +418,16 @@ def evaluate_gate(
         diff, tournament, series, config.bootstrap_draws, config.bootstrap_ci, config.seed
     )
     reasons = []
-    if margin < config.min_margin_nats:
+    margin_passed = not margin < config.min_margin_nats
+    if not margin_passed:
         reasons.append(
             f"margin {margin:.5f} < pre-registered {config.min_margin_nats} nats/map"
         )
-    if lo <= 0.0 <= hi:
+    ci_includes_zero = lo <= 0.0 <= hi
+    ci_entirely_negative = hi < 0.0
+    if ci_includes_zero:
         reasons.append(f"bootstrap {config.bootstrap_ci:.0%} CI [{lo:.5f}, {hi:.5f}] includes 0")
-    elif hi < 0.0:
+    elif ci_entirely_negative:
         reasons.append(
             f"bootstrap {config.bootstrap_ci:.0%} CI [{lo:.5f}, {hi:.5f}] is entirely "
             "negative (the comparator is significantly better)"
@@ -429,6 +440,8 @@ def evaluate_gate(
         reasons=reasons,
         method=method,
         n_maps=len(diff),
+        margin_passed=margin_passed,
+        ci_passed=not ci_includes_zero and not ci_entirely_negative,
         # `rated` is a property of the row (`skip_reason`), not the model, so
         # elo and glicko agree on it whenever paired_differences didn't
         # already raise for a disagreement -- either side's tally is complete.
