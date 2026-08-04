@@ -1,7 +1,11 @@
 import pytest
 
 from ti26.elimination import ChoicePolicy
-from ti26.montecarlo import category_marginals, monte_carlo_stderr
+from ti26.montecarlo import (
+    card_score_distribution,
+    category_marginals,
+    monte_carlo_stderr,
+)
 from ti26.rules import load_rules
 from ti26.types import Category
 
@@ -96,3 +100,47 @@ def test_display_names_cannot_move_the_marginals():
     for team in strengths:
         got = after["0aaa" if team == renamed_key else team]
         assert got == base[team], f"relabel moved {team}"
+
+
+def test_card_score_distribution_is_a_proper_distribution_over_possible_scores():
+    strengths = {t: (i - 7.5) * 0.2 for i, t in enumerate(TEAMS)}
+    slots = [c for c in Category for _ in range(CAPS[c])]
+    card = dict(zip(TEAMS, slots, strict=True))
+    n = 400
+    dist = card_score_distribution(card, strengths, RULES, n_sims=n, seed=5)
+    assert sum(dist.values()) == n, "every simulation must yield exactly one score"
+    assert all(0 <= s <= 16 for s in dist)
+
+
+def test_card_score_distribution_rewards_a_card_aligned_with_the_strengths():
+    """A card ordered WITH the strengths must outscore one ordered against them.
+
+    Without this the function could ignore the card argument entirely --
+    returning the same distribution for every assignment -- and still satisfy
+    the shape check above.
+    """
+    strengths = {t: (i - 7.5) * 0.4 for i, t in enumerate(TEAMS)}
+    slots = [c for c in Category for _ in range(CAPS[c])]
+    strongest_first = sorted(TEAMS, key=lambda t: -strengths[t])
+    aligned = dict(zip(strongest_first, slots, strict=True))
+    inverted = dict(zip(list(reversed(strongest_first)), slots, strict=True))
+
+    def mean(card):
+        d = card_score_distribution(card, strengths, RULES, n_sims=600, seed=11)
+        return sum(s * n for s, n in d.items()) / sum(d.values())
+
+    assert mean(aligned) > mean(inverted) + 1.0
+
+
+def test_card_score_distribution_ignores_display_names():
+    """Same defect class as the marginals: a pure relabel must not move scores."""
+    strengths = {f"team{i:02d}": 0.6 - 0.08 * i for i in range(16)}
+    slots = [c for c in Category for _ in range(CAPS[c])]
+    order = sorted(strengths, key=lambda t: -strengths[t])
+    card = dict(zip(order, slots, strict=True))
+    base = card_score_distribution(card, strengths, RULES, n_sims=300, seed=4)
+
+    ren_s = {("0aaa" if k == "team07" else k): v for k, v in strengths.items()}
+    ren_c = {("0aaa" if k == "team07" else k): v for k, v in card.items()}
+    after = card_score_distribution(ren_c, ren_s, RULES, n_sims=300, seed=4)
+    assert after == base

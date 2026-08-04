@@ -35,6 +35,39 @@ def canonical_labels(strengths: dict[str, float]) -> dict[str, str]:
     return {team: f"t{i:0{width}d}" for i, team in enumerate(order)}
 
 
+def card_score_distribution(
+    card: dict[str, Category],
+    strengths: dict[str, float],
+    rules: Rules,
+    n_sims: int,
+    seed: int,
+    policy: ChoicePolicy = ChoicePolicy.RATIONAL,
+) -> Counter[int]:
+    """Score one FIXED card against n_sims simulated outcomes; return score -> count.
+
+    The card is held constant rather than re-solved per simulation. Re-solving
+    would measure how well the PROCEDURE adapts to each outcome, which is a
+    different and much easier question than how this one published card fares
+    against outcomes the model itself considers plausible.
+
+    Use a `seed` independent of the one that produced the marginals the card was
+    solved from. The card was chosen to maximise expected score over those
+    specific draws, so scoring it against them again rewards it for noise it was
+    fitted to.
+    """
+    labels = canonical_labels(strengths)
+    internal = {labels[team]: strength for team, strength in strengths.items()}
+    target = {labels[team]: category for team, category in card.items()}
+    scores: Counter[int] = Counter()
+    for i in range(n_sims):
+        rng = random.Random(seed * 1_000_003 + i)
+        run = run_swiss(internal, rules, rng)
+        outcome = run_elimination(run, internal, rules, rng, policy=policy)
+        hits = sum(1 for label, c in outcome.categories.items() if target[label] == c)
+        scores[hits] += 1
+    return scores
+
+
 def category_marginals(
     strengths: dict[str, float],
     rules: Rules,
