@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from dataclasses import replace
@@ -5,8 +6,16 @@ from dataclasses import replace
 import pytest
 
 from ti26 import provenance
+from ti26.cli_provenance import main as provenance_main
+from ti26.data.queries import MAP_QUERY
 from ti26.data.schema import MapRow
-from ti26.data.snapshot import sha256_file
+from ti26.data.snapshot import (
+    SnapshotIntegrityError,
+    read_snapshot,
+    sha256_file,
+    validate_snapshot,
+    write_snapshot,
+)
 from ti26.data.store import STORE_COLUMNS, insert_rows, open_store
 from ti26.provenance import (
     RunManifestError,
@@ -353,3 +362,139 @@ def test_verify_run_bundle_rejects_a_symlinked_output(tmp_path):
 
     with pytest.raises(RunManifestError, match="symlink"):
         write_run_manifest(bundle, descriptor, ["report.md"])
+
+
+def _legacy_manifest(raw, sid, entries):
+    """Write a pre-provenance manifest: no per-chunk query and no digest."""
+    (raw / sid).mkdir(parents=True, exist_ok=True)
+    (raw / sid / "manifest.json").write_text(
+        json.dumps(
+            {
+                "snapshot_id": sid,
+                "source": "opendota /explorer",
+                "total_rows": sum(entry["rows"] for entry in entries),
+                "entries": entries,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+
+
+def test_snapshot_manifest_command_hashes_the_committed_gzip_bytes(tmp_path):
+    """Kills mutation: digest the decoded rows instead of the chunk file's bytes.
+
+    The gzip container carries its own header and compression, so the digest of
+    the chunk on disk is a different byte string from the digest of the rows it
+    decodes to. Only the former identifies the committed input.
+    """
+    raw = tmp_path / "raw"
+    sid = "20260802T165535Z"
+    first = write_snapshot(raw, sid, "2025-02", [{"match_id": 1}, {"match_id": 2}])
+    second = write_snapshot(raw, sid, "2025-03", [{"match_id": 3}])
+    _legacy_manifest(
+        raw,
+        sid,
+        [
+            {"name": "2025-02", "rows": 2, "start": 10, "end": 20},
+            {"name": "2025-03", "rows": 1, "start": 20, "end": 30},
+        ],
+    )
+
+    exit_code = provenance_main(
+        ["snapshot-manifest", "--raw", str(raw), "--snapshot", sid, "--replace-existing-manifest"]
+    )
+
+    assert exit_code == 0
+    manifest = json.loads((raw / sid / "manifest.json").read_text())
+    digests = {entry["name"]: entry["sha256"] for entry in manifest["entries"]}
+    assert digests == {"2025-02": sha256_file(first), "2025-03": sha256_file(second)}
+    assert (
+        digests["2025-02"]
+        != hashlib.sha256(canonical_json_bytes(read_snapshot(first))).hexdigest()
+    )
+    assert manifest["total_rows"] == 3
+    assert [chunk.path for chunk in validate_snapshot(raw, sid)] == [first, second]
+
+
+def test_snapshot_manifest_command_derives_the_query_from_the_committed_template(tmp_path):
+    """Kills mutation: write one constant query instead of MAP_QUERY.format(start, end)."""
+    raw = tmp_path / "raw"
+    sid = "20260802T165535Z"
+    write_snapshot(raw, sid, "2025-02", [{"match_id": 1}])
+    write_snapshot(raw, sid, "2025-03", [{"match_id": 2}])
+    _legacy_manifest(
+        raw,
+        sid,
+        [
+            {"name": "2025-02", "rows": 1, "start": 10, "end": 20},
+            {"name": "2025-03", "rows": 1, "start": 20, "end": 30},
+        ],
+    )
+
+    provenance_main(
+        ["snapshot-manifest", "--raw", str(raw), "--snapshot", sid, "--replace-existing-manifest"]
+    )
+
+    entries = json.loads((raw / sid / "manifest.json").read_text())["entries"]
+    queries = {entry["name"]: entry["query"] for entry in entries}
+    assert queries["2025-02"] == MAP_QUERY.format(start=10, end=20)
+    assert queries["2025-03"] == MAP_QUERY.format(start=20, end=30)
+    assert queries["2025-02"] != queries["2025-03"]
+
+
+def test_snapshot_manifest_command_derives_retrieved_at_from_the_snapshot_id(tmp_path):
+    """Kills mutation: stamp the current time instead of parsing the snapshot identifier.
+
+    A wall-clock stamp would make the regenerated manifest differ on every run,
+    so the pinned input could never be reproduced byte-for-byte.
+    """
+    raw = tmp_path / "raw"
+    sid = "20260802T165535Z"
+    write_snapshot(raw, sid, "2025-02", [{"match_id": 1}])
+    _legacy_manifest(raw, sid, [{"name": "2025-02", "rows": 1, "start": 10, "end": 20}])
+
+    provenance_main(
+        ["snapshot-manifest", "--raw", str(raw), "--snapshot", sid, "--replace-existing-manifest"]
+    )
+
+    manifest = json.loads((raw / sid / "manifest.json").read_text())
+    assert manifest["retrieved_at"] == "2026-08-02T16:55:35Z"
+
+
+def test_snapshot_manifest_command_refuses_to_replace_without_the_explicit_flag(tmp_path):
+    """Kills mutation: overwrite an existing manifest whether or not the flag was supplied."""
+    raw = tmp_path / "raw"
+    sid = "20260802T165535Z"
+    write_snapshot(raw, sid, "2025-02", [{"match_id": 1}])
+    _legacy_manifest(raw, sid, [{"name": "2025-02", "rows": 1, "start": 10, "end": 20}])
+    before = (raw / sid / "manifest.json").read_bytes()
+
+    with pytest.raises(SnapshotIntegrityError, match="replace-existing-manifest"):
+        provenance_main(["snapshot-manifest", "--raw", str(raw), "--snapshot", sid])
+
+    assert (raw / sid / "manifest.json").read_bytes() == before
+
+
+def test_snapshot_manifest_command_rejects_a_row_count_the_chunks_contradict(tmp_path):
+    """Kills mutation: recount rows from the decoded chunk instead of carrying the prior count.
+
+    The prior manifest's row counts are the only independent record of what was
+    fetched. Recounting them from the chunk would make the check self-satisfying.
+    """
+    raw = tmp_path / "raw"
+    sid = "20260802T165535Z"
+    write_snapshot(raw, sid, "2025-02", [{"match_id": 1}, {"match_id": 2}])
+    _legacy_manifest(raw, sid, [{"name": "2025-02", "rows": 9, "start": 10, "end": 20}])
+
+    with pytest.raises(SnapshotIntegrityError, match="row count"):
+        provenance_main(
+            [
+                "snapshot-manifest",
+                "--raw",
+                str(raw),
+                "--snapshot",
+                sid,
+                "--replace-existing-manifest",
+            ]
+        )
