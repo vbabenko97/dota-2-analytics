@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from ti26.elimination import ChoicePolicy
-from ti26.montecarlo import category_marginals
+from ti26.montecarlo import category_marginals, monte_carlo_stderr
 from ti26.optimize import solve_card
 from ti26.rules import load_rules
 from ti26.types import Category
@@ -41,7 +41,15 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         policy=ChoicePolicy(args.policy),
     )
-    card, score = solve_card(marginals, rules.category_capacities)
+    # Assignments within one Monte Carlo standard error of the optimum count as
+    # tied (p=0.5 maximises p(1-p), so this bounds the error on every marginal).
+    # The solver then declines to rank what it cannot resolve and applies its
+    # stated scarcity tie-break instead.
+    card, score = solve_card(
+        marginals,
+        rules.category_capacities,
+        tie_tolerance=monte_carlo_stderr(0.5, args.n_sims),
+    )
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

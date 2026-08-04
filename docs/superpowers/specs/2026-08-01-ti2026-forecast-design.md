@@ -108,6 +108,56 @@ Both conditions, not either. With ~40k maps the significance test alone would pa
 
 **Diagnostic, not a gate:** whether the custom model materially changes at least one card slot relative to the public-rating fallback. A difference establishes that the custom model *matters*, not that it is *better*. If the log-loss gate fails and this diagnostic passes, investigate — but ship the fallback. A card that differs without demonstrated out-of-sample skill is noise with extra steps.
 
+### D3 calibration gate
+
+**Pre-registered, 2026-08-02, before any calibration was fitted or scored.**
+
+The D2 gate above failed, and worse: *no* rating model beat the rung-1 constant floor (elo +0.0013142, glicko +0.0051449, ewma +0.0133990 nats/map worse than a coin flip — see `docs/audits/2026-08-02-d2-build-ledger.md`). The measured diagnosis is miscalibration, not absent signal: accuracy exceeded 50% for all three models (elo 0.5363, glicko 0.5439) while calibration slopes sat at 0.2126 / 0.4448 / 0.4023 against a target of 1.0, i.e. the predicted logits are roughly 2.2× too wide. `backtest.calibration()` already computes the correcting slope and intercept on every run and nothing applies them.
+
+Applying that correction and re-running the D2 gate would be post-hoc: the D2 gate was registered against uncalibrated models, and re-using it after seeing which way the models failed is exactly what pre-registration exists to prevent. So D3 gets its own gate, registered here first:
+
+```
+mean(LL_constant − LL_calibrated) ≥ 0.003 nats/map
+AND paired cluster bootstrap 95% CI on that difference excludes 0
+AND calibration slope of the calibrated model ∈ [0.9, 1.1]
+```
+
+All three conditions, not any. The margin and the bootstrap match D2's gate exactly — same value, same clustered method over tournaments then series, so the two results are directly comparable. The slope band is the target this spec's own build plan already set for D3, and it is included because a model can clear a log-loss floor while remaining badly calibrated, and calibration quality is the entire claim under test.
+
+The calibration must be fitted **inside each backtest fold**, from that fold's training data only. Fitting it on the full history and then scoring the folds would leak the test outcomes into the correction and produce a number that cannot fail.
+
+**Two further choices, registered here 2026-08-03 before any calibration code was written, because either could move the verdict and picking after seeing a result would void the gate:**
+
+*Which model is under test.* **Elo is the primary and only gated candidate.** It had the lower uncalibrated out-of-sample log loss (0.6944614 vs Glicko's 0.6982921), and log loss is this gate's own metric, so it is the better base model by the standard being applied. Calibrated Glicko is computed and reported as a diagnostic but is **not** gated: putting two candidates through one gate roughly doubles the probability of a false pass, and choosing the winner afterwards is the multiple-comparisons version of moving the margin.
+
+*How the in-fold calibration is fitted.* Within each fold's training window, hold out the most recent **20%** of training rows as a calibration set: fit the base model on the first 80%, predict the held-out 20%, and fit the logistic slope and intercept on those held-out predictions. Then refit the base model on the full 100% of training rows and apply that correction when predicting the fold's tournament.
+
+The held-out split is not incidental. Fitting the correction on *in-sample* training predictions would estimate the wrong slope — a model scores its own training data with different overconfidence than genuinely unseen data — and the resulting correction would be systematically mis-sized. A nested rolling backtest inside every fold would be the fully correct estimator; a single recent hold-out is the cheap approximation of it, chosen deliberately and recorded as an approximation rather than presented as exact.
+
+**If this gate fails:** ship the rung-3 public-rating card (§X), and do not proceed to a custom Bradley-Terry model. Two failed gates on the same data is evidence about the data, not a reason for a third attempt with a looser bar.
+
+### D3b: the multiplicity-corrected Glicko gate
+
+**Registered 2026-08-03, after the Elo gate above FAILED on all three conditions and before Glicko's confidence interval was computed.**
+
+The Elo gate failed: margin 0.00191 against 0.003, CI [−0.00046, 0.00500] including 0, slope 0.6569 outside [0.9, 1.1]. Calibrated Glicko was computed alongside as a registered diagnostic and its measured values are **already known**: log loss 0.686439 against the constant floor's 0.693147, margin **0.00671**, slope **0.9049**.
+
+Be exact about what is and is not still open. Two of the three conditions are already measured and already pass. The only quantity not yet computed is Glicko's bootstrap interval. **So this is a one-condition test, and calling it a three-condition gate would overstate it.** That is recorded here rather than glossed, because the whole point of registering in advance is defeated by pretending an already-known value was under test.
+
+Why run it at all, given the Elo gate's stated consequence: refusing to look at a computed diagnostic is not rigour, it is discarding data. What would be dishonest is looking and then not paying for the multiplicity. Two candidates were computed, so the family-wise error rate is corrected:
+
+```
+mean(LL_constant − LL_glicko_calibrated) ≥ 0.003 nats/map     [already measured: 0.00671, passes]
+AND paired cluster bootstrap CI excludes 0 at 97.5%, not 95%   [NOT YET COMPUTED — the actual test]
+AND calibration slope ∈ [0.9, 1.1]                             [already measured: 0.9049, passes]
+```
+
+Bonferroni for the two candidates actually computed: family-wise α = 0.05 over 2 comparisons gives per-comparison α = 0.025, hence a 97.5% two-sided interval. This bar is **stricter** than the Elo gate's, not looser, so it does not fall foul of the prohibition above — that prohibition exists to stop a bar being relaxed until something passes.
+
+The slope band is **not** widened, tightened, or given its own interval. It is the band this spec already set for D3 before any of this ran. But note that 0.9049 clears the lower bound by only 0.0049, which is fragile; the report must state that margin of compliance so a reader can judge it rather than seeing a bare PASS.
+
+**No third candidate.** If this fails, the rung-3 card ships and D3 is over. There is no D3c.
+
 ---
 
 ## III. Dataset
@@ -408,6 +458,8 @@ The bound is stated in units the reader can feel, because "bounded" adjustments 
 4. Hand-ordered strength vector into the simulator.
 
 Every rung produces a valid card. The simulator is the component that must not fail — which is why it is built first, on synthetic ratings, before any data exists.
+
+**Correction, 2026-08-02 (D3 rung-3 build).** Rung 3 fired: the D2 forecast-value gate failed and, separately, no rating model cleared the spec V floor (see `docs/audits/2026-08-02-d2-build-ledger.md`). Rung 3's named source, "Noxville, datdota", is UNREACHABLE from this environment — HTTP 403 to every access path tried, including the Internet Archive's own crawler, and Noxville's public dataset dead since 2020-12-29 (full survey: `docs/audits/2026-08-02-rung3-source-research.md`). Built instead from OpenDota's own `team_rating` table, via the existing `explorer_query` seam — no new network path. The scale conversion from that table's raw `rating` column to a logit (`math.log(10) / 400`, matching this repo's own Elo convention) is tagged **`inferred`**: OpenDota documents no divisor for this specific table, and unlike Elo/Glicko a public rating snapshot cannot be backtested to check it. See `reports/rung3_provenance.md` for the per-team ratings, the scale-sensitivity sweep with its noise floor, and the Elo-ordering sanity anchor.
 
 ---
 
