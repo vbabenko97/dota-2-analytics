@@ -1,0 +1,64 @@
+# TI 2025's Swiss stage: the held-out event for the D4 card backtest.
+#
+# Frozen 2026-08-04 as part of D4's pre-registration (spec section II, "D4"),
+# BEFORE any card-level backtest code existed and before any score had been
+# computed. These are observed historical outcomes, so they cannot legitimately
+# change; recording them here rather than deriving them at run time is what
+# stops the target moving after a score is seen.
+#
+# The runner MUST re-derive every record, advancement flag and category from the
+# store and assert equality with this file rather than trusting it. Two
+# independent statements of the same fact catch a transcription error here and a
+# reconstruction error there; either alone catches neither.
+#
+# DERIVATION RULE, fixed in the spec before the values below were written down:
+#   - Event is league_id 18324 (16 teams, 144 maps, 2025-09-04 -> 2025-09-14).
+#   - Swiss maps are start_time < 2025-09-08; the 3-day gap before the playoffs
+#     (first playoff map 2025-09-11) makes that boundary unambiguous.
+#   - Series are grouped by series_id. Verified 2026-08-04: 108 Swiss maps, 44
+#     series, every one series_type=1 (Bo3) with 2 or 3 maps, zero null/0
+#     series_ids. Series winner is the side taking more maps; no series is tied.
+#   - Reconciliation that must hold: sum of wins == sum of losses == 44.
+#   - A team's category follows its Swiss record, EXCEPT that TI 2025 capped the
+#     Swiss at 6 rounds, so four teams finished 3-3 -- a record TI 2026's format
+#     cannot produce and the 2026 card cannot express. Those four are split by
+#     OBSERVED PLAYOFF PARTICIPATION (does the team appear in a map after
+#     2025-09-08), which is a fact rather than an estimate, and which preserves
+#     the card's semantics: elim_win = advanced despite losses, elim_loss =
+#     eliminated despite wins.
+#   - Exactly 8 teams appear in the playoffs. The 3-3 split therefore lands 2/2,
+#     filling elim_win and elim_loss to their capacities of 5 and 5 with no
+#     residue. That is a property of the data, not a tuning choice.
+#
+# NAMES are OpenDota's CURRENT labels (resolved remotely 2026-08-04), not the
+# names these orgs used in September 2025 -- BoomBoys played as BetBoom Team,
+# TEAM VISION as PARIVISION. They are cosmetic: the pipeline is keyed by
+# roster hash, and since commit 67198ee the card provably cannot depend on a
+# display name at all.
+event:
+  league_id: 18324
+  # Epoch seconds. Both bounds are strict upper bounds (start_time < value).
+  swiss_end: 1757289600      # 2025-09-08T00:00:00Z -- separates Swiss from playoffs
+  training_cutoff: 1756944000 # 2025-09-04T00:00:00Z -- strictly before the first Swiss map
+  expected_swiss_maps: 108
+  expected_swiss_series: 44
+  expected_playoff_teams: 8
+
+# record is "wins-losses" in Bo3 SERIES, not maps.
+teams:
+  - {name: Xtreme Gaming,   team_id: 8261500, record: "4-0", advanced: true,  category: "4-0"}
+  - {name: Team Tidebound,  team_id: 9640842, record: "4-1", advanced: true,  category: "4-1"}
+  - {name: BoomBoys,        team_id: 8255888, record: "4-1", advanced: true,  category: "4-1"}
+  - {name: HEROIC,          team_id: 9303484, record: "4-2", advanced: true,  category: elim_win}
+  - {name: TEAM VISION,     team_id: 9572001, record: "4-2", advanced: true,  category: elim_win}
+  - {name: Team Falcons,    team_id: 9247354, record: "4-2", advanced: true,  category: elim_win}
+  - {name: Nigma Galaxy,    team_id: 7554697, record: "3-3", advanced: true,  category: elim_win}
+  - {name: Tundra Esports,  team_id: 8291895, record: "3-3", advanced: true,  category: elim_win}
+  - {name: Team Liquid,     team_id: 2163,    record: "3-3", advanced: false, category: elim_loss}
+  - {name: Aurora Gaming,   team_id: 9467224, record: "3-3", advanced: false, category: elim_loss}
+  - {name: Wildcard,        team_id: 9651185, record: "2-4", advanced: false, category: elim_loss}
+  - {name: Team Spirit,     team_id: 7119388, record: "2-4", advanced: false, category: elim_loss}
+  - {name: Yakult Brothers, team_id: 9351740, record: "2-4", advanced: false, category: elim_loss}
+  - {name: Natus Vincere,   team_id: 36,      record: "1-4", advanced: false, category: "1-4"}
+  - {name: BOOM Esports,    team_id: 7732977, record: "1-4", advanced: false, category: "1-4"}
+  - {name: Team Nemesis,    team_id: 9691969, record: "0-4", advanced: false, category: "0-4"}
