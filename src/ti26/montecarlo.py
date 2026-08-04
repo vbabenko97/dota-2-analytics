@@ -1,8 +1,10 @@
 import math
 import random
 from collections import Counter
+from collections.abc import Mapping
 
 from ti26.elimination import ChoicePolicy, run_elimination
+from ti26.identity import order_key
 from ti26.rules import Rules
 from ti26.swiss import run_swiss
 from ti26.types import Category
@@ -12,7 +14,9 @@ def monte_carlo_stderr(p: float, n: int) -> float:
     return math.sqrt(max(p * (1.0 - p), 0.0) / n)
 
 
-def canonical_labels(strengths: dict[str, float]) -> dict[str, str]:
+def canonical_labels(
+    strengths: dict[str, float], team_ids: Mapping[str, object] | None = None
+) -> dict[str, str]:
     """Map team names to strength-ranked internal ids, `t00`-style.
 
     The simulation sorts its team ids before every RNG draw it makes
@@ -20,17 +24,21 @@ def canonical_labels(strengths: dict[str, float]) -> dict[str, str]:
     `pair_bucket` for the schedules), so running it directly on display names
     makes the card depend on those names. Renaming "1win" to "Iron Wing" moved
     one team from first to seventh in alphabetical order and flipped a card
-    slot with no strength change at all -- the two candidate assignments were
-    4.2e-4 expected points apart, well inside this estimator's own Monte Carlo
-    error, so the reshuffle alone decided it.
+    slot with no strength change at all.
 
     Ranking by strength makes the labels a function of the model's numbers
     rather than of its labels. Zero-padding keeps lexicographic order equal to
-    rank order, so the downstream `sorted()` calls need no changes. The name is
-    the final tie-break only among exactly-equal strengths, where the teams are
-    interchangeable and the choice cannot matter.
+    rank order, so the downstream `sorted()` calls need no changes.
+
+    Exactly-equal strengths still need an order, and that order is `team_ids`
+    when supplied. It was previously the display name, described as harmless
+    because tied teams are interchangeable. They are not: equal strength does
+    not mean equal simulation stream, so swapping two tied teams' labels swaps
+    their marginal rows. Production callers pass the configured team ids;
+    callers whose keys are already stable identifiers may omit them.
     """
-    order = sorted(strengths, key=lambda t: (-strengths[t], t))
+    tie_break = order_key(strengths, team_ids)
+    order = sorted(strengths, key=lambda t: (-strengths[t], tie_break(t)))
     width = max(len(str(len(order) - 1)), 2)
     return {team: f"t{i:0{width}d}" for i, team in enumerate(order)}
 
@@ -42,6 +50,7 @@ def card_score_distribution(
     n_sims: int,
     seed: int,
     policy: ChoicePolicy = ChoicePolicy.RATIONAL,
+    team_ids: Mapping[str, object] | None = None,
 ) -> Counter[int]:
     """Score one FIXED card against n_sims simulated outcomes; return score -> count.
 
@@ -55,7 +64,7 @@ def card_score_distribution(
     specific draws, so scoring it against them again rewards it for noise it was
     fitted to.
     """
-    labels = canonical_labels(strengths)
+    labels = canonical_labels(strengths, team_ids)
     internal = {labels[team]: strength for team, strength in strengths.items()}
     target = {labels[team]: category for team, category in card.items()}
     scores: Counter[int] = Counter()
@@ -74,9 +83,10 @@ def category_marginals(
     n_sims: int,
     seed: int,
     policy: ChoicePolicy = ChoicePolicy.RATIONAL,
+    team_ids: Mapping[str, object] | None = None,
 ) -> dict[str, dict[Category, float]]:
     """Run n_sims tournaments and return P[team][category]."""
-    labels = canonical_labels(strengths)
+    labels = canonical_labels(strengths, team_ids)
     internal = {labels[team]: strength for team, strength in strengths.items()}
     tally: dict[str, Counter[Category]] = {label: Counter() for label in internal}
     for i in range(n_sims):

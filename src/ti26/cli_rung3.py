@@ -151,12 +151,15 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
     # --- 2. Convert to strengths, write the card's direct input --------------
     strengths = strengths_from_ratings(ratings)
 
+    # team_id travels with the strength: this file is a card input, and the
+    # card generator orders teams by configured identity, never by name.
+    team_ids = {entry.name: str(entry.team_id) for entry in teams}
     strengths_path = out / "strengths_public.csv"
     with strengths_path.open("w", newline="") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["team", "strength"])
+        writer.writerow(["team", "team_id", "strength"])
         for name in sorted(strengths):
-            writer.writerow([name, f"{strengths[name]:.6f}"])
+            writer.writerow([name, team_ids[name], f"{strengths[name]:.6f}"])
 
     # --- 3(a). Scale-conversion sensitivity sweep, with a noise floor ---------
     sweep = scale_sensitivity_sweep(

@@ -308,13 +308,24 @@ def main(argv: list[str] | None = None) -> int:
             sweep_strengths = strengths
             sweep_strengths_note = f"fitted {selected} strengths ({len(strengths)} teams)"
 
+            # team_id travels with the strength so the card generator orders
+            # teams by configured identity rather than by display name.
+            team_ids = {entry.name: str(entry.team_id) for entry in teams}
             strengths_path = out / "strengths.csv"
             with strengths_path.open("w", newline="") as fh:
                 writer = csv.writer(fh)
-                writer.writerow(["team", "strength", "roster_version_id", "prior_driven"])
+                writer.writerow(
+                    ["team", "team_id", "strength", "roster_version_id", "prior_driven"]
+                )
                 for name in sorted(strengths):
                     writer.writerow(
-                        [name, f"{strengths[name]:.6f}", resolved[name], name in prior_driven]
+                        [
+                            name,
+                            team_ids[name],
+                            f"{strengths[name]:.6f}",
+                            resolved[name],
+                            name in prior_driven,
+                        ]
                     )
 
             # The card comes from the D1 generator, fed OUR fitted strengths --

@@ -16,6 +16,66 @@ def uniform_marginals():
     return {t: {c: CAPS[c] / 16 for c in Category} for t in TEAMS}
 
 
+def _identical_row_field() -> tuple[dict[str, dict[Category, float]], dict[str, str]]:
+    """16 marginal rows, two of them byte-identical, with stable ids.
+
+    team03 and team04 share a row, and their ids are swapped relative to name
+    order, so ordering by name and ordering by id put a different team first.
+    """
+    cats = list(Category)
+    marginals = {
+        f"team{i:02d}": {c: 0.5 - 0.011 * i - 0.017 * j for j, c in enumerate(cats)}
+        for i in range(16)
+    }
+    marginals["team04"] = dict(marginals["team03"])
+    ids = {name: f"id{i:02d}" for i, name in enumerate(sorted(marginals))}
+    ids["team03"], ids["team04"] = ids["team04"], ids["team03"]
+    return marginals, ids
+
+
+def test_identical_marginal_rows_are_ordered_by_stable_id_not_display_name():
+    """Kills mutation: fall back to the display name as solve_card's row-order key.
+
+    Row order decides among equal-cost optima inside linear_sum_assignment. For
+    two byte-identical rows the existing order key is exhausted and the name
+    breaks the tie, so renaming one of them moves its slot -- the audit executed
+    exactly this and watched an assignment change. Keyed on the configured team
+    id, the assignment is a function of the probabilities alone.
+    """
+    marginals, ids = _identical_row_field()
+    before, _ = solve_card(marginals, CAPS, team_ids=ids)
+
+    rename = lambda k: "0aaa" if k == "team04" else k
+    renamed = {rename(k): v for k, v in marginals.items()}
+    renamed_ids = {rename(k): v for k, v in ids.items()}
+    after, _ = solve_card(renamed, CAPS, team_ids=renamed_ids)
+
+    by_id_before = {ids[t]: c for t, c in before.items()}
+    by_id_after = {renamed_ids[t]: c for t, c in after.items()}
+    assert by_id_after == by_id_before
+
+
+def test_identical_marginal_rows_are_unmoved_by_input_row_order():
+    """Kills mutation: let dict insertion order reach the solver as identity.
+
+    Reordering the input rows must not change any assignment either; if it did,
+    a caller could change the card by changing how it built its mapping.
+    """
+    marginals, ids = _identical_row_field()
+    before, _ = solve_card(marginals, CAPS, team_ids=ids)
+    reversed_rows = dict(reversed(list(marginals.items())))
+    after, _ = solve_card(reversed_rows, CAPS, team_ids=ids)
+    assert after == before
+
+
+def test_solve_card_rejects_team_ids_that_do_not_match_its_rows():
+    """Kills mutation: silently ignore a mismatched team_ids mapping."""
+    marginals, ids = _identical_row_field()
+    del ids["team00"]
+    with pytest.raises(ValueError, match="team_ids"):
+        solve_card(marginals, CAPS, team_ids=ids)
+
+
 def _brute_force_best(teams, marginals, slots, weights=None):
     """Exhaustively score every distinct team->category assignment.
 

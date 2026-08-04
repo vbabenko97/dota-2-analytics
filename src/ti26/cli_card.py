@@ -171,7 +171,11 @@ def rd_attenuation_range(
 
 
 def seed_stability(
-    strengths: dict[str, float], rules, seeds: list[int], n_sims: int
+    strengths: dict[str, float],
+    rules,
+    seeds: list[int],
+    n_sims: int,
+    team_ids: dict[str, str] | None = None,
 ) -> tuple[dict[int, dict[str, str]], list[str]]:
     """Solve the card under every seed in `seeds` at `n_sims`.
 
@@ -182,14 +186,17 @@ def seed_stability(
     """
     cards_by_seed: dict[int, dict[str, str]] = {}
     for seed in seeds:
-        marginals = category_marginals(strengths, rules, n_sims=n_sims, seed=seed)
-        # Tie tolerance MUST match `cli.main`'s, or this diagnostic measures a
-        # solver nobody ships: it would report instability the card does not
-        # have, or hide instability it does.
+        marginals = category_marginals(
+            strengths, rules, n_sims=n_sims, seed=seed, team_ids=team_ids
+        )
+        # Tie tolerance and identity keying MUST match `cli.main`'s, or this
+        # diagnostic measures a solver nobody ships: it would report instability
+        # the card does not have, or hide instability it does.
         card, _score = solve_card(
             marginals,
             rules.category_capacities,
             tie_tolerance=monte_carlo_stderr(0.5, n_sims),
+            team_ids=team_ids,
         )
         cards_by_seed[seed] = {team: category.value for team, category in card.items()}
 
@@ -262,12 +269,15 @@ def main(argv: list[str] | None = None) -> int:
     # --- 3. Apply the correction, re-centre -----------------------------------
     calibrated_strengths = apply_correction(raw_strengths, slope)
 
+    # The configured team id travels with the strength, so every ordering
+    # decision downstream is keyed on identity rather than on the display name.
+    team_ids = {entry.name: str(entry.team_id) for entry in teams}
     strengths_path = out / "strengths_calibrated.csv"
     with strengths_path.open("w", newline="") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["team", "strength"])
+        writer.writerow(["team", "team_id", "strength"])
         for name in sorted(calibrated_strengths):
-            writer.writerow([name, f"{calibrated_strengths[name]:.6f}"])
+            writer.writerow([name, team_ids[name], f"{calibrated_strengths[name]:.6f}"])
 
     # --- 4. Card, via D1's generator, fed OUR calibrated strengths -----------
     card_rc = cli_main(
@@ -288,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         seeds = [args.card_seed, args.card_seed + 1, args.card_seed + 2]
     cards_by_seed, unstable_teams = seed_stability(
-        calibrated_strengths, rules, seeds, args.card_sims
+        calibrated_strengths, rules, seeds, args.card_sims, team_ids=team_ids
     )
 
     # --- 6. Observed recent form (reused, not reimplemented) -------------------
@@ -452,8 +462,12 @@ def main(argv: list[str] | None = None) -> int:
         "",
         f"Status: generated from calibrated Glicko strengths ({len(calibrated_strengths)} teams).",
         (
-            f"Model-implied expected score: {card_payload['model_implied_expected_score']} "
-            "(descriptive only, never evidence of skill)."
+            "Optimizer marginal objective: "
+            f"{card_payload['optimizer_marginal_objective']} -- the sum of the model's "
+            "own estimated category marginals under this assignment. Descriptive "
+            "only, never evidence of skill. It is NOT the evaluation-simulation "
+            "mean score, which scores this card against independently seeded "
+            "simulated outcomes and is a different quantity."
         ),
     ]
     if prior_driven:

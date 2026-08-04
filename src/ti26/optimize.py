@@ -1,6 +1,9 @@
+from collections.abc import Mapping
+
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+from ti26.identity import order_key
 from ti26.types import Category
 
 
@@ -31,9 +34,9 @@ def _break_ties(
     the tie-break rule, not a global one. That is enough for its purpose: it
     replaces an arbitrary choice among near-tied assignments with a stated and
     reproducible one. Terminates because each accepted swap strictly increases a
-    bounded quantity. `order` is the caller's name-independent team order, so
-    which of several equally-good swaps is taken does not depend on display
-    names.
+    bounded quantity. `order` is the caller's marginal-ranked team order, broken
+    by configured team id, so which of several equally-good swaps is taken does
+    not depend on display names.
     """
     current = dict(assignment)
     total = sum(marginals[t][c] * weight[c] for t, c in current.items())
@@ -74,6 +77,7 @@ def solve_card(
     capacities: dict[Category, int],
     weights: dict[Category, float] | None = None,
     tie_tolerance: float | None = None,
+    team_ids: Mapping[str, object] | None = None,
 ) -> tuple[dict[str, Category], float]:
     """Assign every team to exactly one category, respecting slot capacities.
 
@@ -82,30 +86,43 @@ def solve_card(
     only -- never evidence of forecast quality (see spec section II).
 
     `tie_tolerance` is how far below the optimum an assignment may sit and
-    still count as tied with it. Pass the Monte Carlo standard error of the
-    marginals (see `montecarlo.monte_carlo_stderr`); pass None to rank strictly
-    on the raw values, which is the plain expected-score optimum.
+    still count as tied with it. Pass None to rank strictly on the raw values,
+    which is the plain expected-score optimum.
 
-    It exists because the raw objective silently separated assignments by less
-    than its own estimation error: on the 2026-08-04 production run the 0-4
-    slot turned on a 4.2e-4 difference in expected points while a single
-    marginal carried 6.5e-4 of Monte Carlo error, so which team took the card's
-    most extreme slot was decided by simulation noise. This does not remove
-    that noise -- it stops the solver acting on differences it cannot resolve,
-    and hands those choices to `_break_ties`' stated rule instead.
+    WHAT THE CALLERS PASS, STATED HONESTLY. Production callers pass
+    `montecarlo.monte_carlo_stderr(0.5, n_sims)`: the largest standard error a
+    SINGLE Bernoulli marginal can carry at that simulation count. It is a
+    magnitude heuristic -- a plausible scale for "smaller than this estimator
+    can resolve" -- and nothing more.
 
-    Note it is the ASSIGNMENT TOTALS that must be compared at this tolerance,
-    not the individual marginals. Rounding each marginal to the error instead
-    is a no-op here: the cells that make up two near-tied totals differ from
-    each other by far more than the error (0.148 vs 0.122 against a 6.5e-4
-    error), so they survive rounding untouched and the totals stay just as
-    separated as before.
+    It is NOT the standard error of the quantity this tolerance is compared
+    against. That quantity is a difference of two ASSIGNMENT TOTALS, each a sum
+    of 16 marginals estimated from the same simulation runs and therefore
+    correlated with one another. Its standard error depends on the covariance
+    between those marginals, which this simulation does not estimate: the
+    marginals are accumulated as per-category tallies, so the per-replication
+    joint outcomes needed to compute it are not retained. The two numbers are
+    not equal and neither bounds the other; the heuristic was previously
+    documented as though it were the estimated error of the compared
+    difference, which it never was.
+
+    Why it exists at all: the raw objective was separating assignments by less
+    than plausible simulation noise, so which team took the card's most extreme
+    slot could turn on differences the estimator could not resolve. This does
+    not remove that noise -- it stops the solver acting on differences at that
+    scale, and hands those choices to `_break_ties`' stated rule instead. That
+    is a reproducibility property, not an accuracy one.
     """
     # Row order decides among equal-cost optima inside `linear_sum_assignment`,
     # so it must not depend on display names either -- ordering by the marginal
-    # vector keeps the whole solve a function of the probabilities. The name is
-    # the last resort only for byte-identical rows, which are interchangeable.
-    teams = sorted(marginals, key=lambda t: ([-marginals[t][c] for c in Category], t))
+    # vector keeps the whole solve a function of the probabilities. Byte-identical
+    # rows exhaust that key, and the last resort is the configured team id rather
+    # than the name: identical rows are NOT interchangeable, because whichever
+    # sorts first takes the earlier slot.
+    tie_break = order_key(marginals, team_ids)
+    teams = sorted(
+        marginals, key=lambda t: ([-marginals[t][c] for c in Category], tie_break(t))
+    )
     slots: list[Category] = [c for c in Category for _ in range(capacities[c])]
     if len(slots) != len(teams):
         raise ValueError(f"{len(teams)} teams cannot fill {len(slots)} slots")

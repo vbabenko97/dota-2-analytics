@@ -102,6 +102,94 @@ def test_display_names_cannot_move_the_marginals():
         assert got == base[team], f"relabel moved {team}"
 
 
+def _tied_field() -> tuple[dict[str, float], dict[str, str]]:
+    """16 teams, two of them at EXACTLY equal strength, with stable ids.
+
+    The ids are assigned so that id order and name order DISAGREE for the tied
+    pair: team00 holds the later id. A tie broken by name and a tie broken by id
+    therefore pick different teams, which is what makes the tests below able to
+    tell them apart.
+
+    The tie sits at ranks 0 and 1 deliberately. Those ranks take the 4-0 and 4-1
+    slots, so swapping the pair changes a category. An earlier version of this
+    fixture tied ranks 3 and 4, which are BOTH elim_win -- the swap was real but
+    invisible, and the score-distribution test below passed under the very
+    mutation it claimed to kill.
+    """
+    strengths = {f"team{i:02d}": 0.6 - 0.08 * i for i in range(16)}
+    strengths["team00"] = strengths["team01"]
+    ids = {name: f"id{i:02d}" for i, name in enumerate(sorted(strengths))}
+    ids["team00"], ids["team01"] = ids["team01"], ids["team00"]
+    return strengths, ids
+
+
+def test_exactly_tied_strengths_are_ordered_by_stable_id_not_display_name():
+    """Kills mutation: break exact-strength ties with the display name.
+
+    The rename test above passes today only because distinct float strengths
+    never reach the tie-break. Two teams at exactly equal strength do reach it,
+    and then the NAME decides which of them takes which simulation stream --
+    so renaming one moves probability mass with no strength change at all.
+    Keying the tie-break on the configured team id removes the name from the
+    computation entirely.
+    """
+    strengths, ids = _tied_field()
+    base = category_marginals(strengths, RULES, n_sims=300, seed=3, team_ids=ids)
+
+    renamed = {("0aaa" if k == "team01" else k): v for k, v in strengths.items()}
+    renamed_ids = {("0aaa" if k == "team01" else k): v for k, v in ids.items()}
+    after = category_marginals(renamed, RULES, n_sims=300, seed=3, team_ids=renamed_ids)
+
+    by_id_before = {ids[team]: row for team, row in base.items()}
+    by_id_after = {renamed_ids[team]: row for team, row in after.items()}
+    assert by_id_after == by_id_before
+
+
+def test_card_score_distribution_is_unmoved_by_renaming_an_exactly_tied_team():
+    """Kills mutation: break exact-strength ties with the display name.
+
+    Same defect as the marginals, reached through the scoring path instead:
+    canonical_labels is what both share, so a name-keyed tie-break moves the
+    score distribution of a card nobody edited.
+    """
+    strengths, ids = _tied_field()
+    slots = [c for c in Category for _ in range(CAPS[c])]
+    order = sorted(strengths, key=lambda t: (-strengths[t], ids[t]))
+    card = dict(zip(order, slots, strict=True))
+    base = card_score_distribution(card, strengths, RULES, n_sims=300, seed=4, team_ids=ids)
+
+    rename = lambda k: "0aaa" if k == "team01" else k
+    renamed_s = {rename(k): v for k, v in strengths.items()}
+    renamed_c = {rename(k): v for k, v in card.items()}
+    renamed_ids = {rename(k): v for k, v in ids.items()}
+    after = card_score_distribution(
+        renamed_c, renamed_s, RULES, n_sims=300, seed=4, team_ids=renamed_ids
+    )
+    assert after == base
+
+
+def test_team_ids_must_cover_exactly_the_strength_keys():
+    """Kills mutation: ignore a team_ids mapping that does not match the strengths.
+
+    A silently-ignored id mapping is worse than none: the caller believes the
+    card is name-independent while the name fallback is still deciding ties.
+    """
+    strengths, ids = _tied_field()
+    with pytest.raises(ValueError, match="team_ids"):
+        category_marginals(
+            strengths, RULES, n_sims=10, seed=0, team_ids={k: v for k, v in list(ids.items())[:15]}
+        )
+
+
+def test_team_ids_must_be_unique():
+    """Kills mutation: accept duplicate stable ids, which cannot order a tie."""
+    strengths, ids = _tied_field()
+    collided = dict(ids)
+    collided["team03"] = collided["team04"]
+    with pytest.raises(ValueError, match="team_ids"):
+        category_marginals(strengths, RULES, n_sims=10, seed=0, team_ids=collided)
+
+
 def test_card_score_distribution_is_a_proper_distribution_over_possible_scores():
     strengths = {t: (i - 7.5) * 0.2 for i, t in enumerate(TEAMS)}
     slots = [c for c in Category for _ in range(CAPS[c])]

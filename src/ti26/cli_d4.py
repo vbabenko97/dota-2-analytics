@@ -111,20 +111,24 @@ def main(argv: list[str] | None = None) -> int:
     raw_strengths, prior_driven = team_strengths(resolved, fitted)
     strengths = apply_correction(raw_strengths, slope)
 
+    # Same identity keying as the shipping card: this measures that pipeline,
+    # so it must not order teams by a key the pipeline does not use.
+    team_ids = {entry.name: str(entry.team_id) for entry in teams}
     marginals = category_marginals(
-        strengths, rules, n_sims=args.card_sims, seed=args.card_seed
+        strengths, rules, n_sims=args.card_sims, seed=args.card_seed, team_ids=team_ids
     )
-    card, model_expected = solve_card(
+    card, optimizer_marginal_objective = solve_card(
         marginals,
         rules.category_capacities,
         tie_tolerance=monte_carlo_stderr(0.5, args.card_sims),
+        team_ids=team_ids,
     )
 
     # --- 5. Score plus the three companions the registration demanded -------
     score, table = score_card(card, outcome, truth.names)
     baseline = sum(c * c for c in rules.category_capacities.values()) / len(teams)
     dist = card_score_distribution(
-        card, strengths, rules, n_sims=args.card_sims, seed=args.eval_seed
+        card, strengths, rules, n_sims=args.card_sims, seed=args.eval_seed, team_ids=team_ids
     )
     below, at_or_below = percentile_of(dist, score)
     sim_mean = sum(s * n for s, n in dist.items()) / sum(dist.values())
@@ -137,8 +141,8 @@ def main(argv: list[str] | None = None) -> int:
         "training_maps": len(train),
         "observed_score": score,
         "random_baseline": baseline,
-        "model_expected_score_from_marginals": model_expected,
-        "model_expected_score_from_eval_sims": sim_mean,
+        "optimizer_marginal_objective": optimizer_marginal_objective,
+        "evaluation_simulation_mean_score": sim_mean,
         "percentile_strictly_below": below,
         "percentile_at_or_below": at_or_below,
         "calibration_slope_refit_precutoff": slope,
@@ -167,7 +171,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"d4: refit calibration slope {slope:.4f} (production, full store: 0.4023)")
     print(
         f"d4: observed score {score}/16 | random baseline {baseline:.2f} | "
-        f"model expected {sim_mean:.4f}"
+        f"optimizer marginal objective {optimizer_marginal_objective:.4f} | "
+        f"evaluation-simulation mean score {sim_mean:.4f}"
     )
     print(f"d4: percentile {below:.1f}% strictly below, {at_or_below:.1f}% at or below")
     print(f"d4: {hits} hits, {16 - hits} misses")
