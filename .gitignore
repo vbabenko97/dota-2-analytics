@@ -1,8 +1,12 @@
-# Data — raw snapshots are immutable but large; track manifests, not payloads
-data/raw/
+# Data — a published number is only reproducible if the bytes it came from are
+# here. Raw snapshots are immutable and small enough to track (compressed JSON);
+# the SQLite store is a build product rebuilt from them, so it is not tracked.
+data/raw/*
+!data/raw/*/
+!data/raw/**/*.json.gz
+!data/raw/**/manifest.json
 data/interim/
 data/processed/
-!data/**/manifest.json
 
 # Secrets — STRATZ / OpenDota keys, market API credentials
 .env
@@ -17,8 +21,12 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-# CLI output — generated, not tracked
-reports/
+# CLI output — scratch runs are not tracked. A run bundle under reports/runs/
+# is: it carries a manifest binding every output hash to the source revision,
+# the input snapshot and the configs, so it is evidence rather than output.
+reports/*
+!reports/runs/
+!reports/runs/**
 
 # Agent harness local state — machine-local config, plugin caches, and skill
 # scratch workspaces. None of it is project source.
