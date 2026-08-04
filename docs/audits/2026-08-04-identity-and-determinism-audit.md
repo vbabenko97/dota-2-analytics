@@ -25,10 +25,21 @@ names at all, so the remote `teams` table was queried once for candidate ids.
 
 **PARIVISION -> TEAM VISION (9572001).** Renamed in place; no separate
 PARIVISION id exists (a remote `%pari%` search returns only unrelated teams).
-Its history is continuous: 237 maps of one roster (2025-02-16 -> 2026-01-05),
-then 97, then the current 80, each successor sharing 4/5 accounts with its
-predecessor. This is the best-supported chain in the field, which matters
-because this entry holds the card's 4-0 slot.
+The org does have a second id, 9824702 "PVISION", which an org-name search
+cannot match -- found by the staleness detector instead (section 1a). Counting
+per ROSTER across every team_id that fielded it, the chain is 282 maps
+(2025-02-16 -> 2026-01-05) -> 97 -> the current 80, each successor sharing 4/5
+accounts with its predecessor, and `RosterIndex` resolves it without an alias
+because 9572001 saw the current roster first (2026-05-08 vs 9824702's
+2026-05-26). Verified by walking the fitted index. The best-supported chain in
+the field, which matters because this entry holds the card's 4-0 slot.
+
+An earlier version of this section gave that chain as "237 -> 97 -> 80", which
+mixed one team_id-scoped count (237 maps under 9572001) into two rvid totals.
+That is the same mixed-population error already recorded twice in
+`config/ti2026_teams.yaml` against the Nigma and Tundra entries, made a third
+time by the same author and caught by the reconciliation in section 1a rather
+than by re-reading.
 
 **Apex Genesis -> GamerLegion (9964962).** The 267-map Apex Genesis roster
 `77aa9436a6f28e94` was fielded by team_id 9964962 itself for 86 of those maps
@@ -49,11 +60,34 @@ display name. Note OpenDota's per-id labels do not agree with the real
 chronology (the MIDDLE id is the one labelled "Iron Wing"), so those labels
 are not evidence about the current name and were not used as such.
 
-**Two new duplicate ids** registered after the 2026-08-02 pass: 10208009
-"L1GA TEAM" and 10207984 "Team resilience". Both hold rosters identical to
-their configured counterparts (rvids `dbc6910c22be2655` and
-`eac6601adfecb821`), so their maps already inform those ratings. They do mean
-neither team is as idle as its configured id's last map suggests.
+## 1a. Duplicate ids: the detector beat the manual pass
+
+Two new duplicate ids were found by hand (10208009 "L1GA TEAM", 10207984 "Team
+resilience", both registered after 2026-08-02). Running
+`teams.check_roster_staleness` afterwards -- the detector built for exactly this
+-- reported those two plus **two the manual pass had missed**:
+
+| configured team | second id | maps under it | span | verdict |
+|---|---|---|---|---|
+| HULIGANI | 10208009 | 6 | 07-31 -> 08-01 | duplicate, same rvid |
+| Team Resilience | 10207984 | 8 | 07-31 -> 08-02 | duplicate, same rvid |
+| Xtreme Gaming | **10208071** | 5 | 07-31 -> 08-01 | duplicate, same rvid |
+| Team Vision | **9824702 "PVISION"** | 75 | 2025-07-08 -> 2026-07-19 | duplicate, same rvid |
+| LGD Gaming | 10208068 "LGD.Pinghu" | 6 | 07-31 -> 08-01 | duplicate, already documented |
+
+Four of the five appeared in a single burst on 2026-07-31, which reads like an
+OpenDota-side re-registration rather than four independent org events.
+
+All confirmed duplicates by direct account comparison, so every rating already
+includes these maps and no alias or config change is needed. Two lessons worth
+keeping:
+
+1. The detector earned its place. An org-name search cannot match "PVISION" to
+   "Team Vision", and 9824702 predates the 2026-08-02 pass -- it was missed by
+   name-based checking twice before an account-keyed check found it.
+2. Four configured teams are LESS idle than their own ids suggest: HULIGANI,
+   Team Resilience, Xtreme Gaming and Team Vision kept playing under a second
+   id past 2026-06-28, 2026-06-18, 2026-07-14 and 2026-06-25 respectively.
 
 ## 2. The determinism defect
 

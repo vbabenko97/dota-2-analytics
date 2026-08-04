@@ -103,11 +103,29 @@
 # attached to the wrong entity. Specifically:
 # - PARIVISION -> TEAM VISION (9572001): renamed IN PLACE. A remote `teams`
 #   search for '%pari%' returns no PARIVISION id at all -- only unrelated
-#   teams (Pariah Caste, Pariente Gaming, Paris Saint-Germain). 9572001's own
-#   history is continuous and complete: 237 maps of one roster (2025-02-16 ->
-#   2026-01-05), then 97, then the current 80, each successor sharing 4/5
-#   accounts with its predecessor. This is the best-supported chain in the
-#   field, which matters because this entry holds the card's 4-0 slot.
+#   teams (Pariah Caste, Pariente Gaming, Paris Saint-Germain). The org DOES
+#   have a second id, 9824702 "PVISION" (75 maps, 2025-07-08 -> 2026-07-19),
+#   found by `check_roster_staleness`, not by name -- see the duplicate-id
+#   entry below. The roster chain behind this entry, counted per ROSTER
+#   (rvid) across every team_id that fielded it, is:
+#     - 8915d3e398b07ed6: 282 maps (237 under 9572001, 2025-02-16 ->
+#       2026-01-05; 45 under 9824702, 2025-07-08 -> 2025-10-27)
+#     - acf8a71726b77943: 97 maps, all under 9572001
+#     - c298aa3eb4837f25 (CURRENT): 80 maps (50 under 9572001, 30 under
+#       9824702 running to 2026-07-19)
+#   Each successor shares 4/5 accounts with its predecessor, and
+#   `RosterIndex` resolves that chain correctly without an alias because
+#   9572001 saw the current roster FIRST (2026-05-08, vs 9824702's
+#   2026-05-26), so the predecessor is set from 9572001's own history.
+#   Verified by walking the fitted index: 80 -> 97 -> 282. This is the
+#   best-supported chain in the field, which matters because this entry
+#   holds the card's 4-0 slot.
+#   CORRECTION, same day: the first version of this note gave the chain as
+#   "237 -> 97 -> 80", mixing one team_id-scoped count into two rvid totals
+#   -- the identical mixed-population error already recorded against the
+#   Nigma and Tundra entries above, made a third time here by the same
+#   author. The counts above are all rvid totals, with the team_id split
+#   stated explicitly rather than left implicit.
 # - Apex Genesis -> GamerLegion (9964962): the 267-map Apex Genesis roster
 #   77aa9436a6f28e94 was fielded by team_id 9964962 ITSELF for 86 of those
 #   maps (2025-11-15 -> 2026-02-20) before two single-player swaps produced
@@ -123,16 +141,34 @@
 #   through ededc1aba09e25f0 to that SEA roster's 109 maps, sharing 4/5
 #   accounts each step, so its prior comes through the SEA side and never
 #   through the discarded EU roster.
-# - Two further duplicate team_ids found 2026-08-04 that the 2026-08-02 pass
-#   missed, both registered after it: 10208009 "L1GA TEAM" and 10207984
-#   "Team resilience". Both are the same category as the duplicates above --
-#   IDENTICAL 5/5 rosters to their configured counterparts, sharing rvid
-#   dbc6910c22be2655 (HULIGANI) and eac6601adfecb821 (Team Resilience)
-#   respectively -- so their maps ALREADY inform those ratings and the
-#   configured ids still resolve to the right roster. No alias, no config
-#   change. They do mean the roster totals are current through 2026-08-01/02
-#   rather than through the configured ids' own last maps (2026-06-28 and
-#   2026-06-18), so neither team is as idle as its configured id suggests.
+# - FOUR duplicate team_ids carry configured rosters forward under a second
+#   id. `check_roster_staleness` reports all four; each was then confirmed by
+#   direct account comparison to be a duplicate registration, NOT a roster
+#   migration. All four share their configured counterpart's rvid, so their
+#   maps ALREADY inform those ratings and the configured ids still resolve to
+#   the right roster. No alias and no config change for any of them:
+#     - 10208009 "L1GA TEAM"       -> HULIGANI's dbc6910c22be2655
+#       (6 maps under this id, 2026-07-31 -> 2026-08-01)
+#     - 10207984 "Team resilience" -> eac6601adfecb821
+#       (8 maps, 2026-07-31 -> 2026-08-02)
+#     - 10208071                   -> Xtreme Gaming's fdf0257d5da92217
+#       (5 maps, 2026-07-31 -> 2026-08-01)
+#     - 9824702 "PVISION"          -> Team Vision's c298aa3eb4837f25
+#       (75 maps of its own history, 2025-07-08 -> 2026-07-19; see the
+#       PARIVISION entry above)
+#   A fifth, 10208068 "LGD.Pinghu" (6 maps, 2026-07-31 -> 2026-08-01), is
+#   already recorded separately above. Note four of the five ids begin on
+#   2026-07-31, which reads as one OpenDota-side re-registration rather than
+#   four independent org events.
+#   Of these, 10208009/10207984/10208071 were registered after the
+#   2026-08-02 pass and so could not have been found by it; 9824702 predates
+#   it and was simply missed, because an org-name search for "Team Vision"
+#   does not match "PVISION" -- the account-keyed detector found it, a name
+#   search had already failed to twice. They matter beyond bookkeeping:
+#   HULIGANI, Team Resilience, Xtreme Gaming and Team Vision are all LESS
+#   idle than their configured ids' own last maps suggest (2026-06-28,
+#   2026-06-18, 2026-07-14 and 2026-06-25 respectively), because the roster
+#   kept playing under the second id.
 teams:
   - {name: Aurora Gaming, team_id: 9467224}
   - {name: Team Liquid, team_id: 2163}
