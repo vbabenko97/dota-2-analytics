@@ -70,3 +70,29 @@ def test_equal_strength_teams_approach_capacity_over_sixteen():
             assert row[category] == pytest.approx(expected, abs=tolerance), (
                 f"{team}/{category}"
             )
+
+
+def test_display_names_cannot_move_the_marginals():
+    """A pure relabel must not change a single probability.
+
+    This is the 2026-08-04 defect. `run_swiss` sorts its team ids before every
+    RNG draw it makes, so renaming "1win" to "Iron Wing" -- which changed no
+    strength at all -- moved that team from first to seventh in alphabetical
+    order, shifted which team consumed which draw, and flipped the card's 0-4
+    slot. The two candidate assignments were 4.2e-4 expected points apart
+    against 6.5e-4 of Monte Carlo error, so the reshuffle alone decided it.
+
+    The renamed key below sorts BEFORE every other name, reproducing that
+    first-versus-seventh move rather than a harmless adjacent one.
+    """
+    strengths = {f"team{i:02d}": 0.6 - 0.08 * i for i in range(16)}
+    renamed_key = "team07"
+    base = category_marginals(strengths, RULES, n_sims=300, seed=3)
+
+    renamed = {("0aaa" if k == renamed_key else k): v for k, v in strengths.items()}
+    after = category_marginals(renamed, RULES, n_sims=300, seed=3)
+
+    assert set(after) == (set(strengths) - {renamed_key}) | {"0aaa"}
+    for team in strengths:
+        got = after["0aaa" if team == renamed_key else team]
+        assert got == base[team], f"relabel moved {team}"
