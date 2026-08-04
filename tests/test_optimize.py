@@ -138,3 +138,74 @@ def test_solver_beats_a_provably_worse_greedy_on_an_adversarial_instance():
         "t3": Category.L0_4,
     }
     assert score == pytest.approx(3.46)
+
+
+def _bottom_slot_instance():
+    """Three teams for one 0-4 slot and two 1-4 slots, from the real 2026-08-04 run.
+
+    The numbers are the shape that exposed the defect: the team with the HIGHEST
+    P(0-4) is not the one the raw optimum puts there, because the totals differ
+    by 0.001 the other way.
+    """
+    caps = dict.fromkeys(Category, 0)
+    caps[Category.L1_4] = 2
+    caps[Category.L0_4] = 1
+
+    def row(p04, p14):
+        r = {c: 0.0 for c in Category}
+        r[Category.L0_4] = p04
+        r[Category.L1_4] = p14
+        return r
+
+    # a: highest P(0-4). b: raw optimum's pick. c: in between.
+    return caps, {"a": row(0.148, 0.236), "b": row(0.122, 0.209), "c": row(0.126, 0.214)}
+
+
+def _zero_four(card):
+    return next(t for t, c in card.items() if c == Category.L0_4)
+
+
+def test_raw_optimum_gives_the_scarce_slot_to_a_lower_probability_team():
+    """Baseline for the two tests below -- without a tolerance nothing changes.
+
+    Documents the behaviour the tie-break exists to override: maximising the
+    total alone hands 0-4 to `b` even though `a` is likelier to finish there.
+    """
+    caps, marginals = _bottom_slot_instance()
+    card, score = solve_card(marginals, caps)
+    assert _zero_four(card) == "b"
+    assert score == pytest.approx(0.572)
+
+
+def test_tie_break_gives_a_scarce_slot_to_the_likeliest_team():
+    caps, marginals = _bottom_slot_instance()
+    card, score = solve_card(marginals, caps, tie_tolerance=0.002)
+    assert _zero_four(card) == "a", "0-4 should go to the highest P(0-4) team"
+    # Costs exactly the 0.001 the raw optimum was ahead by, which is inside the
+    # stated tolerance -- so the tie-break spent what it was allowed and no more.
+    assert score == pytest.approx(0.571)
+    assert score >= 0.572 - 0.002
+
+
+def test_tie_break_refuses_to_move_when_the_gap_exceeds_the_tolerance():
+    """The tolerance is a real bound, not a licence to always apply the rule.
+
+    Without this, a tie-break that fired unconditionally would pass the test
+    above while silently overriding differences the model CAN resolve.
+    """
+    caps, marginals = _bottom_slot_instance()
+    card, _ = solve_card(marginals, caps, tie_tolerance=0.0005)
+    assert _zero_four(card) == "b"
+
+
+def test_tie_break_never_drops_more_than_the_tolerance_on_the_real_capacities():
+    """Chained free swaps must not drift below the optimum cumulatively."""
+    rng = random.Random(20260804)
+    for _ in range(25):
+        marginals = {
+            t: {c: rng.random() for c in Category} for t in TEAMS
+        }
+        _, optimum = solve_card(marginals, CAPS)
+        _, tied = solve_card(marginals, CAPS, tie_tolerance=0.01)
+        assert tied <= optimum + 1e-12
+        assert tied >= optimum - 0.01 - 1e-12

@@ -57,7 +57,7 @@ from pathlib import Path
 from ti26.backtest import calibration, rolling_folds, run_model
 from ti26.cli import main as cli_main
 from ti26.data.store import load_rows, open_store
-from ti26.montecarlo import category_marginals
+from ti26.montecarlo import category_marginals, monte_carlo_stderr
 from ti26.optimize import solve_card
 from ti26.public_ratings import observed_recent_form
 from ti26.ratings import load_gate_config
@@ -183,7 +183,14 @@ def seed_stability(
     cards_by_seed: dict[int, dict[str, str]] = {}
     for seed in seeds:
         marginals = category_marginals(strengths, rules, n_sims=n_sims, seed=seed)
-        card, _score = solve_card(marginals, rules.category_capacities)
+        # Tie tolerance MUST match `cli.main`'s, or this diagnostic measures a
+        # solver nobody ships: it would report instability the card does not
+        # have, or hide instability it does.
+        card, _score = solve_card(
+            marginals,
+            rules.category_capacities,
+            tie_tolerance=monte_carlo_stderr(0.5, n_sims),
+        )
         cards_by_seed[seed] = {team: category.value for team, category in card.items()}
 
     reference_seed = seeds[0]
