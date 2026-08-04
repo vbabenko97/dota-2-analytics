@@ -531,6 +531,17 @@ def test_deviation_summary_reports_both_directions_when_mixed():
     branch (ignoring the case where both directions occur) would emit
     "point the same way" here instead, and this fails on that number
     disagreement.
+
+    2026-08-04 prose audit: this branch used to rank sampling noise ABOVE a
+    shared cause ("More consistent with sampling noise across small map
+    counts than with a shared cause") -- an unsupported conclusion, since
+    the function only counts Wilson-flag directions with no null model,
+    multiplicity correction, or dependence analysis. Restore the causal
+    claim X: reinstating that old sentence in place of the narrowed
+    "cannot determine" wording makes the last two assertions below fail --
+    confirmed by mutating `deviation_summary` to the old wording, observing
+    this test fail, and reverting byte-exactly (see the build report's
+    mutation section).
     """
     observed = {
         "A": _form("form ABOVE implied"),
@@ -544,6 +555,11 @@ def test_deviation_summary_reports_both_directions_when_mixed():
     assert "2 form ABOVE implied" in text
     assert "1 form BELOW implied" in text
     assert "point the same way" not in text
+    assert "cannot determine whether a mixed-direction pattern" in text
+    assert "More consistent with sampling noise" not in text, (
+        "must not rank sampling noise above a shared cause without a null "
+        "model, multiplicity correction, or dependence analysis"
+    )
 
 
 def test_deviation_summary_one_directional_clustered_in_bottom_half():
@@ -551,6 +567,19 @@ def test_deviation_summary_one_directional_clustered_in_bottom_half():
     implied", none below -- the divisor/schedule-confound interpretation
     must appear, and the count/direction must be the real 3, not a stale
     literal.
+
+    2026-08-04 prose audit: the old wording ("Noise would be roughly
+    symmetric, so a one-directional pattern like this is systematic -- but
+    it is {mechanism}") asserted the pattern WAS systematic, identifying a
+    cause from nothing but counted Wilson-flag directions. A bare
+    `assert "systematic" in text` false-pins this (it also passes against
+    the narrowed hedge below, which still uses the word "systematic" but no
+    longer asserts it as a fact), so this test instead pins the exact
+    hedge phrase and the absence of the old unqualified claim. Restore the
+    causal claim X: reinstating the old sentence in place of the narrowed
+    one makes the last two assertions below fail -- confirmed by mutating
+    `deviation_summary` to the old wording, observing this test fail, and
+    reverting byte-exactly (see the build report's mutation section).
     """
     ordered = ["A", "B", "C", "D", "E", "F"]  # bottom half (weaker) = D, E, F
     observed = {
@@ -565,9 +594,12 @@ def test_deviation_summary_one_directional_clustered_in_bottom_half():
     assert "All 3 current deviation(s) point the same way" in text
     assert "form ABOVE implied" in text
     assert "all in the bottom half" in text
-    assert "systematic" in text
     assert "point BOTH ways" not in text
     assert "No deviations" not in text
+    assert "does not by itself establish a systematic cause" in text
+    assert "Noise would be roughly symmetric, so a one-directional pattern like this is" not in text, (
+        "must not assert the pattern IS systematic from counted directions alone"
+    )
 
 
 def test_deviation_summary_one_directional_but_not_clustered():

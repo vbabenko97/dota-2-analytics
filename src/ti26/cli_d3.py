@@ -68,9 +68,10 @@ def main(argv: list[str] | None = None) -> int:
     slope_elo, intercept_elo = calibration(predictions_elo, rows)
 
     # Glicko: calibrated and reported as a DIAGNOSTIC only. Registered
-    # 2026-08-03: putting two candidates through one gate roughly doubles
-    # the false-pass probability, and choosing the winner after seeing
-    # results is the multiple-comparisons version of moving the margin. Never
+    # 2026-08-03 with Elo as the sole gated candidate, because testing a second
+    # candidate through the same gate raises the false-pass probability and
+    # choosing the winner after seeing results is the multiple-comparisons
+    # version of moving the margin. By how much is not computed here. Never
     # gated, never substituted if Elo fails.
     predictions_glicko, _fitted_glicko = run_calibrated_model(
         rows, lambda: GlickoModel(tau=config.glicko_tau, roster_index=RosterIndex(aliases)), folds

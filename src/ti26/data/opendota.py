@@ -32,9 +32,12 @@ class ExplorerError(RuntimeError):
 
 
 def http_transport(url: str) -> bytes:
-    # Measured 2026-08-02: the endpoint returns 403 Forbidden to urllib's
-    # default `Python-urllib/x.y` User-Agent and 200 to any ordinary one.
-    # Confirmed with and without this header, same URL, same run.
+    # A custom User-Agent is set deliberately, not left at urllib's default --
+    # see docs/audits/2026-08-02-d2-build-ledger.md's implementer-deviations
+    # section for why this was needed. That was a one-off manual observation,
+    # not something this module re-checks or a test can reproduce offline
+    # (this is the network seam this test suite never calls), so it is not
+    # restated as a measurement here.
     request = urllib.request.Request(url, headers={"User-Agent": "ti26-ingest/1.0"})
     with urllib.request.urlopen(request, timeout=300) as response:
         return response.read()

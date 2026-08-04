@@ -397,6 +397,84 @@ def test_observed_recent_form_section_appears_with_caveats_and_reconciling_count
     )
 
 
+@pytest.mark.slow
+def test_observed_recent_form_section_narrows_the_elo_bias_claim(tmp_path):
+    """2026-08-04 prose audit: the Observed-recent-form section used to
+    assert "our Elo also underrates thin-history rosters, so it would miss
+    exactly that problem" -- a specific, directional bias claim this run
+    never measures (no history-bucket calibration or error split is
+    computed anywhere in this module). Narrowed to a generic
+    correlated-error caveat, with 'thin' named explicitly as a sample-size
+    flag, not a measured bias.
+
+    Restore the causal claim X: reinstating the old sentence ("our Elo
+    also underrates thin-history rosters, so it would miss exactly that
+    problem") in place of the narrowed paragraph makes the last assertion
+    below fail, since that exact phrase would then be present -- confirmed
+    by mutating cli_rung3.py to the old wording, observing this test fail,
+    and reverting byte-exactly (see the build report's mutation section).
+    """
+    small_store(tmp_path / "d2.sqlite")
+    teams = write_team_config(tmp_path / "teams.yaml")
+    out = tmp_path / "reports"
+
+    rc = rung3_main(
+        [
+            "--teams", str(teams), "--store", str(tmp_path / "d2.sqlite"),
+            "--out", str(out), "--card-sims", "3000", "--sweep-sims", "2000",
+        ],
+        transport=fake_transport(full_rating_rows()),
+    )
+    assert rc == 0
+
+    provenance = (out / "rung3_provenance.md").read_text()
+    assert "shares a correlated error" in provenance
+    assert "computes no history-bucket calibration or error split for Elo" in provenance
+    assert "sample-size flag, not a measured bias" in provenance
+    assert "our Elo also underrates" not in provenance, (
+        "must not assert a specific, unmeasured directional bias for Elo"
+    )
+
+
+@pytest.mark.slow
+def test_boundary_proximity_section_states_past_observation_not_forward_claim(tmp_path):
+    """2026-08-04 prose audit: the boundary-proximity section used to turn
+    the single historical +/-17.74-point drift observation into
+    forward-looking guidance ("-- meaning one more match result could
+    plausibly swap their order") applied to whichever pairs this run
+    happens to flag. Narrowed to state the 17.74 figure as a single past
+    observation used only as a reference scale, with no prediction about
+    any other pair's future.
+
+    Restore the causal claim X: reinstating the old "-- meaning one more
+    match result could plausibly swap their order." clause in place of the
+    narrowed sentence makes the last assertion below fail, since that exact
+    phrase would then be present -- confirmed by mutating cli_rung3.py to
+    the old wording, observing this test fail, and reverting byte-exactly
+    (see the build report's mutation section).
+    """
+    small_store(tmp_path / "d2.sqlite")
+    teams = write_team_config(tmp_path / "teams.yaml")
+    out = tmp_path / "reports"
+
+    rc = rung3_main(
+        [
+            "--teams", str(teams), "--store", str(tmp_path / "d2.sqlite"),
+            "--out", str(out), "--card-sims", "3000", "--sweep-sims", "2000",
+        ],
+        transport=fake_transport(full_rating_rows()),
+    )
+    assert rc == 0
+
+    provenance = (out / "rung3_provenance.md").read_text()
+    assert "a single past observation, not a general drift" in provenance
+    assert "reference scale for how large a same-day move has been seen to be" in provenance
+    assert "could plausibly swap their order" not in provenance, (
+        "must not turn the one historical drift observation into a forward "
+        "claim about any other pair's future"
+    )
+
+
 def test_team_count_mismatch_fails_loudly(tmp_path):
     """Catches a runner that silently proceeds (or crashes obscurely) when
     the teams file does not have as many entries as the rules require,

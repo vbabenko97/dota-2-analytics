@@ -153,13 +153,13 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
 
     # team_id travels with the strength: this file is a card input, and the
     # card generator orders teams by configured identity, never by name.
-    team_ids = {entry.name: str(entry.team_id) for entry in teams}
+    team_id_by_name = {entry.name: str(entry.team_id) for entry in teams}
     strengths_path = out / "strengths_public.csv"
     with strengths_path.open("w", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(["team", "team_id", "strength"])
         for name in sorted(strengths):
-            writer.writerow([name, team_ids[name], f"{strengths[name]:.6f}"])
+            writer.writerow([name, team_id_by_name[name], f"{strengths[name]:.6f}"])
 
     # --- 3(a). Scale-conversion sensitivity sweep, with a noise floor ---------
     sweep = scale_sensitivity_sweep(
@@ -189,11 +189,15 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
 
     # --- 3(d). Observed recent form (diagnostic only, never a card input) ------
     # A rating-vs-rating anchor (3(b) above) cannot catch a strength source
-    # biased in the SAME direction our own models are biased -- our Elo also
-    # underrates thin-history rosters, so it would miss exactly that. A
-    # direct read of what each CURRENT roster has actually done recently is
-    # independent of that failure mode. See the report's caveats: this never
-    # overrides a strength or the card on its own.
+    # that shares a correlated error with our own models -- if Elo and this
+    # public source were biased the SAME way for a given team, an anchor
+    # built from Elo would miss it. This run computes no history-bucket
+    # calibration or error split for Elo, so it does not measure whether or
+    # how Elo is biased for any team; `is_thin()` below is only a sample-size
+    # FLAG (games < THIN_GAMES_THRESHOLD), not a measured bias. A direct read
+    # of what each CURRENT roster has actually done recently is independent
+    # of the shared-source failure mode either way. See the report's
+    # caveats: this never overrides a strength or the card on its own.
     rows_for_form = load_rows(open_store(args.store))
     resolved_rosters = resolve_rosters(rows_for_form, teams, aliases)
     reference_time = max((r.start_time for r in rows_for_form), default=0)
@@ -337,10 +341,14 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
         "",
         (
             "Independent of the Elo-ordering anchor above: a rating-vs-rating "
-            "comparison cannot catch a source that is biased in the SAME "
-            "direction our own models are biased -- our Elo also underrates "
-            "thin-history rosters, so it would miss exactly that problem. This "
-            "compares each team's IMPLIED map win rate (the mean of "
+            "comparison cannot catch a source that shares a correlated error "
+            "with our own models -- if Elo and this public source were biased "
+            "the SAME way for a given team, an anchor built from Elo would "
+            "miss it. This run computes no history-bucket calibration or "
+            "error split for Elo, so it does not measure whether or how Elo "
+            "is biased for any team; the 'thin' flag in the table above is "
+            "only a sample-size flag, not a measured bias. This compares each "
+            "team's IMPLIED map win rate (the mean of "
             "`map_win_prob` against the other 15 teams, from the strengths "
             "above) against what that team's CURRENT roster has actually done "
             f"over its last {OBSERVED_FORM_WINDOW_DAYS:.0f} days of maps in the "
@@ -392,11 +400,14 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
             "(equal and opposite -- the signature of a head-to-head result) in "
             "a matter of hours, collapsing their strength gap from 0.2189 to "
             "0.0146 logits while they sat across the 4-1/elim_win card "
-            "boundary. Every ADJACENT pair below is flagged when its gap is "
-            f"smaller than that observed {DAILY_DRIFT_RATING_POINTS:.2f}-rating-"
-            "point movement -- meaning one more match result could plausibly "
-            "swap their order. Diagnostic only: reported, not gated on, and "
-            "never changes a strength or the card."
+            "boundary. That is a single past observation, not a general drift "
+            "rate -- this run does not recompute it and it is not a forecast "
+            "of how much any other pair could move. Every ADJACENT pair below "
+            "is flagged only when its CURRENT gap is smaller than that observed "
+            f"{DAILY_DRIFT_RATING_POINTS:.2f}-rating-point movement, as a "
+            "reference scale for how large a same-day move has been seen to "
+            "be. Diagnostic only: reported, not gated on, and never changes a "
+            "strength or the card."
         ),
         "",
         "| team A (stronger) | team B (weaker) | gap (logits) | gap (rating points) | flagged |",
