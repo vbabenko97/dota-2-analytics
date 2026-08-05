@@ -4,9 +4,9 @@ Every audit document in this directory used to publish measured results as prose
 Those numbers were produced by real runs, but nothing in the repository
 reproduced them: the SQLite store they came from was gitignored, no manifest tied
 a report to an input, and several were computed in throwaway inline commands that
-were never committed. An external audit of `d0221dc` confirmed the substantive
-results by fresh execution and found that a number of documented values had no
-producer at all.
+were never committed. [An external audit of `d0221dc`](2026-08-04-external-audit-of-d0221dc.md)
+confirmed the substantive results by fresh execution and found that a number of
+documented values had no producer at all.
 
 The fix is not to soften the prose. It is to make the numbers regenerable and
 delete the ones that are not. This register records what happened to each family

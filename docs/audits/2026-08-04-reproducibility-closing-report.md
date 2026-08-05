@@ -96,7 +96,9 @@ The naive strength ladder, with no simulation at all, scored 2/16.
 
 What happened to each superseded claim family is recorded in
 [the correction register](2026-08-04-correction-register.md); this table covers
-the audit's numbered verdicts and lettered findings.
+the numbered verdicts and lettered findings of
+[the external audit](2026-08-04-external-audit-of-d0221dc.md), whose triage is
+[here](2026-08-04-response-to-external-audit.md).
 
 | # | finding | outcome | note |
 |---|---|---|---|
