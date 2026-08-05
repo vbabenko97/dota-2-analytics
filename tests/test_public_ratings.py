@@ -19,6 +19,7 @@ from ti26.public_ratings import (
     wilson_interval,
 )
 from ti26.roster import roster_version_id
+from ti26.types import Category
 
 
 def test_parse_ratings_casts_bigint_strings_defensively():
@@ -175,25 +176,63 @@ def test_strengths_from_ratings_accepts_an_overridden_divisor():
     assert doubled["B"] == pytest.approx(default["B"] * 2.0)
 
 
-@pytest.mark.slow
-def test_scale_sensitivity_sweep_reports_a_noise_floor_and_resolvability():
-    """Mirrors ti26.duration.sensitivity_sweep's own test of the same shape:
-    a magnitude assertion here would measure Monte Carlo noise, not an
-    effect, so check the structural contract instead -- a hardcoded-zero
-    noise_floor would make every delta look resolvable, and computing it
-    fresh per multiplier instead of once from the baseline would break the
-    "one shared value" contract.
+def test_scale_sensitivity_sweep_reports_a_noise_floor_and_resolvability(monkeypatch):
+    """A hardcoded-constant `scale_sensitivity_sweep` (fixed max_abs_delta=0.0,
+    a fixed positive noise_floor, resolvable=False everywhere) satisfies
+    every assertion the old version of this test made -- audit finding
+    (`gpt-5-6-sol-ultra-audit.md`): "passes if the function returns fixed
+    max_abs_delta=0, positive shared noise and resolvable=False". Fixed here
+    by replacing the live Monte Carlo call with a SCRIPTED
+    `category_marginals` (monkeypatched on `ti26.montecarlo`, since
+    `scale_sensitivity_sweep` re-imports the name fresh from that module on
+    every call -- see its `from ti26.montecarlo import category_marginals`),
+    so `max_abs_delta` and `noise_floor` are KNOWN numbers computed by hand
+    from the scripted marginals, not live Monte Carlo noise: noise_floor
+    must land at exactly 0.01 (the largest pairwise gap among the three
+    scripted baseline-seed runs), the 0.5x-divisor entry's delta must land
+    at exactly 0.20 (clearly above the floor -> resolvable=True), and the
+    2.0x-divisor entry's delta must land at exactly 0.008 (clearly below the
+    floor -> resolvable=False). A stub that zeroes every `max_abs_delta`
+    still passes the old assertions but fails the exact 0.20/0.008 checks
+    here; a stub that hardcodes `resolvable=False` everywhere (replacing
+    `delta > noise_floor`) still passes the old assertions but fails the
+    `result[1]["resolvable"] is True` check here.
     """
     from ti26.rules import load_rules
 
     rules = load_rules("config/ti2026_rules.yaml")
     ratings = {
-        f"t{i:02d}": PublicRating(
-            team_id=i, rating=1500.0 + (i - 7.5) * 40.0, wins=500, losses=400, last_match_time=0
-        )
-        for i in range(16)
+        "A": PublicRating(team_id=1, rating=1500.0, wins=500, losses=400, last_match_time=0),
+        "B": PublicRating(team_id=2, rating=1300.0, wins=500, losses=400, last_match_time=0),
     }
-    result = scale_sensitivity_sweep(ratings, rules, [1.0, 0.5, 2.0], n_sims=3000, seed=3)
+
+    def _marginals(a_w4_0: float) -> dict[str, dict]:
+        zeros = {c: 0.0 for c in Category if c is not Category.W4_0}
+        return {
+            "A": {Category.W4_0: a_w4_0, **zeros},
+            "B": {Category.W4_0: 0.0, **zeros},
+        }
+
+    # scale_sensitivity_sweep makes exactly 5 category_marginals calls for
+    # divisor_multipliers=[1.0, 0.5, 2.0]: baseline @ seed, @ seed+1, @ seed+2
+    # (the 3 runs the noise floor is computed from), then 0.5x @ seed, then
+    # 2.0x @ seed -- each compared back against the FIRST (baseline @ seed) run.
+    scripted = iter(
+        [
+            _marginals(0.50),  # baseline @ seed        -- the reference "baseline" dict
+            _marginals(0.505),  # baseline @ seed + 1
+            _marginals(0.495),  # baseline @ seed + 2   -- pairwise deltas 0.005 / 0.005 / 0.01
+            _marginals(0.70),  # 0.5x @ seed             -- delta vs baseline = 0.20
+            _marginals(0.508),  # 2.0x @ seed            -- delta vs baseline = 0.008
+        ]
+    )
+
+    def fake_category_marginals(strengths, _rules, n_sims, seed, policy=None):
+        return next(scripted)
+
+    monkeypatch.setattr("ti26.montecarlo.category_marginals", fake_category_marginals)
+
+    result = scale_sensitivity_sweep(ratings, rules, [1.0, 0.5, 2.0], n_sims=10, seed=3)
 
     assert result[0]["is_baseline"] is True
     assert result[0]["max_abs_delta"] == 0.0
@@ -201,7 +240,22 @@ def test_scale_sensitivity_sweep_reports_a_noise_floor_and_resolvability():
 
     floors = {entry["noise_floor"] for entry in result}
     assert len(floors) == 1, "noise_floor must be one value shared by every entry"
-    assert next(iter(floors)) > 0.0, "a hardcoded-zero floor would make every delta look resolvable"
+    noise_floor = next(iter(floors))
+    assert noise_floor == pytest.approx(0.01), (
+        "the largest of the three scripted pairwise baseline deltas (0.005, "
+        "0.005, 0.01) must be the reported floor"
+    )
+
+    assert result[1]["max_abs_delta"] == pytest.approx(0.20), (
+        "0.5x's delta against the scripted baseline is a known 0.20, not live "
+        "Monte Carlo noise"
+    )
+    assert result[1]["resolvable"] is True, "0.20 is well above the 0.01 noise floor"
+
+    assert result[2]["max_abs_delta"] == pytest.approx(0.008), (
+        "2.0x's delta against the scripted baseline is a known 0.008"
+    )
+    assert result[2]["resolvable"] is False, "0.008 sits below the 0.01 noise floor"
 
     expected_keys = {
         "divisor_multiplier", "divisor", "max_abs_delta", "is_baseline", "noise_floor", "resolvable",
@@ -477,6 +531,17 @@ def test_deviation_summary_reports_both_directions_when_mixed():
     branch (ignoring the case where both directions occur) would emit
     "point the same way" here instead, and this fails on that number
     disagreement.
+
+    2026-08-04 prose audit: this branch used to rank sampling noise ABOVE a
+    shared cause ("More consistent with sampling noise across small map
+    counts than with a shared cause") -- an unsupported conclusion, since
+    the function only counts Wilson-flag directions with no null model,
+    multiplicity correction, or dependence analysis. Restore the causal
+    claim X: reinstating that old sentence in place of the narrowed
+    "cannot determine" wording makes the last two assertions below fail --
+    confirmed by mutating `deviation_summary` to the old wording, observing
+    this test fail, and reverting byte-exactly (see the build report's
+    mutation section).
     """
     observed = {
         "A": _form("form ABOVE implied"),
@@ -490,6 +555,11 @@ def test_deviation_summary_reports_both_directions_when_mixed():
     assert "2 form ABOVE implied" in text
     assert "1 form BELOW implied" in text
     assert "point the same way" not in text
+    assert "cannot determine whether a mixed-direction pattern" in text
+    assert "More consistent with sampling noise" not in text, (
+        "must not rank sampling noise above a shared cause without a null "
+        "model, multiplicity correction, or dependence analysis"
+    )
 
 
 def test_deviation_summary_one_directional_clustered_in_bottom_half():
@@ -497,6 +567,19 @@ def test_deviation_summary_one_directional_clustered_in_bottom_half():
     implied", none below -- the divisor/schedule-confound interpretation
     must appear, and the count/direction must be the real 3, not a stale
     literal.
+
+    2026-08-04 prose audit: the old wording ("Noise would be roughly
+    symmetric, so a one-directional pattern like this is systematic -- but
+    it is {mechanism}") asserted the pattern WAS systematic, identifying a
+    cause from nothing but counted Wilson-flag directions. A bare
+    `assert "systematic" in text` false-pins this (it also passes against
+    the narrowed hedge below, which still uses the word "systematic" but no
+    longer asserts it as a fact), so this test instead pins the exact
+    hedge phrase and the absence of the old unqualified claim. Restore the
+    causal claim X: reinstating the old sentence in place of the narrowed
+    one makes the last two assertions below fail -- confirmed by mutating
+    `deviation_summary` to the old wording, observing this test fail, and
+    reverting byte-exactly (see the build report's mutation section).
     """
     ordered = ["A", "B", "C", "D", "E", "F"]  # bottom half (weaker) = D, E, F
     observed = {
@@ -511,9 +594,12 @@ def test_deviation_summary_one_directional_clustered_in_bottom_half():
     assert "All 3 current deviation(s) point the same way" in text
     assert "form ABOVE implied" in text
     assert "all in the bottom half" in text
-    assert "systematic" in text
     assert "point BOTH ways" not in text
     assert "No deviations" not in text
+    assert "does not by itself establish a systematic cause" in text
+    assert "Noise would be roughly symmetric, so a one-directional pattern like this is" not in text, (
+        "must not assert the pattern IS systematic from counted directions alone"
+    )
 
 
 def test_deviation_summary_one_directional_but_not_clustered():

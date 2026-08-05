@@ -226,6 +226,35 @@ def test_sensitivity_sweep_reports_a_noise_floor_and_resolvability():
         assert set(entry) == expected_keys
 
 
+def test_module_and_sweep_docstrings_do_not_claim_an_uncomputed_percentage():
+    """2026-08-04 prose audit: this module's docstring and
+    `sensitivity_sweep`'s docstring both used to assert "the resolver is
+    consulted on ~30% of ranking instances"/"every ranking" -- a specific
+    share no code in this module computes. `DurationResolver.consultations`
+    (`tiebreak.py`) counts consultations, but nothing turns that count into
+    a percentage anywhere in this repo's `duration.py`. `sensitivity_sweep`'s
+    docstring also used to assert a specific historical finding ("Measured
+    for this model (tied and spread strengths, sigma 0.05 vs 1.20,
+    n_sims=20000): every sigma-varying delta observed so far fell inside or
+    below the noise-floor range") as a standing fact, rather than pointing
+    at the function's own returned `resolvable` flags for the answer on any
+    given run.
+
+    Restore the causal claim X: reinstating "~30%" or the "sigma 0.05 vs
+    1.20" historical-finding sentence in either docstring makes the
+    assertions below fail -- confirmed by mutating both docstrings back to
+    the old wording, observing this test fail, and reverting byte-exactly
+    (see the build report's mutation section).
+    """
+    import ti26.duration as duration_module
+
+    assert "30%" not in duration_module.__doc__
+    assert "30%" not in duration_module.sensitivity_sweep.__doc__
+    assert "consultations" in duration_module.__doc__
+    assert "sigma 0.05 vs 1.20" not in duration_module.sensitivity_sweep.__doc__
+    assert "read the returned" in duration_module.sensitivity_sweep.__doc__
+
+
 def test_fitted_sigma_differs_from_the_invented_placeholder():
     """If the fit reproduces 0.25 exactly, someone wired the placeholder
     through instead of estimating. Real pro durations are more dispersed."""

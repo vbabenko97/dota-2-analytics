@@ -1,0 +1,54 @@
+# The exact TI-facing names the owner submits, in submission order.
+#
+# A VERSIONED INPUT, not a measurement. Names are cosmetic to the model: every
+# ordering decision in the pipeline is keyed on the configured team_id, and
+# renaming a team cannot move a card slot (see tests/test_montecarlo.py and
+# tests/test_optimize.py, which cover the exact-tie case that used to break
+# that property). These are what goes on the compendium form.
+#
+# `model_name` is the display name in config/ti2026_teams.yaml. Where it differs
+# from `submission_name` the difference is cosmetic only. `former_name` records
+# the org's previous branding, for the human doing the pre-lock identity check.
+#
+# The pre-lock procedure that consumes this file is docs/ti26/near-lock-runbook.md.
+# Confirm identity by ACCOUNT SET, never by name.
+
+teams:
+  - submission_name: Aurora
+    model_name: Aurora Gaming
+  - submission_name: BoomBoys
+    model_name: BoomBoys
+    former_name: BetBoom
+  - submission_name: Iron Wing
+    model_name: Iron Wing
+    former_name: Tundra, then 1win
+  - submission_name: Falcons
+    model_name: Team Falcons
+  - submission_name: Liquid
+    model_name: Team Liquid
+  - submission_name: Yandex
+    model_name: Team Yandex
+  - submission_name: Xtreme
+    model_name: Xtreme Gaming
+  - submission_name: Spirit
+    model_name: Team Spirit
+  - submission_name: Team Vision
+    model_name: Team Vision
+    former_name: PARIVISION
+  - submission_name: Nigma
+    model_name: Nigma Galaxy
+  - submission_name: Huligani
+    model_name: HULIGANI
+    former_name: L1ga Team
+  - submission_name: Resilience
+    model_name: Team Resilience
+  - submission_name: Vici Gaming
+    model_name: Vici Gaming
+  - submission_name: OG
+    model_name: OG
+  - submission_name: GamerLegion
+    model_name: GamerLegion
+    former_name: Apex Genesis
+  - submission_name: LGD Gaming
+    model_name: LGD Gaming
+    former_name: Heroic

@@ -15,6 +15,7 @@ from pathlib import Path
 from ti26.backtest import calibration, log_loss, rolling_folds, run_model
 from ti26.calibrate import SLOPE_BAND, evaluate_d3_gate, run_calibrated_model
 from ti26.data.store import load_rows, open_store
+from ti26.gate_artifacts import gate_result_payload, write_gate_result
 from ti26.ratings import load_gate_config
 from ti26.ratings.elo import EloModel
 from ti26.ratings.glicko import GlickoModel
@@ -67,9 +68,10 @@ def main(argv: list[str] | None = None) -> int:
     slope_elo, intercept_elo = calibration(predictions_elo, rows)
 
     # Glicko: calibrated and reported as a DIAGNOSTIC only. Registered
-    # 2026-08-03: putting two candidates through one gate roughly doubles
-    # the false-pass probability, and choosing the winner after seeing
-    # results is the multiple-comparisons version of moving the margin. Never
+    # 2026-08-03 with Elo as the sole gated candidate, because testing a second
+    # candidate through the same gate raises the false-pass probability and
+    # choosing the winner after seeing results is the multiple-comparisons
+    # version of moving the margin. By how much is not computed here. Never
     # gated, never substituted if Elo fails.
     predictions_glicko, _fitted_glicko = run_calibrated_model(
         rows, lambda: GlickoModel(tau=config.glicko_tau, roster_index=RosterIndex(aliases)), folds
@@ -180,11 +182,12 @@ def main(argv: list[str] | None = None) -> int:
         "",
         (
             "`elo_calibrated` is the gated candidate. `glicko_calibrated_diagnostic` is "
-            "reported here only -- per spec (registered 2026-08-03), putting two "
-            "candidates through one gate roughly doubles the false-pass probability, "
-            "and choosing between them after seeing results is the multiple-comparisons "
-            "version of moving the margin. It never gates and is never substituted if "
-            "Elo fails."
+            "reported here only -- per spec (registered 2026-08-03), the registration "
+            "names Elo as the sole gated candidate, because testing a second candidate "
+            "through the same gate raises the false-pass probability and choosing "
+            "between them after seeing results is the multiple-comparisons version of "
+            "moving the margin. This run does not compute by how much. It never gates "
+            "and is never substituted if Elo fails."
         ),
         "",
         "## Consequence",
@@ -206,11 +209,51 @@ def main(argv: list[str] | None = None) -> int:
         ]
     (out / "d3_gate.md").write_text("\n".join(lines) + "\n")
 
+    exit_code = 0 if result.passed else GATE_FAIL_EXIT
+    write_gate_result(
+        out / "d3_gate.json",
+        gate_result_payload(
+            gate="d3",
+            verdict=verdict,
+            exit_code=exit_code,
+            registration=(
+                "docs/superpowers/specs/2026-08-01-ti2026-forecast-design.md "
+                "section II, D3 calibration gate (Elo, sole gated candidate)"
+            ),
+            conditions={
+                "margin": {
+                    "value": result.margin,
+                    "threshold": config.min_margin_nats,
+                    "passed": result.margin_passed,
+                },
+                "ci": {
+                    "value": [result.ci_low, result.ci_high],
+                    "excludes": 0.0,
+                    "passed": result.ci_passed,
+                },
+                "slope": {
+                    "value": result.calibration_slope,
+                    "band": list(result.slope_band),
+                    "passed": result.slope_passed,
+                },
+            },
+            method=result.method,
+            n_maps=result.n_maps,
+            excluded=result.excluded,
+            config={
+                "bootstrap_ci": config.bootstrap_ci,
+                "bootstrap_draws": config.bootstrap_draws,
+                "min_train": args.min_train,
+                "seed": config.seed,
+            },
+        ),
+    )
+
     print(
         f"D3 gate: {verdict} (margin {result.margin:.5f}, CI [{result.ci_low:.5f}, "
         f"{result.ci_high:.5f}], slope {result.calibration_slope:.4f})"
     )
-    return 0 if result.passed else GATE_FAIL_EXIT
+    return exit_code
 
 
 if __name__ == "__main__":

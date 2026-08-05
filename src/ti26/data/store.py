@@ -30,12 +30,12 @@ create table if not exists maps (
 create index if not exists maps_start_time on maps(start_time);
 """
 
-_COLUMNS = [
+STORE_COLUMNS = (
     "match_id", "start_time", "duration", "radiant_win", "league_id", "tier",
     "radiant_team_id", "dire_team_id", "series_id", "series_type", "patch",
     "radiant_accounts", "dire_accounts", "radiant_heroes", "dire_heroes",
     "has_null_team", "has_bad_roster",
-]
+)
 
 
 class LeakageError(AssertionError):
@@ -74,21 +74,23 @@ def insert_rows(conn: sqlite3.Connection, rows: Sequence[MapRow]) -> int:
     batch back and leaves the store exactly as it was.
     """
     payload = [_tuple_of(r) for r in rows]
-    placeholders = ",".join("?" * len(_COLUMNS))
+    placeholders = ",".join("?" * len(STORE_COLUMNS))
     inserted = 0
     with conn:  # rolls back the whole batch if anything raises
         for record in payload:
             existing = conn.execute(
-                f"select {','.join(_COLUMNS)} from maps where match_id = ?", (record[0],)
+                f"select {','.join(STORE_COLUMNS)} from maps where match_id = ?", (record[0],)
             ).fetchone()
             if existing is None:
                 conn.execute(
-                    f"insert into maps ({','.join(_COLUMNS)}) values ({placeholders})", record
+                    f"insert into maps ({','.join(STORE_COLUMNS)}) values ({placeholders})", record
                 )
                 inserted += 1
             elif tuple(existing) != record:
                 differing = [
-                    _COLUMNS[i] for i in range(len(_COLUMNS)) if existing[i] != record[i]
+                    STORE_COLUMNS[i]
+                    for i in range(len(STORE_COLUMNS))
+                    if existing[i] != record[i]
                 ]
                 raise ConflictingRowError(
                     f"match_id={record[0]} already stored with different values "
@@ -109,7 +111,7 @@ def load_rows(
         params.append(since)
     where = f"where {' and '.join(clauses)}" if clauses else ""
     cursor = conn.execute(
-        f"select {','.join(_COLUMNS)} from maps {where} order by start_time, match_id", params
+        f"select {','.join(STORE_COLUMNS)} from maps {where} order by start_time, match_id", params
     )
     return [
         MapRow(

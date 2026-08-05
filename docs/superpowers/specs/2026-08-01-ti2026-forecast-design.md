@@ -158,6 +158,38 @@ The slope band is **not** widened, tightened, or given its own interval. It is t
 
 **No third candidate.** If this fails, the rung-3 card ships and D3 is over. There is no D3c.
 
+### D4: the TI 2025 card backtest — a DIAGNOSTIC, explicitly not a gate
+
+**Registered 2026-08-04, before any card-level backtest code exists and before any score has been computed.** Verified at this commit: nothing in `src/` scores a card against an observed outcome, and no TI 2025 field or outcome is recorded anywhere in the repo.
+
+Every result this project has produced so far is measured **per map**. The card's own headline number — model-implied expected score 4.6321 against a random baseline of 3.75 — is computed from the model's own probabilities and is therefore descriptive only, as §II already says. Nothing has ever scored a *card* against a real outcome. TI 2025's Swiss stage is in the store and makes that possible for the first time.
+
+**Why this is not a gate, stated before the number exists.** One event is one sample. The score is a single draw whose model-implied distribution is wide, so a high score would not establish forecast value and a low score would not refute it. Registering a threshold here would manufacture false authority, and the temptation to read the result as validation is exactly what this paragraph exists to block. **There is no pass/fail. The result is reported and interpreted, never used to promote or demote the shipping card.** The card that ships is the one D3b already selected.
+
+**The fixed inputs, recorded now so they cannot be chosen after seeing a score:**
+
+- **Event:** OpenDota `league_id = 18324`, 16 teams, 144 maps, 2025-09-04 → 2025-09-14. Measured 2026-08-04.
+- **Swiss/playoff split:** Swiss is `start_time < 2025-09-08` — 108 maps over 2025-09-04→07, 44 Bo3 series, every series `series_type = 1` with 2 or 3 maps and no null `series_id`. The 3-day gap to the playoffs (2025-09-11) makes the boundary unambiguous.
+- **Training cutoff:** `start_time < 2025-09-04`, strictly before the event's first map. 16,958 maps, 207 days of history. Everything is refit under this cutoff — Glicko ratings, roster resolution, AND the calibration slope. Re-using the production slope (0.4023, measured over the full store) would leak the event's own maps into the correction.
+- **Scoring rule:** count of exact category matches out of 16, the compendium card's own rule. Compared against the random baseline Σ k_c²/16 = 3.75 from §II.
+
+**The truth mapping, frozen here.** TI 2025's Swiss capped at 6 rounds, so four teams finished 3-3 — a record unreachable under TI 2026's format and one the 2026 card cannot express. The observed distribution nonetheless maps onto the 2026 capacities exactly, with no residue:
+
+| category | capacity | TI 2025 |
+|---|---|---|
+| 4-0 | 1 | 1 |
+| 4-1 | 2 | 2 |
+| elim_win | 5 | 3 at 4-2, plus the 2 of the four 3-3 teams who advanced |
+| elim_loss | 5 | 3 at 2-4, plus the 2 of the four 3-3 teams who did not |
+| 1-4 | 2 | 2 |
+| 0-4 | 1 | 1 |
+
+The one judgment is splitting the 3-3 teams, resolved by **observed playoff participation** — a fact, not an estimate: exactly 8 teams appear in maps after 2025-09-08 and each 3-3 team either does or does not. This preserves the card's semantics (`elim_win` = advanced despite losses, `elim_loss` = eliminated despite wins) rather than inventing a record. That the split lands on 5/5 exactly, filling both capacities, is a property of the data and is not adjustable.
+
+**Leakage that refitting CANNOT remove, disclosed rather than buried.** The cutoff removes this event's outcomes from the training data. It does not remove them from the *method*: D2 and D3 chose Glicko over Elo, set τ, and fixed the gate thresholds using rolling backtests over the full store, whose folds include September 2025. So the pipeline's structure was selected with knowledge of data overlapping this event. This is unavoidable without a second held-out event the project does not have, and it means the result should be read as **weaker than a true out-of-sample test** — one more reason it is a diagnostic.
+
+**Registered interpretation, so the reading is not chosen to suit the number.** Report three things together: the observed score, the random baseline 3.75, and the observed score's percentile within the distribution of scores this same card achieves across the model's own simulated outcomes. A score near the model's median means the model's uncertainty was honest about this event; a score in a far tail means it was not, in whichever direction. Also report the per-slot hit/miss table, because *which* slots were missed is more informative than the total — the extremes are the slots the 2026 card is most exposed on.
+
 ---
 
 ## III. Dataset

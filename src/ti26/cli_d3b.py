@@ -28,6 +28,7 @@ from pathlib import Path
 from ti26.backtest import calibration, rolling_folds, run_model
 from ti26.calibrate import SLOPE_BAND, evaluate_d3_gate, run_calibrated_model
 from ti26.data.store import load_rows, open_store
+from ti26.gate_artifacts import gate_result_payload, write_gate_result
 from ti26.ratings import load_gate_config
 from ti26.ratings.glicko import GlickoModel
 from ti26.ratings.simple import ConstantModel
@@ -66,10 +67,10 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    # Same construction as the D3 (Elo) run: identical rows/folds/model
-    # factory, so this reproduces the identical scored population (26,830
-    # maps, 191 tournaments) the Elo gate used -- required for the two
-    # intervals to be directly comparable.
+    # Same construction as the D3 (Elo) run: identical rows, folds and model
+    # factory, so this scores the same population the Elo gate did -- required
+    # for the two intervals to be directly comparable. The size of that
+    # population is reported by this run as `n_maps`, not asserted here.
     predictions_constant = run_model(rows, ConstantModel, folds)
     predictions_glicko, _fitted = run_calibrated_model(
         rows, lambda: GlickoModel(tau=config.glicko_tau, roster_index=RosterIndex(aliases)), folds
@@ -181,12 +182,58 @@ def main(argv: list[str] | None = None) -> int:
         ]
     (out / "d3b_gate.md").write_text("\n".join(lines) + "\n")
 
+    exit_code = 0 if result.passed else GATE_FAIL_EXIT
+    write_gate_result(
+        out / "d3b_gate.json",
+        gate_result_payload(
+            gate="d3b",
+            verdict=verdict,
+            exit_code=exit_code,
+            registration=(
+                "docs/superpowers/specs/2026-08-01-ti2026-forecast-design.md "
+                "section II, D3b multiplicity-corrected Glicko gate"
+            ),
+            conditions={
+                "margin": {
+                    "value": result.margin,
+                    "threshold": config.min_margin_nats,
+                    "passed": result.margin_passed,
+                    "open_for_test": False,
+                },
+                # The interval is the only quantity that was open when this
+                # gate was registered; margin and slope were already measured.
+                "ci": {
+                    "value": [result.ci_low, result.ci_high],
+                    "excludes": 0.0,
+                    "passed": result.ci_passed,
+                    "open_for_test": True,
+                },
+                "slope": {
+                    "value": result.calibration_slope,
+                    "band": list(result.slope_band),
+                    "passed": result.slope_passed,
+                    "open_for_test": False,
+                },
+            },
+            method=result.method,
+            n_maps=result.n_maps,
+            excluded=result.excluded,
+            config={
+                "bootstrap_ci": config_975.bootstrap_ci,
+                "bootstrap_draws": config_975.bootstrap_draws,
+                "min_train": args.min_train,
+                "seed": config_975.seed,
+                "slope_band": list(SLOPE_BAND),
+            },
+        ),
+    )
+
     print(
         f"D3b gate: {verdict} (97.5% CI [{result.ci_low:.5f}, {result.ci_high:.5f}], "
         f"margin {result.margin:.5f} already known, slope {result.calibration_slope:.4f} "
         "already known)"
     )
-    return 0 if result.passed else GATE_FAIL_EXIT
+    return exit_code
 
 
 if __name__ == "__main__":

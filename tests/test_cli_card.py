@@ -278,13 +278,78 @@ def test_correction_is_actually_applied_with_the_measured_slope_not_hardcoded(tm
 
 
 @pytest.mark.slow
-def test_gate_lineage_and_approximation_caveat_are_stated(tmp_path):
-    """The provenance report must state the gate lineage (D2 FAIL, D3 Elo
-    FAIL, D3b Glicko PASS as a one-condition test) and the approximation
-    caveat with REAL, computed g(phi)/RD numbers for this fixture -- not a
-    copy-pasted literal from the docs (this project's own ledger records
-    exactly this defect class recurring: prose asserting a number the code
-    did not actually compute for the run at hand).
+def _frozen_gate_artifact(path, *, d3b_slope):
+    """A frozen-gate artifact whose numbers no real run of this fixture produces."""
+    from ti26.gate_artifacts import gate_result_payload, write_frozen_gate_artifact
+
+    result_paths = {}
+    for gate, verdict in (("d2", "FAIL"), ("d3", "FAIL"), ("d3b", "PASS")):
+        result_path = path.parent / f"{gate}_gate.json"
+        result_path.write_text(
+            json.dumps(
+                gate_result_payload(
+                    gate=gate,
+                    verdict=verdict,
+                    exit_code=0 if verdict == "PASS" else 1,
+                    registration=f"spec section {gate}",
+                    conditions={
+                        "slope": {
+                            "value": d3b_slope if gate == "d3b" else 0.4321,
+                            "band": [0.9, 1.1],
+                            "passed": verdict == "PASS",
+                        },
+                    },
+                    method="clustered bootstrap",
+                    n_maps=12345,
+                    excluded={},
+                    config={"bootstrap_ci": 0.975},
+                )
+            )
+        )
+        result_paths[gate] = result_path
+    write_frozen_gate_artifact(result_paths, path, source_revision="b" * 40)
+    return path
+
+
+def test_gate_lineage_is_read_from_the_artifact_not_restated_from_a_literal(tmp_path):
+    """Kills mutation: restore the D2/D3/D3b summary literals in the report.
+
+    The module used to carry three hand-written gate summaries. They were
+    accurate when written and nothing kept them accurate. The slope below is a
+    value no run of this fixture produces, so it can only appear in the report
+    if the report actually read the artifact -- and 0.9049, the historical
+    literal, must not appear at all.
+    """
+    store = tmp_path / "d2.sqlite"
+    card_store(store)
+    teams_path = write_team_config(tmp_path / "teams.yaml")
+    out = tmp_path / "reports"
+    artifact = _frozen_gate_artifact(tmp_path / "frozen.json", d3b_slope=0.98765)
+
+    rc = card_main([
+        "--teams", str(teams_path), "--store", str(store), "--out", str(out),
+        "--min-train", "150", "--card-sims", "2000", "--card-seed", "1",
+        "--stability-seeds", "1,2,3", "--frozen-gates", str(artifact),
+    ])
+    assert rc == 0
+
+    report = (out / "card_provenance.md").read_text()
+    assert "0.98765" in report, "the report must render the artifact's own slope"
+    assert "D3B PASS" in report
+    assert "D2 FAIL" in report and "D3 FAIL" in report
+    assert "b" * 40 in report, "the artifact's source revision must be named"
+    for historical_literal in ("0.9049", "0.00671", "-0.00383", "0.6569"):
+        assert historical_literal not in report, (
+            f"{historical_literal} is a historical literal with no producer in this run"
+        )
+
+
+def test_card_report_refuses_to_restate_gate_lineage_without_an_artifact(tmp_path):
+    """Kills mutation: fall back to the hardcoded summaries when no artifact is given.
+
+    Silently printing remembered gate numbers is exactly the defect the
+    artifact replaces, and it would be invisible in a report that looks
+    complete.
     """
     store = tmp_path / "d2.sqlite"
     card_store(store)
@@ -299,14 +364,39 @@ def test_gate_lineage_and_approximation_caveat_are_stated(tmp_path):
     assert rc == 0
 
     report = (out / "card_provenance.md").read_text()
-    assert "D2 forecast-value gate FAILED" in report
-    assert "D3 calibration gate (Elo" in report and "FAILED on all three" in report
-    assert "D3b" in report and "PASSED" in report
-    assert "ONE-CONDITION test" in report
-    assert "0.00671" in report and "0.9049" in report and "97.5%" in report
+    assert "Gate lineage: not supplied for this run" in report
+    for historical_literal in ("0.9049", "0.00671", "-0.00383", "0.6569"):
+        assert historical_literal not in report
 
+
+def test_approximation_caveat_reports_measured_ranges_and_disclaims_the_rest(tmp_path):
+    """Kills mutation: infer close probability tracking from the g(phi) range alone.
+
+    The run measures an RD attenuation range. It does not measure the
+    discrepancy between the scalar strengths' implied pairwise probabilities
+    and expected_score's, which is the quantity that would justify a tracking
+    claim. The report must state the range it computed and disclaim the one it
+    did not.
+    """
+    store = tmp_path / "d2.sqlite"
+    card_store(store)
+    teams_path = write_team_config(tmp_path / "teams.yaml")
+    out = tmp_path / "reports"
+
+    rc = card_main([
+        "--teams", str(teams_path), "--store", str(store), "--out", str(out),
+        "--min-train", "150", "--card-sims", "2000", "--card-seed", "1",
+        "--stability-seeds", "1,2,3",
+    ])
+    assert rc == 0
+
+    report = (out / "card_provenance.md").read_text()
     assert "## Approximation caveat" in report
-    m = re.search(r"span \*\*([\d.]+) to ([\d.]+)\*\*", report)
+    assert "What is NOT measured" in report
+    assert "tracks the raw model's own" not in report, (
+        "the report must not infer probability tracking from an attenuation range"
+    )
+    m = re.search(r"spans\s+\*\*([\d.]+) to ([\d.]+)\*\*", report)
     assert m is not None, "the report must state a real, computed g(phi) range"
     g_lo, g_hi = float(m.group(1)), float(m.group(2))
 

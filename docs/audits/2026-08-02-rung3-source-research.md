@@ -1,9 +1,18 @@
 # Rung-3 source research: what's actually machine-readable
 
-Context: `reports/d2_gate.md` (2026-08-02) recorded the elo-vs-glicko gate FAIL
-and, separately, that neither model clears the spec-V floor against a
-constant 50/50 prediction (elo +0.00131 nats worse, glicko +0.00514 nats
-worse). Spec X rung 3 is the prescribed response: "public ratings
+> **Retained as a source-availability record, not as results.** This document
+> exists to record which external rating sources were reachable from this
+> environment on 2026-08-02 and which were not -- an input to a design decision,
+> not a forecast measurement. The gate numbers it quotes for context are
+> superseded: see [the correction register](2026-08-04-correction-register.md)
+> and the generated run bundle under `reports/runs/`. The reachability findings
+> themselves describe one-off network probes and cannot be replayed offline;
+> they are a dated observation, not a current claim about those hosts.
+
+Context: the elo-vs-glicko gate failed and, separately, neither model cleared
+the spec-V floor against a constant 50/50 prediction (the current values are in
+the run bundle's `d2/d2_gate.json`). Spec X rung 3 is the prescribed response:
+"public ratings
 (Noxville/datdota) piped straight into the simulator." This audit checks
 whether that source, or any alternative, is actually reachable as a
 `team,strength` CSV before anyone writes ingestion code for it.

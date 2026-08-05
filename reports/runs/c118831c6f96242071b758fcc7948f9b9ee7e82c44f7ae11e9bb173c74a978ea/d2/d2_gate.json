@@ -1,0 +1,33 @@
+{
+  "conditions": {
+    "ci": {
+      "excludes": 0.0,
+      "passed": false,
+      "value": [
+        -0.02054904294039731,
+        0.006135204322805879
+      ]
+    },
+    "margin": {
+      "passed": false,
+      "threshold": 0.003,
+      "value": -0.003830623766642504
+    }
+  },
+  "config": {
+    "bootstrap_ci": 0.95,
+    "bootstrap_draws": 10000,
+    "min_train": 500,
+    "seed": 20260802
+  },
+  "excluded": {
+    "null_team": 2093
+  },
+  "exit_code": 3,
+  "gate": "d2",
+  "method": "cluster bootstrap over 191 tournaments",
+  "n_maps": 26830,
+  "registration": "docs/superpowers/specs/2026-08-01-ti2026-forecast-design.md section II, D2 forecast-value gate",
+  "schema": "ti26.gate-result.v1",
+  "verdict": "FAIL"
+}

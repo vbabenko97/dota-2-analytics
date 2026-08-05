@@ -1,9 +1,13 @@
 """Fit the average-duration tiebreak model from real match durations.
 
-Spec XII: the resolver is consulted on ~30% of ranking instances in every
-simulated tournament, and until this task runs it is driven by an invented
-log-normal tagged `arbitrary`. That parameter is steering a meaningful share
-of simulated standings, so it gets estimated, not guessed.
+Spec XII requires the duration tiebreak be estimated from real match
+durations rather than the invented log-normal (tagged `arbitrary`) it
+replaces. How often the resolver is actually consulted is tracked by
+`DurationResolver.consultations` (`tiebreak.py`); this module does not
+convert that count into a share of rankings. Whether the fitted parameter
+actually MOVES the card is a separate question this module does check --
+see `sensitivity_sweep` below for what it measures and how to read its
+output.
 """
 
 import math
@@ -142,11 +146,12 @@ def sensitivity_sweep(
 ) -> list[dict]:
     """How far does the card move across plausible `log_sigma` values?
 
-    Spec XII: the resolver is consulted on ~30% of every ranking, but that
-    high consultation rate does not by itself mean this parameter moves the
-    card -- it only means the resolver is asked often. Whether the answer
-    actually depends on `log_sigma` has to be checked against this
-    statistic's own resampling noise, not assumed.
+    Spec XII: however often the resolver is consulted (tracked by
+    `DurationResolver.consultations` in `tiebreak.py`, not converted to a
+    share of rankings by this module), that consultation rate does not by
+    itself mean this parameter moves the card -- it only means the resolver
+    is asked. Whether the answer actually depends on `log_sigma` has to be
+    checked against this statistic's own resampling noise, not assumed.
 
     `noise_floor` is an ESTIMATE of that resampling noise from a small number
     of draws, not a fixed property of the sweep: it is the largest of the
@@ -167,12 +172,11 @@ def sensitivity_sweep(
     `resolvable=True` (`max_abs_delta > noise_floor`) entries indicate a
     change distinguishable from noise, and a `resolvable` result near the
     boundary should not be read as a firm finding -- rerun with a fresh seed
-    before trusting it. Measured for this model (tied and spread strengths,
-    sigma 0.05 vs 1.20, n_sims=20000): every sigma-varying delta observed so
-    far fell inside or below the noise-floor range, so the honest reading is
-    that `log_sigma` does not move the card resolvably at the sample sizes
-    checked so far, even though the resolver itself is consulted constantly.
-    See spec XII for the fuller writeup.
+    before trusting it. Whether `log_sigma` moves the card resolvably is
+    whatever this function's own `resolvable` flags say for the sigmas,
+    strengths, and seeds a given caller passes in -- read the returned
+    entries for the answer on any particular run, not this docstring. See
+    spec XII for the fuller writeup.
     """
     from dataclasses import replace
 

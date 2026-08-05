@@ -19,6 +19,7 @@ from ti26.backtest import (
 from ti26.cli import main as cli_main
 from ti26.data.store import load_rows, open_store
 from ti26.duration import fit_duration_model, rating_gaps, sensitivity_sweep
+from ti26.gate_artifacts import gate_result_payload, write_gate_result
 from ti26.ratings import load_gate_config
 from ti26.ratings.elo import EloModel
 from ti26.ratings.glicko import GlickoModel
@@ -308,13 +309,24 @@ def main(argv: list[str] | None = None) -> int:
             sweep_strengths = strengths
             sweep_strengths_note = f"fitted {selected} strengths ({len(strengths)} teams)"
 
+            # team_id travels with the strength so the card generator orders
+            # teams by configured identity rather than by display name.
+            team_ids = {entry.name: str(entry.team_id) for entry in teams}
             strengths_path = out / "strengths.csv"
             with strengths_path.open("w", newline="") as fh:
                 writer = csv.writer(fh)
-                writer.writerow(["team", "strength", "roster_version_id", "prior_driven"])
+                writer.writerow(
+                    ["team", "team_id", "strength", "roster_version_id", "prior_driven"]
+                )
                 for name in sorted(strengths):
                     writer.writerow(
-                        [name, f"{strengths[name]:.6f}", resolved[name], name in prior_driven]
+                        [
+                            name,
+                            team_ids[name],
+                            f"{strengths[name]:.6f}",
+                            resolved[name],
+                            name in prior_driven,
+                        ]
                     )
 
             # The card comes from the D1 generator, fed OUR fitted strengths --
@@ -554,17 +566,57 @@ def main(argv: list[str] | None = None) -> int:
             "",
             (
                 "Largest movement in any single category probability when the duration "
-                "parameter is varied. Spec §XII: this parameter is consulted on roughly "
-                "30% of every ranking, so its influence is reported rather than assumed away."
+                "parameter is varied. Spec §XII requires this parameter's influence to be "
+                "reported rather than assumed away. The table above is that report; this "
+                "run measures the movement, not the share of any ranking the parameter "
+                "accounts for."
             ),
         ]
     (out / "d2_gate.md").write_text("\n".join(lines) + "\n")
+
+    exit_code = NO_CARD_EXIT if card_refused else 0
+    write_gate_result(
+        out / "d2_gate.json",
+        gate_result_payload(
+            gate="d2",
+            verdict=verdict,
+            # D2's registered refusal exit is NO_CARD_EXIT, which is non-zero
+            # for a failing gate; the artifact records what this process
+            # actually returned rather than a normalised stand-in.
+            exit_code=exit_code,
+            registration=(
+                "docs/superpowers/specs/2026-08-01-ti2026-forecast-design.md "
+                "section II, D2 forecast-value gate"
+            ),
+            conditions={
+                "margin": {
+                    "value": result.margin,
+                    "threshold": config.min_margin_nats,
+                    "passed": result.margin_passed,
+                },
+                "ci": {
+                    "value": [result.ci_low, result.ci_high],
+                    "excludes": 0.0,
+                    "passed": result.ci_passed,
+                },
+            },
+            method=result.method,
+            n_maps=result.n_maps,
+            excluded=result.excluded,
+            config={
+                "bootstrap_ci": config.bootstrap_ci,
+                "bootstrap_draws": config.bootstrap_draws,
+                "min_train": args.min_train,
+                "seed": config.seed,
+            },
+        ),
+    )
 
     print(f"gate: {verdict} (margin {result.margin:.5f}, CI [{result.ci_low:.5f}, "
           f"{result.ci_high:.5f}], {result.method})")
     print(f"floor: {selected} cleared={floor[selected]['cleared']}")
     print(f"card: {card_status}")
-    return NO_CARD_EXIT if card_refused else 0
+    return exit_code
 
 
 if __name__ == "__main__":

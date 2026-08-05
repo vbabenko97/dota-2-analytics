@@ -67,9 +67,12 @@ WILSON_Z_95 = 1.96
 # (BoomBoys, Team Falcons) by exactly +/-17.74 rating points each (equal and
 # opposite -- the signature of a head-to-head result), collapsing their
 # strength gap from 0.2189 to 0.0146 logits while they sat across a card
-# category boundary. A citation of an OBSERVED magnitude, not a tuned
-# constant: an adjacent pair in the strength ordering separated by less
-# than this is one plausible match result away from swapping order.
+# category boundary. A citation of an OBSERVED magnitude from that ONE past
+# event, not a tuned constant and not a general drift rate: `boundary_proximity`
+# uses it only as a reference scale for how large a same-day move has been
+# seen to be, flagging adjacent pairs whose current gap is smaller than it --
+# see that function's docstring for exactly what `flagged` means (and does
+# not claim) about any particular pair's future.
 DAILY_DRIFT_RATING_POINTS = 17.74
 
 
@@ -457,6 +460,13 @@ def deviation_summary(
     deviations clusters in the bottom (weaker) or top (stronger) half, which
     is the specific pattern the `/400` divisor's over-spreading would
     produce. A `"no data"` verdict does not count as either direction.
+
+    This function only counts Wilson-flag directions -- it runs no null
+    model, applies no multiplicity correction, and does no dependence
+    analysis. It can describe the PATTERN (mixed-direction, or
+    one-directional and where it clusters); it cannot determine whether
+    that pattern is caused by a systematic effect, sampling noise, or
+    something else, and the prose below must never claim otherwise.
     """
     above = sorted(n for n, f in observed_form.items() if f.verdict == "form ABOVE implied")
     below = sorted(n for n, f in observed_form.items() if f.verdict == "form BELOW implied")
@@ -472,10 +482,12 @@ def deviation_summary(
     if above and below:
         return (
             f"**Deviations point BOTH ways this run** ({len(above)} form ABOVE "
-            f"implied, {len(below)} form BELOW implied) -- not the "
-            "one-directional signature a systematic divisor or schedule bias "
-            "would produce. More consistent with sampling noise across small "
-            "map counts than with a shared cause."
+            f"implied, {len(below)} form BELOW implied). Only Wilson-flag "
+            "directions are counted here -- no null model, multiplicity "
+            "correction, or dependence analysis is applied -- so this "
+            "diagnostic cannot determine whether a mixed-direction pattern "
+            "like this reflects sampling noise, a real mixed effect, or "
+            "something else."
         )
 
     half_size = len(ordered_by_strength) // 2
@@ -500,7 +512,9 @@ def deviation_summary(
         )
     return (
         f"**All {len(names)} current deviation(s) point the same way** (form "
-        f"{direction} implied, {where}) with none the other way. Noise would be "
-        f"roughly symmetric, so a one-directional pattern like this is "
-        f"systematic -- but it is {mechanism}"
+        f"{direction} implied, {where}) with none the other way. Only "
+        "Wilson-flag directions are counted here -- no null model, "
+        "multiplicity correction, or dependence analysis is applied -- so a "
+        "one-directional pattern like this does not by itself establish a "
+        f"systematic cause; if there is one, it is {mechanism}"
     )

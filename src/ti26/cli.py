@@ -10,12 +10,38 @@ from ti26.rules import load_rules
 from ti26.types import Category
 
 
-def _load_strengths(path: str | None, n_teams: int) -> dict[str, float]:
+def _load_strengths(
+    path: str | None, n_teams: int
+) -> tuple[dict[str, float], dict[str, str] | None]:
+    """Return `(strengths, team_ids)`; `team_ids` is None only for the ladder.
+
+    The CSV must carry `team_id`. Accepting a file without one and falling back
+    to the display name would silently reintroduce name-dependence at exactly
+    the boundary this argument exists to close, and the caller would have no
+    way to tell.
+    """
     if path is None:
-        # Synthetic ladder: D1 has no ingestion, so strengths are an input.
-        return {f"t{i:02d}": (i - (n_teams - 1) / 2) * 0.15 for i in range(n_teams)}
+        # Synthetic ladder: D1 has no ingestion, so strengths are an input. Its
+        # keys are generated stable identifiers, so there is no separate id.
+        return {f"t{i:02d}": (i - (n_teams - 1) / 2) * 0.15 for i in range(n_teams)}, None
     with open(path) as fh:
-        return {row["team"]: float(row["strength"]) for row in csv.DictReader(fh)}
+        reader = csv.DictReader(fh)
+        missing = {"team", "team_id", "strength"}.difference(reader.fieldnames or [])
+        if missing:
+            raise ValueError(
+                f"{path} must have columns team, team_id and strength; "
+                f"missing {sorted(missing)}"
+            )
+        strengths: dict[str, float] = {}
+        team_ids: dict[str, str] = {}
+        for row in reader:
+            team = row["team"]
+            team_id = (row["team_id"] or "").strip()
+            if not team_id:
+                raise ValueError(f"{path}: team {team!r} has a blank team_id")
+            strengths[team] = float(row["strength"])
+            team_ids[team] = team_id
+    return strengths, team_ids
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     rules = load_rules(args.rules)
-    strengths = _load_strengths(args.strengths, rules.n_teams)
+    strengths, team_ids = _load_strengths(args.strengths, rules.n_teams)
     if len(strengths) != rules.n_teams:
         raise ValueError(
             f"loaded {len(strengths)} strengths but rules.n_teams requires {rules.n_teams}"
@@ -40,15 +66,20 @@ def main(argv: list[str] | None = None) -> int:
         n_sims=args.n_sims,
         seed=args.seed,
         policy=ChoicePolicy(args.policy),
+        team_ids=team_ids,
     )
-    # Assignments within one Monte Carlo standard error of the optimum count as
-    # tied (p=0.5 maximises p(1-p), so this bounds the error on every marginal).
-    # The solver then declines to rank what it cannot resolve and applies its
-    # stated scarcity tie-break instead.
+    # `tie_magnitude` is the largest standard error ONE marginal can carry at
+    # this simulation count (p=0.5 maximises p(1-p)). It is a magnitude
+    # heuristic, not the standard error of the quantity actually compared --
+    # see `solve_card` for what it is and, more importantly, what it is not.
+    # Its purpose is to stop the solver ranking differences it cannot resolve
+    # and hand those to the stated scarcity tie-break instead.
+    tie_magnitude = monte_carlo_stderr(0.5, args.n_sims)
     card, score = solve_card(
         marginals,
         rules.category_capacities,
-        tie_tolerance=monte_carlo_stderr(0.5, args.n_sims),
+        tie_tolerance=tie_magnitude,
+        team_ids=team_ids,
     )
 
     out = Path(args.out)
@@ -62,14 +93,19 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = {
         "assignments": {t: c.value for t, c in sorted(card.items())},
-        "model_implied_expected_score": round(score, 4),
+        "team_ids": dict(sorted(team_ids.items())) if team_ids else None,
+        "optimizer_marginal_objective": round(score, 4),
         "random_baseline": rules.random_baseline,
         "n_sims": args.n_sims,
         "seed": args.seed,
         "policy": args.policy,
+        "tie_magnitude_heuristic": tie_magnitude,
         "note": (
-            "model_implied_expected_score is computed from the model's own "
-            "probabilities and is descriptive only, never evidence of skill"
+            "optimizer_marginal_objective is the sum of the model's own "
+            "estimated category marginals under this assignment. It is "
+            "descriptive only, never evidence of skill, and it is NOT the "
+            "evaluation-simulation mean score, which is estimated by scoring "
+            "this card against independently seeded simulated outcomes"
         ),
     }
     (out / "recommended_card.json").write_text(json.dumps(payload, indent=2) + "\n")

@@ -10,7 +10,13 @@ from pathlib import Path
 
 from ti26.data.opendota import MAP_QUERY, explorer_query, http_transport, month_windows
 from ti26.data.schema import normalize_all
-from ti26.data.snapshot import read_snapshot, snapshot_id, write_manifest, write_snapshot
+from ti26.data.snapshot import (
+    sha256_file,
+    snapshot_id,
+    validate_snapshot,
+    write_manifest,
+    write_snapshot,
+)
 from ti26.data.store import insert_rows, open_store
 
 
@@ -25,32 +31,38 @@ def main(argv: list[str] | None = None) -> int:
     raw_root = Path(args.raw)
     if args.snapshot:
         sid = args.snapshot
-        paths = sorted((raw_root / sid).glob("*.json.gz"))
-        if not paths:
-            raise SystemExit(f"no snapshot chunks under {raw_root / sid}")
+        chunks = validate_snapshot(raw_root, sid)
     else:
         now = datetime.now(UTC)
         sid = snapshot_id(now)
         start = now - timedelta(days=30 * args.months)
-        entries, paths = [], []
+        entries = []
         for start_epoch, end_epoch in month_windows(start, now):
             sql = MAP_QUERY.format(start=start_epoch, end=end_epoch)
             rows = explorer_query(sql, http_transport)
             name = datetime.fromtimestamp(start_epoch, UTC).strftime("%Y-%m")
-            paths.append(write_snapshot(raw_root, sid, name, rows))
+            path = write_snapshot(raw_root, sid, name, rows)
             entries.append(
-                {"name": name, "rows": len(rows), "start": start_epoch, "end": end_epoch}
+                {
+                    "name": name,
+                    "rows": len(rows),
+                    "start": start_epoch,
+                    "end": end_epoch,
+                    "query": sql,
+                    "sha256": sha256_file(path),
+                }
             )
             print(f"{name}: {len(rows)} maps")
-        write_manifest(raw_root, sid, entries)
+        write_manifest(raw_root, sid, entries, retrieved_at=now.isoformat().replace("+00:00", "Z"))
+        chunks = validate_snapshot(raw_root, sid)
 
     store_path = Path(args.store)
     store_path.parent.mkdir(parents=True, exist_ok=True)
     conn = open_store(store_path)
 
     total, tally = 0, {}
-    for path in paths:
-        rows, chunk_tally = normalize_all(read_snapshot(path))
+    for chunk in chunks:
+        rows, chunk_tally = normalize_all(chunk.rows)
         total += insert_rows(conn, rows)
         for key, count in chunk_tally.items():
             tally[key] = tally.get(key, 0) + count
