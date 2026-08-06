@@ -162,6 +162,34 @@ def test_idle_rosters_lose_certainty_every_empty_period():
     assert after_40 > after_10, "RD must keep growing across MULTIPLE idle periods"
 
 
+def test_consecutive_periods_charge_exactly_one_glicko2_inflation():
+    """Kills mutation: feed `rating_of(rvid)` to `update_rating` inside `flush`.
+
+    `rating_of` inflates by the whole elapsed gap and `update_rating` then
+    applies Glicko-2's own step-6 increment on top of it, so a roster playing
+    in consecutive periods took two variance increments where Glickman
+    specifies one, and a roster returning after k idle periods took k+1. The
+    reference below is the repository's own `update_rating` applied once per
+    period with NO inflation in between, which is what two consecutive rating
+    periods mean. A fresh opponent in the second period keeps the comparison
+    on the roster's own inflation rather than on how opponent RDs are read.
+    """
+    from ti26.ratings.glicko import GlickoRating, update_rating
+
+    model = GlickoModel(period_seconds=WEEK)
+    model.update(row(1, 0, A, B, radiant_win=True))
+    model.update(row(2, WEEK, A, C, radiant_win=True))
+    model.flush()
+
+    initial = GlickoRating(1500.0, 350.0, 0.06)
+    first = update_rating(initial, [(initial, 1.0)], tau=0.5)
+    second = update_rating(first, [(initial, 1.0)], tau=0.5)
+
+    observed = model.rating_of(roster_version_id(A), at_period=1)
+    assert observed.rd == pytest.approx(second.rd, abs=1e-9)
+    assert observed.rating == pytest.approx(second.rating, abs=1e-9)
+
+
 def test_idle_inflation_never_exceeds_the_never_seen_prior():
     """Otherwise a long-idle roster becomes more uncertain than one that has
     never played, which is incoherent."""

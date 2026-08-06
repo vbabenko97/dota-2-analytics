@@ -180,6 +180,25 @@ class GlickoModel:
         idle = period - self._last_period.get(rvid, period)
         return self._inflate(self._ratings[rvid], idle)
 
+    def _rating_for_update(self, rvid: str) -> GlickoRating:
+        """The pre-update rating, carrying one FEWER inflation than `rating_of`.
+
+        `update_rating` applies Glicko-2's own step-6 increment,
+        `sqrt(phi^2 + sigma'^2)`, for the period being scored. Passing it
+        `rating_of`'s value charged that increment twice: a roster playing in
+        consecutive periods has `idle == 1`, so it took one inflation here and
+        a second inside the update, and a roster returning after `k` idle
+        periods took `k + 1` where Glicko-2 specifies `k`.
+
+        `rating_of` stays as it is. It is right for prediction and for
+        `strengths`, where no update follows and the full elapsed gap is
+        exactly the uncertainty the caller should see.
+        """
+        if rvid not in self._ratings:
+            return self._inherit(rvid, self._current_period)
+        idle = self._current_period - self._last_period.get(rvid, self._current_period)
+        return self._inflate(self._ratings[rvid], idle - 1)
+
     def _inherit(self, rvid: str, period: int) -> GlickoRating:
         """Continuity-weighted initialization (spec III), overlap-measured."""
         if self._index is None:
@@ -244,7 +263,7 @@ class GlickoModel:
         if not self._pending:
             return
         updated = {
-            rvid: update_rating(self.rating_of(rvid), results, self._tau)
+            rvid: update_rating(self._rating_for_update(rvid), results, self._tau)
             for rvid, results in self._pending.items()
         }
         self._ratings.update(updated)
