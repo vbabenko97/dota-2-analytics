@@ -176,30 +176,33 @@ class GlickoModel:
     def rating_of(self, rvid: str, at_period: int | None = None) -> GlickoRating:
         period = self._current_period if at_period is None else at_period
         if rvid not in self._ratings:
-            return self._inherit(rvid, period)
+            return self._inherit(rvid, period, for_update=False)
         idle = period - self._last_period.get(rvid, period)
         return self._inflate(self._ratings[rvid], idle)
 
     def _rating_for_update(self, rvid: str) -> GlickoRating:
-        """The pre-update rating, carrying one FEWER inflation than `rating_of`.
+        """The START-OF-PERIOD rating: one FEWER inflation than `rating_of`.
 
-        `update_rating` applies Glicko-2's own step-6 increment,
-        `sqrt(phi^2 + sigma'^2)`, for the period being scored. Passing it
-        `rating_of`'s value charged that increment twice: a roster playing in
-        consecutive periods has `idle == 1`, so it took one inflation here and
-        a second inside the update, and a roster returning after `k` idle
-        periods took `k + 1` where Glicko-2 specifies `k`.
+        Glicko-2 inflates once per period that has already elapsed, so at the
+        start of period p a roster last rated in period q carries `p - q - 1`
+        increments; `update_rating` then supplies the final one for period p
+        itself as `sqrt(phi^2 + sigma'^2)`. `rating_of` returns `p - q`, which
+        is right for prediction and for `strengths`, where no update follows
+        and the whole elapsed gap is the uncertainty the caller should see.
 
-        `rating_of` stays as it is. It is right for prediction and for
-        `strengths`, where no update follows and the full elapsed gap is
-        exactly the uncertainty the caller should see.
+        Every value entering a rating period must use this, not `rating_of`:
+        the rated roster, each opponent it faced, and the prior an inheriting
+        roster is seeded from. Mixing the two conventions charged the same
+        roster different uncertainties depending on which side of a map it was
+        on.
         """
+        period = self._current_period
         if rvid not in self._ratings:
-            return self._inherit(rvid, self._current_period)
-        idle = self._current_period - self._last_period.get(rvid, self._current_period)
+            return self._inherit(rvid, period, for_update=True)
+        idle = period - self._last_period.get(rvid, period)
         return self._inflate(self._ratings[rvid], idle - 1)
 
-    def _inherit(self, rvid: str, period: int) -> GlickoRating:
+    def _inherit(self, rvid: str, period: int, for_update: bool) -> GlickoRating:
         """Continuity-weighted initialization (spec III), overlap-measured."""
         if self._index is None:
             return self._initial
@@ -209,7 +212,11 @@ class GlickoModel:
         weight = self._index.continuity_with_predecessor(rvid)
         if weight <= 0.0:
             return self._initial
-        prior = self.rating_of(predecessor, at_period=period)
+        prior = (
+            self._rating_for_update(predecessor)
+            if for_update
+            else self.rating_of(predecessor, at_period=period)
+        )
         rating = weight * prior.rating + (1.0 - weight) * self._initial.rating
         # Variance blend: uncertainty must never fall below the predecessor's,
         # because this exact roster has played nothing.
@@ -250,7 +257,7 @@ class GlickoModel:
 
         a = roster_version_id(row.radiant_accounts)
         b = roster_version_id(row.dire_accounts)
-        ra, rb = self.rating_of(a), self.rating_of(b)
+        ra, rb = self._rating_for_update(a), self._rating_for_update(b)
         score = 1.0 if row.radiant_win else 0.0
         self._pending.setdefault(a, []).append((rb, score))
         self._pending.setdefault(b, []).append((ra, 1.0 - score))
