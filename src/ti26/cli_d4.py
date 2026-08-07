@@ -341,6 +341,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--store", default="data/processed/d2.sqlite")
     parser.add_argument("--gate-config", default="config/d2_gate.yaml")
     parser.add_argument("--min-train", type=int, default=500)
+    parser.add_argument(
+        "--train-from",
+        type=int,
+        default=None,
+        help=(
+            "lower bound on training rows, as epoch seconds. Unset reproduces "
+            "D4's original behaviour, where the store's own start is the "
+            "effective bound. Set it to match production's window length: on a "
+            "deeper snapshot the cutoff alone would give the backtest MORE "
+            "history than production has, which flatters the score"
+        ),
+    )
     parser.add_argument("--card-sims", type=int, default=250_000)
     parser.add_argument("--card-seed", type=int, default=1)
     parser.add_argument(
@@ -392,11 +404,23 @@ def main(argv: list[str] | None = None) -> int:
     outcome = derive_outcome(all_rows, truth)
 
     # --- 2. The strict cutoff. Everything below sees only these rows ---------
+    # `--train-from` is the LOWER bound, and it exists because the cutoff alone
+    # is not a window. On the pinned 18-month snapshot the store's own start is
+    # the effective lower bound and the backtest sees 6.8 months where
+    # production gets 17.7. On a deeper snapshot the same code would hand the
+    # backtest a LONGER window than production, which flatters the result by
+    # exactly the mechanism it was meant to correct. Set it and the span is
+    # matched deliberately; leave it unset and the behaviour is D4's original.
     train = [r for r in all_rows if r.start_time < truth.training_cutoff]
+    if args.train_from is not None:
+        train = [r for r in train if r.start_time >= args.train_from]
     if not train:
-        raise SystemExit("no maps before the training cutoff")
+        raise SystemExit("no maps in the training window")
     if max(r.start_time for r in train) >= truth.training_cutoff:
         raise SystemExit("training rows include a map at or after the cutoff")
+    if args.train_from is not None and min(r.start_time for r in train) < args.train_from:
+        raise SystemExit("training rows precede --train-from")
+    train_span_days = (max(r.start_time for r in train) - min(r.start_time for r in train)) / 86400
 
     # --- 3. The production comparator, measured fresh over the FULL store ----
     # This is cli_card.py's own production slope, computed exactly the way it
@@ -463,6 +487,11 @@ def main(argv: list[str] | None = None) -> int:
         "status": "DIAGNOSTIC -- not a gate; does not alter the shipping card",
         "league_id": truth.league_id,
         "training_maps": len(train),
+        # Reported so the window can be CHECKED against production's rather
+        # than assumed to match: 41% of production's maps was the defect that
+        # made a matched-window re-run necessary in the first place.
+        "training_from": args.train_from,
+        "training_window_days": round(train_span_days, 1),
         "observed_score": score,
         "random_baseline": baseline,
         "optimizer_marginal_objective": optimizer_marginal_objective,

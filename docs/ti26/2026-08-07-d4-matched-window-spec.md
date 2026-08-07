@@ -28,8 +28,20 @@ of production's data.* That sentence would be equally true if D4 had returned
 **Training window.** 17.7 months before the TI 2025 cutoff, matching production's
 window before TI 2026. NOT "as much history as the ingest returns" — maximising
 the window after seeing results is the move this document exists to prevent. The
-ingest therefore needs roughly 30 months from today; any surplus beyond the
-matched window is discarded by the cutoff filter, not used.
+ingest therefore needs roughly 30 months from today.
+
+**This requires a LOWER bound, which D4 does not have.** `cli_d4` filters
+`start_time < training_cutoff` and nothing else, so a deeper snapshot would
+silently hand the backtest a *longer* window than production gets rather than a
+matched one — which is the same misconfiguration this document is correcting,
+pointed the other way, and it would inflate the result. A `--train-from` argument
+is therefore required, set to `training_cutoff` minus production's window length,
+and the run must report the resulting map count and month span so the match can
+be checked rather than assumed.
+
+Corrected here on 2026-08-07, before any data was fetched. An earlier draft of
+this paragraph said the surplus "is discarded by the cutoff filter", which is
+false: the cutoff filter is an upper bound only.
 
 **Everything else is D4's, unchanged:** `--card-sims 250000`, `--card-seed 1`,
 `--eval-seed 90001`, `--min-train 500`, the same `config/ti2025_backtest.yaml`

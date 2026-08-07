@@ -16,7 +16,7 @@ from ti26.cli_d4 import (
     render_markdown,
 )
 from ti26.data.schema import MapRow
-from ti26.data.store import insert_rows, open_store
+from ti26.data.store import insert_rows, load_rows, open_store
 from ti26.observed import SwissOutcome
 from ti26.types import Category
 
@@ -342,6 +342,59 @@ def _truth_yaml() -> str:
 
 
 @pytest.mark.slow
+def test_train_from_bounds_the_window_below_as_well_as_above(tmp_path, monkeypatch):
+    """Kills mutation: accept `--train-from` and never apply it.
+
+    The cutoff is an upper bound only. On a snapshot deeper than the one the
+    backtest was designed against, that alone hands the backtest MORE history
+    than production has, which flatters the score by exactly the mechanism the
+    matched-window spec exists to correct. A silently ignored lower bound would
+    report a matched window while running an unmatched one.
+
+    The spy captures what calibration actually received, so this fails if the
+    bound is dropped, applied to the wrong side, or applied only to the report.
+    """
+    store = tmp_path / "d2.sqlite"
+    _build_store(store)
+    truth_path = tmp_path / "truth.yaml"
+    truth_path.write_text(_truth_yaml())
+    aliases_path = tmp_path / "aliases.yaml"
+    aliases_path.write_text("aliases: []\n")
+    out = tmp_path / "reports"
+
+    train_from = 300_000
+    calls: list[list[int]] = []
+    original = cli_d4_module.derive_glicko_calibration_slope
+
+    def spy(rows, *a, **kw):
+        calls.append([r.start_time for r in rows])
+        return original(rows, *a, **kw)
+
+    monkeypatch.setattr(cli_d4_module, "derive_glicko_calibration_slope", spy)
+
+    rc = d4_main([
+        "--truth", str(truth_path), "--aliases", str(aliases_path), "--store", str(store),
+        "--out", str(out), "--min-train", "150", "--card-sims", "300", "--card-seed", "1",
+        "--eval-seed", "2", "--sweep-sims", "50,80", "--sweep-seeds", "1",
+        "--random-samples", "300", "--random-seed", "3",
+        "--train-from", str(train_from),
+    ])
+    assert rc == 0
+
+    all_rows = load_rows(open_store(str(store)))
+    unbounded = [r for r in all_rows if r.start_time < CUTOFF]
+    expected = [r for r in unbounded if r.start_time >= train_from]
+    assert len(expected) < len(unbounded), "the fixture must have rows the bound removes"
+
+    refit = min(calls, key=len)
+    assert min(refit) >= train_from, "a row older than --train-from reached calibration"
+    assert len(refit) == len(expected)
+
+    payload = json.loads((out / "d4_card_backtest.json").read_text())
+    assert payload["training_from"] == train_from
+    assert payload["training_maps"] == len(expected)
+
+
 def test_strict_cutoff_only_pre_cutoff_rows_reach_calibration_and_roster_resolution(
     tmp_path, monkeypatch
 ):
