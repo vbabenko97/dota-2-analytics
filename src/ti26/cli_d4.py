@@ -5,7 +5,20 @@ existed and before any score was computed: one event is one sample, so a high
 score here would not establish forecast value and a low one would not refute it.
 Nothing in this module promotes, demotes or alters the shipping card.
 
-What it does, all under a strict `start_time < training_cutoff` filter:
+What it does, under a `start_time < training_cutoff` filter with ONE documented
+exception. The filter governs everything derived from match rows here: the
+calibration refit, the Glicko fit and roster resolution all receive pre-cutoff
+rows only. It does NOT govern `config/ti2026_rules.yaml`, whose `duration_model`
+block was fitted over 41,082 maps -- effectively the whole store, including at
+least 24,124 maps after the cutoff. The simulator draws map durations from those
+parameters and durations feed the sixth tiebreak criterion, so post-cutoff
+information reaches the simulation through that one channel. The committed
+sensitivity sweep bounds the effect at about 0.0027 on a category marginal
+against a Monte Carlo noise floor of about 0.0094, and reports `resolvable:
+false` on every row -- but it varies only `log_sigma` and never `log_mean`, so
+that bound is partial. This paragraph exists because the docstring previously
+claimed a strict filter without the exception, which is not a claim the code
+supports:
 
 1. Re-derives TI 2025's observed Swiss outcome from the store and asserts it
    matches the frozen `config/ti2025_backtest.yaml`.

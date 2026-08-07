@@ -149,13 +149,31 @@ def test_round_constraints():
     assert rules.max_distance_elimination_rounds == [5]
 
 
-def test_every_rule_carries_a_provenance_tag():
+def test_every_rule_carries_a_provenance_tag_and_none_claims_official():
+    """Kills mutation: retag a secondhand format value as `official`.
+
+    Nothing in this repository can check Valve's published rules. The design
+    spec records that the page is JavaScript-rendered and that two fetch
+    attempts returned no body, no archived copy is committed, the D1 pass that
+    was to confirm the values has been withdrawn, and `explorer_query` is the
+    only network path here. `reported_official` is the strongest tag the
+    evidence supports. The second assertion is not redundant with the first:
+    it is what fails if someone restores `official` to the allowed set.
+    """
     rules = load_rules(RULES_PATH)
     # "empirical" added in D2: the duration model is now fitted from real
     # match durations (reports/duration_fit.json) rather than guessed.
-    allowed = {"official", "logically_forced", "inferred", "arbitrary", "empirical"}
+    allowed = {
+        "reported_official",
+        "logically_forced",
+        "inferred",
+        "inferred_unvalidated",
+        "arbitrary",
+        "empirical",
+    }
     assert rules.provenance
     assert set(rules.provenance.values()) <= allowed
+    assert "official" not in set(rules.provenance.values())
 
 
 def test_team_state_properties():

@@ -33,23 +33,43 @@ duration_model:
   log_sigma: 0.2805980274352356
   fitted_from_n_maps: 41082
 
+# `reported_official` means: a secondhand report of Valve's published rules that
+# NOTHING in this repository can check. The design spec records that the rules
+# page is JavaScript-rendered, that two fetch attempts returned no body, and that
+# the values were relayed with citations the session could not open; the D1 pass
+# that was to confirm them has since been withdrawn. No archived copy of the page
+# is committed. These values were tagged `official` until 2026-08-06, which
+# asserted a verification status that has never existed. Every published marginal
+# and the whole card depend on them, so the tag has to say what is actually
+# known. Confirming them against the live rules page is an owner task: it needs
+# sources outside `explorer_query`, which is this project's only network path.
 provenance:
-  n_teams: official
-  total_rounds: official
-  advance_at_wins: official
-  eliminate_at_losses: official
-  tiebreak_order: official
-  within_group_rounds: official
-  cross_group_rounds: official
-  max_distance_when_loser_eliminated: official
+  n_teams: reported_official
+  total_rounds: reported_official
+  advance_at_wins: reported_official
+  eliminate_at_losses: reported_official
+  tiebreak_order: reported_official
+  within_group_rounds: reported_official
+  cross_group_rounds: reported_official
+  max_distance_when_loser_eliminated: reported_official
   record_capacities: logically_forced
   category_capacities: logically_forced
+  # The base pairing preference -- minimum ranking distance inside a record
+  # bucket, uniform random among exact ties -- came from the consultation
+  # document, not from any recorded official source, and had NO provenance key
+  # at all until 2026-08-06 while adjacent inferences carried one. The spec's
+  # own acceptance criterion for it, reproducing TI 2025's pairings exactly from
+  # actual results, was never discharged: no producer exists and the
+  # `schedule_sensitivity.csv` deliverable was never written. The card's
+  # sensitivity to this rule is therefore unquantified.
+  base_pairing_preference: inferred_unvalidated
   # Round 4's 0-3 group also eliminates its loser, but the published rule
   # names Round 5 only. Applying max-distance at R4 would be an inference
   # and is deliberately NOT enabled.
   max_distance_at_round_4: inferred
   # No published rule orders teams still exactly tied after duration.
   coin_toss_resolution: arbitrary
-  # Repeat avoidance is "where possible" per the official text.
-  repeat_avoidance_is_soft: official
+  # Repeat avoidance is "where possible" per the reported official text, which
+  # reaches this repository through the same unopenable citations as the rest.
+  repeat_avoidance_is_soft: reported_official
   duration_model: empirical   # fitted in D2; see reports/duration_fit.json
