@@ -1,3 +1,4 @@
+<!-- ti26-run: 7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198 manifest.json -->
 # D3 calibration gate result
 
 **Verdict: FAIL**
@@ -32,9 +33,9 @@ Folds: 192 tournaments, 28923 out-of-sample maps.
 |---|---|---|---|---|
 | constant | 0.69315 | nan | nan | 26830 / 28923 |
 | elo_calibrated | 0.69124 | 0.6569 | 0.0460 | 26830 / 28923 |
-| glicko_calibrated_diagnostic | 0.68644 | 0.9049 | 0.0314 | 26830 / 28923 |
+| glicko_calibrated_diagnostic | 0.68642 | 0.9057 | 0.0315 | 26830 / 28923 |
 
-`elo_calibrated` is the gated candidate. `glicko_calibrated_diagnostic` is reported here only -- per spec (registered 2026-08-03), putting two candidates through one gate roughly doubles the false-pass probability, and choosing between them after seeing results is the multiple-comparisons version of moving the margin. It never gates and is never substituted if Elo fails.
+`elo_calibrated` is the gated candidate. `glicko_calibrated_diagnostic` is reported here only -- per spec (registered 2026-08-03), the registration names Elo as the sole gated candidate, because testing a second candidate through the same gate raises the false-pass probability and choosing between them after seeing results is the multiple-comparisons version of moving the margin. This run does not compute by how much. It never gates and is never substituted if Elo fails.
 
 ## Consequence
 

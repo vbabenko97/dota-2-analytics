@@ -1,3 +1,4 @@
+<!-- ti26-run: 7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198 manifest.json -->
 # D3b calibration gate result -- the multiplicity-corrected Glicko gate
 
 **Verdict: PASS**
@@ -10,10 +11,10 @@ Registered 2026-08-03 in `docs/superpowers/specs/2026-08-01-ti2026-forecast-desi
 
 | condition | value | required | result |
 |---|---|---|---|
-| margin: mean(LL_constant - LL_glicko_calibrated) | 0.00671 nats/map | >= 0.003 | PASS (already known) |
-| calibration slope | 0.9049 | [0.9, 1.1] | PASS (already known) |
+| margin: mean(LL_constant - LL_glicko_calibrated) | 0.00673 nats/map | >= 0.003 | PASS (already known) |
+| calibration slope | 0.9057 | [0.9, 1.1] | PASS (already known) |
 
-**The slope's margin of compliance is fragile: 0.9049 clears the 0.9 lower bound by only 0.0049.** This is stated plainly rather than shown as a bare PASS, so a reader can judge it rather than trust it.
+**The slope's margin of compliance is fragile: 0.9057 clears the 0.9 lower bound by only 0.0057.** This is stated plainly rather than shown as a bare PASS, so a reader can judge it rather than trust it.
 
 ## The actual test: the paired cluster bootstrap interval, at 97.5% not 95%
 
@@ -21,7 +22,7 @@ Bonferroni for the two candidates actually computed (Elo, Glicko): family-wise a
 
 | condition | measured | required | result |
 |---|---|---|---|
-| paired cluster bootstrap 97.5% CI excludes 0 | [0.00230, 0.01301] | excludes 0 | PASS |
+| paired cluster bootstrap 97.5% CI excludes 0 | [0.00240, 0.01290] | excludes 0 | PASS |
 
 **Overall D3b verdict: PASS**
 

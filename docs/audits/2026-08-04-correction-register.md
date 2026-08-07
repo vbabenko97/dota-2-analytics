@@ -96,6 +96,32 @@ The statistic had a name, two defensible definitions, and no record of which one
 was meant. Agreement between two ad-hoc calculations looked like confirmation and
 was not.
 
+## The rating model was wrong, and the apparatus did not notice
+
+Added 2026-08-06. An external audit of the reproducibility work found that
+`GlickoModel` charged one Glicko-2 variance increment per period too many, in
+three separate places. Correcting it moved every number the model produces,
+swapped two of the sixteen card assignments, and withdrew the claim that all
+sixteen were stable across simulation seeds. Details are in
+[the closing report](2026-08-04-reproducibility-closing-report.md).
+
+The part that belongs in this register is not the defect. It is that everything
+built to catch exactly this kind of problem reported success throughout.
+
+`verify-run` exited 0 on the committed bundle the whole time, because every check
+it performs is internal: the declared inputs and outputs still hashed to what the
+manifest said, the run id still derived from the descriptor, every report still
+named its own run. All true, all irrelevant to whether the code still produced
+those numbers. The suite of 819 tests passed on the corrected model as readily as
+on the defective one, because no test pinned the per-period deviation growth rate;
+the two conventions agree at a one-period gap and every fixture used one. And the
+gate artifacts were frozen precisely so their numbers could not drift, which meant
+they went on describing a model that no longer existed.
+
+Provenance answers "is this bundle internally consistent". It does not answer "is
+this bundle still what the code produces", and the second question is the one that
+mattered. `verify-run --against-revision` now asks it.
+
 ## What is still unverified
 
 - The pre-registration timing of D3b as a one-condition test rests on commit

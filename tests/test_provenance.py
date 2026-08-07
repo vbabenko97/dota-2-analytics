@@ -277,6 +277,28 @@ def _descriptor(tmp_path):
     }
 
 
+def test_verify_run_bundle_rejects_a_bundle_built_at_another_revision(tmp_path):
+    """Kills mutation: accept `against_revision` and never compare it.
+
+    Every other check here is internal -- it proves a bundle still describes
+    the bytes it was built from, which stays true forever no matter what the
+    source tree does. A rating-model correction moved every published number
+    while this function went on exiting 0 on the superseded bundle. Passing a
+    revision has to be able to FAIL, or the argument is decoration.
+    """
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    descriptor = _descriptor(tmp_path)
+    (bundle / "report.md").write_text(f"{render_report_prefix(descriptor)}\nbody\n")
+    write_run_manifest(bundle, descriptor, ["report.md"])
+
+    assert verify_run_bundle(bundle, repo_root=tmp_path, against_revision="a" * 40)
+    assert verify_run_bundle(bundle, repo_root=tmp_path)
+
+    with pytest.raises(RunManifestError, match="does not describe this tree"):
+        verify_run_bundle(bundle, repo_root=tmp_path, against_revision="c" * 40)
+
+
 def test_verify_run_bundle_rejects_a_changed_report(tmp_path):
     """Kills mutation: skip SHA-256 validation for outputs ending in .md."""
     bundle = tmp_path / "bundle"

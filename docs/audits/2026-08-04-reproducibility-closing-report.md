@@ -6,6 +6,14 @@ from the pinned 2026-08-02 snapshot. The near-lock regeneration runs close to th
 [the runbook](../ti26/near-lock-runbook.md); rosters and ratings are still moving,
 and doing it now would mean doing it twice.
 
+**Superseded in part on 2026-08-06 by a rating-model correction.** A defect in
+the Glicko idle-inflation path charged one variance increment per period too
+many. Correcting it moved every number the model produces and changed two of the
+sixteen assignments. This document has been updated to the corrected bundle; the
+section "The Glicko correction" below records what moved and what did not. The
+2026-08-04 bundle it previously described remains in the repository as a
+historical artifact and is discussed there.
+
 Every number in this document is read from the run bundle named below, whose
 manifest binds it to a source revision, an input snapshot and a set of configs.
 
@@ -13,9 +21,9 @@ manifest binds it to a source revision, an input snapshot and a set of configs.
 
 | field | value |
 |---|---|
-| run id | `c118831c6f96242071b758fcc7948f9b9ee7e82c44f7ae11e9bb173c74a978ea` |
-| path | `reports/runs/c118831c6f96242071b758fcc7948f9b9ee7e82c44f7ae11e9bb173c74a978ea/` |
-| source revision | `247aba5f01a905f8e6226d9bdd4a3408ec3d247f` |
+| run id | `7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198` |
+| path | `reports/runs/7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198/` |
+| source revision | `d62fb41f4b9158928a79df76cd92e6c86ff4b866` |
 | snapshot | `20260802T165535Z`, 19 committed chunks, 41,140 rows |
 | logical store digest | `8b3f2bb715d0f75e92f1e039594b06835f5f87d85639bdd86e7cb596f8dc8cf9` |
 | outputs / inputs hashed | 19 / 7 |
@@ -23,9 +31,16 @@ manifest binds it to a source revision, an input snapshot and a set of configs.
 Reproduce it:
 
 ```
-.venv/bin/python -m ti26.cli_release --snapshot 20260802T165535Z --source-revision 247aba5f01a905f8e6226d9bdd4a3408ec3d247f
-.venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/<run-id>
+.venv/bin/python -m ti26.cli_release --snapshot 20260802T165535Z --source-revision d62fb41f4b9158928a79df76cd92e6c86ff4b866
+.venv/bin/python -m ti26.cli_provenance verify-run \
+  --bundle reports/runs/7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198 \
+  --against-revision $(git rev-parse HEAD)
 ```
+
+`--against-revision` is the check this project did not have while the defect was
+live. Without it `verify-run` asks only whether a bundle still describes the bytes
+it was built from, which stayed true throughout; it never asked whether the
+current source still produces them, and for two days it did not.
 
 ## The card
 
@@ -35,13 +50,13 @@ what the pipeline orders on; display names are what the owner submits.
 | team id | team | category |
 |---|---|---|
 | 9572001 | Team Vision | 4-0 |
-| 8255888 | BoomBoys | 4-1 |
+| 7119388 | Team Spirit | 4-1 |
 | 9823272 | Team Yandex | 4-1 |
 | 9467224 | Aurora Gaming | elim_win |
 | 10136357 | Nigma Galaxy | elim_win |
 | 9247354 | Team Falcons | elim_win |
 | 2163 | Team Liquid | elim_win |
-| 7119388 | Team Spirit | elim_win |
+| 8255888 | BoomBoys | elim_win |
 | 10182357 | Iron Wing | elim_loss |
 | 10150538 | LGD Gaming | elim_loss |
 | 2586976 | OG | elim_loss |
@@ -51,16 +66,43 @@ what the pipeline orders on; display names are what the owner submits.
 | 10149530 | HULIGANI | 1-4 |
 | 5017210 | Team Resilience | 0-4 |
 
-Optimizer marginal objective 4.629 against a random baseline of 3.75. That number
+Optimizer marginal objective 4.5903 against a random baseline of 3.75. That number
 is the sum of the model's own estimated category marginals under this assignment.
 It is descriptive only. It is not the evaluation-simulation mean score, and it is
 not evidence of skill.
 
-**Unchanged from the previously published card.** All 16 assignments and the
-objective are identical. The identity and tie-tolerance corrections below were
-reproducibility fixes; running the production command before and after each of
-them produced byte-identical assignments, because float Glicko strengths do not
-tie exactly.
+**Two assignments moved, and the seed-stability claim is withdrawn.** Team Spirit
+and BoomBoys swap `4-1` and `elim_win` relative to the 2026-08-04 card. The cause
+is the Glicko correction, not fresh data; the section below states which.
+
+The previous card reported all 16 teams stable across seeds 1, 2 and 3 at 250,000
+simulations. The corrected model reports **6 of 16 unstable**, including both
+extremes:
+
+| team | seed 1 | seed 2 | seed 3 |
+|---|---|---|---|
+| Team Vision | 4-0 | 4-1 | 4-0 |
+| Team Resilience | 0-4 | 1-4 | 1-4 |
+| Team Spirit | 4-1 | 4-0 | elim_win |
+| Team Falcons | elim_win | elim_win | 4-1 |
+| GamerLegion | 1-4 | 0-4 | 1-4 |
+| HULIGANI | 1-4 | 1-4 | 0-4 |
+
+Team Resilience holds the `0-4` slot on one seed of the three and `1-4` on the
+other two, so the shipping pick is the minority outcome among the seeds checked.
+Nothing about the diagnostic changed. The earlier stability was an artifact of the
+inflated strength spread.
+
+This is not resolvable by simulating harder, and the temptation to try was
+examined and rejected. The gap between the best and second-best full assignment
+under these marginals is 0.000004, exactly one simulated tournament in 250,000,
+against a sampling error on a single marginal of about 0.00073 -- 183 times
+larger. Raising the count would also silently move the tie tolerance, which
+`cli_card.py` derives from it, and
+[the runbook](../ti26/near-lock-runbook.md) makes a tolerance-driven assignment
+change an owner stop. Spec section IX had already set the acceptance threshold
+that 250,000 meets and called anything beyond it "ritual, not method". The
+instability is the model reporting that it cannot separate six of sixteen slots.
 
 ## Gate lineage
 
@@ -69,9 +111,20 @@ quoting literals. All three scored the same 26,830 maps.
 
 | gate | verdict | conditions |
 |---|---|---|
-| D2 | **FAIL** | margin −0.00383 against ≥0.003; 95% CI [−0.02055, 0.00614] does not exclude 0 |
+| D2 | **FAIL** | margin −0.00356 against ≥0.003; 95% CI [−0.02037, 0.00649] does not exclude 0 |
 | D3 | **FAIL** | margin 0.00191 against ≥0.003; CI [−0.00046, 0.00500] does not exclude 0; slope 0.6569 outside [0.9, 1.1] |
-| D3b | **PASS** | margin 0.00671; 97.5% CI [0.00230, 0.01301] excludes 0; slope 0.9049 inside [0.9, 1.1] |
+| D3b | **PASS** | margin 0.00673; 97.5% CI [0.00240, 0.01290] excludes 0; slope 0.9057 inside [0.9, 1.1] |
+
+D3 is byte-identical to the 2026-08-04 run, and not by coincidence: it gates on
+Elo, which never touches `GlickoModel`. Only its Glicko diagnostic row moved.
+
+**These are recomputations, not re-registrations.** The corrected model has no
+pre-registered D3b result and cannot be given one. D3b's standing came from an
+ordering -- registered after Elo failed, before Glicko's interval was computed --
+that cannot be recreated after the fact. What can be said is narrower and is all
+that is claimed here: re-running each gate on corrected code, with its arguments,
+thresholds and data unchanged, overturns no verdict, and D3b's fragile slope
+condition clears its 0.9 bound by 0.0057 rather than 0.0049.
 
 D3b's artifact records which condition was actually open: only the interval.
 Margin and slope were already measured and already passing when it ran, so the
@@ -82,15 +135,65 @@ lower bound by 0.0049.
 
 From `d4/d4_card_backtest.json`. It promotes and demotes nothing.
 
-Observed score **1/16** against the 3.75 random baseline, at the 0.7th percentile
-strictly below / 5.0th at-or-below of the model's own predictive distribution.
-Optimizer marginal objective 4.1675; evaluation-simulation mean score 4.1634.
-Calibration slope refit strictly before the cutoff 0.2009, against 0.4023 measured
+Observed score **1/16** against the 3.75 random baseline, at the 0.72nd percentile
+strictly below / 4.99th at-or-below of the model's own predictive distribution.
+Optimizer marginal objective 4.1637; evaluation-simulation mean score 4.1601.
+Calibration slope refit strictly before the cutoff 0.2016, against 0.4051 measured
 over the full store.
 
-The sweep reproduced the published table exactly — scores of 5, 3, 3 at 2,000
-sims; 3, 2, 2 at 20,000; 1, 2, 1 at 250,000 — while the objective barely moves.
-The naive strength ladder, with no simulation at all, scored 2/16.
+The headline survives the Glicko correction unchanged: the observed score is still
+1/16, the naive strength ladder with no simulation at all still scores 2/16, the
+rank correlation is still 0.4781, and the displacement partition is still one team
+exact, ten off by one, five off by two or more.
+
+The sweep does not survive, and the previous version of this report was wrong to
+say it "reproduced the published table exactly". It reproduced the table computed
+under the defective model. Under the corrected model the scores are 4, 1, 3 at
+2,000 sims; 4, 5, 2 at 20,000; 1, 2, 2 at 250,000. The direction the earlier
+report drew from it — that scoring gets no better, and if anything worse, as the
+optimisation gets more precise — is unchanged, but it was reported as an exact
+reproduction and it was not.
+
+## The Glicko correction
+
+Found by an external audit of the reproducibility work, on 2026-08-06.
+
+`GlickoModel` inflated a rating's deviation once per elapsed period and then
+handed it to `update_rating`, which applies Glicko-2's own step-6 increment
+`sqrt(phi^2 + sigma'^2)` on top. A roster active in consecutive periods therefore
+took two variance increments where Glickman specifies one, and one returning after
+k idle periods took k+1. The same mistake lived in three places: the rated roster,
+every opponent captured into the pending period, and the prior an inheriting
+roster is seeded from. The first fix corrected one of the three and its commit
+message asserted the other two did not exist; a second audit caught that, and the
+completion is a separate commit.
+
+Consequences, in descending order of how much they matter:
+
+- **Two assignments moved.** Spirit and BoomBoys swap, because BoomBoys carried
+  the largest single correction in the field at −0.0337 logits and fell from third
+  to fifth. This is a corrected computation, not fresh data.
+- **The seed-stability claim is withdrawn**, as above. A tighter deviation makes
+  each result move a rating less, so the corrected model separates teams more
+  slowly: the raw spread over the 16 falls from 1.8518 to 1.7918.
+- **No gate verdict is overturned**, as above.
+- **The D4 sweep no longer reproduces** the committed table, as above.
+- **Completing the fix changed no assignment.** The opponent-capture and
+  inheritance instances moved the objective from 4.5905 to 4.5903 and nothing
+  else, so they are real defects roughly two orders of magnitude smaller than the
+  first.
+
+Three tests now pin the convention, one per instance, each observed failing under
+the exact mutation it names. All three need a gap of more than one period to
+separate the two conventions; at a one-period gap they agree, which is why 819
+passing tests never saw any of it.
+
+**The 2026-08-04 bundle no longer verifies.** Retagging the tournament-format
+provenance changed `config/ti2026_rules.yaml`, which that bundle declares as an
+input, so `verify-run` now fails on it with an input hash mismatch. Nothing it
+computed was affected — no code reads those tags — but content addressing does not
+distinguish a comment from a coefficient, and it should not. The earlier bytes are
+in Git history if the old bundle ever needs to be re-verified.
 
 ## Every audit finding
 
@@ -145,6 +248,21 @@ the numbered verdicts and lettered findings of
   comparison with an owner stop, not a name match.
 - **Rung-3 public ratings.** `cli_rung3` reads a live table with no snapshot here,
   so none of its historical numbers can be replayed offline.
+- **The tournament format itself.** The Swiss structure, win and loss thresholds,
+  series length, tiebreak sequence and round-one seeding reach this repository
+  secondhand, through citations the originating session could not open, from a
+  JavaScript-rendered page that returned no body. No archived copy is committed.
+  Every published marginal depends on these values. They are now tagged
+  `reported_official` rather than `official`, which is what is actually known;
+  confirming them needs sources outside `explorer_query` and is an owner task.
+- **The pairing rule.** Minimum ranking distance inside a record bucket, uniform
+  random among exact ties, comes from the consultation document rather than any
+  official source. The spec's acceptance criterion for it — reproduce TI 2025's
+  pairings exactly from actual results — was never discharged, no producer exists,
+  and the card's sensitivity to the rule is unquantified.
+- **The corrected model's out-of-period behaviour at scale.** The three fixed
+  instances are pinned by unit tests against a Glicko-2 reference. Nothing here
+  independently re-derives the full-store fit against a second implementation.
 - **Every claim about a future TI 2026 result.** Nothing here forecasts anything;
   it makes an existing forecast checkable.
 

@@ -111,6 +111,15 @@ def main(argv: list[str] | None = None) -> int:
     verify_run = commands.add_parser("verify-run")
     verify_run.add_argument("--bundle", required=True)
     verify_run.add_argument("--repo-root", default=None)
+    verify_run.add_argument(
+        "--against-revision",
+        default=None,
+        help=(
+            "require the bundle to name this source revision; pass "
+            "$(git rev-parse HEAD) to check that it still describes this tree, "
+            "and omit it when verifying a historical bundle"
+        ),
+    )
     manifest = commands.add_parser("snapshot-manifest")
     manifest.add_argument("--raw", required=True)
     manifest.add_argument("--snapshot", required=True)
@@ -131,7 +140,13 @@ def main(argv: list[str] | None = None) -> int:
         print(written)
     else:
         repo_root = Path(args.repo_root) if args.repo_root is not None else None
-        _print_json(verify_run_bundle(Path(args.bundle), repo_root=repo_root))
+        _print_json(
+            verify_run_bundle(
+                Path(args.bundle),
+                repo_root=repo_root,
+                against_revision=args.against_revision,
+            )
+        )
     return 0
 
 

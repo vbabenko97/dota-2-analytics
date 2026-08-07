@@ -162,6 +162,115 @@ def test_idle_rosters_lose_certainty_every_empty_period():
     assert after_40 > after_10, "RD must keep growing across MULTIPLE idle periods"
 
 
+def test_consecutive_periods_charge_exactly_one_glicko2_inflation():
+    """Kills mutation: feed `rating_of(rvid)` to `update_rating` inside `flush`.
+
+    `rating_of` inflates by the whole elapsed gap and `update_rating` then
+    applies Glicko-2's own step-6 increment on top of it, so a roster playing
+    in consecutive periods took two variance increments where Glickman
+    specifies one, and a roster returning after k idle periods took k+1. The
+    reference below is the repository's own `update_rating` applied once per
+    period with NO inflation in between, which is what two consecutive rating
+    periods mean. A fresh opponent in the second period keeps the comparison
+    on the roster's own inflation rather than on how opponent RDs are read.
+    """
+    from ti26.ratings.glicko import GlickoRating, update_rating
+
+    model = GlickoModel(period_seconds=WEEK)
+    model.update(row(1, 0, A, B, radiant_win=True))
+    model.update(row(2, WEEK, A, C, radiant_win=True))
+    model.flush()
+
+    initial = GlickoRating(1500.0, 350.0, 0.06)
+    first = update_rating(initial, [(initial, 1.0)], tau=0.5)
+    second = update_rating(first, [(initial, 1.0)], tau=0.5)
+
+    observed = model.rating_of(roster_version_id(A), at_period=1)
+    assert observed.rd == pytest.approx(second.rd, abs=1e-9)
+    assert observed.rating == pytest.approx(second.rating, abs=1e-9)
+
+
+def _start_of_period(rating, periods):
+    """Glicko-2's pre-update deviation: one inflation per ALREADY-elapsed period."""
+    from ti26.ratings.glicko import SCALE, GlickoRating
+
+    phi = rating.rd / SCALE
+    rd = math.sqrt(phi * phi + periods * rating.volatility**2) * SCALE
+    return GlickoRating(rating.rating, min(rd, 350.0), rating.volatility)
+
+
+def test_opponents_enter_a_period_at_the_same_deviation_as_the_rated_roster():
+    """Kills mutation: capture opponents with `rating_of` inside `update`.
+
+    `update` stores each opponent's rating in `_pending` and `flush` feeds it
+    straight to `update_rating`. Reading it with `rating_of` charged the
+    opponent the whole elapsed gap while the roster being rated took
+    `idle - 1`, so one roster entered a single rating period carrying two
+    different deviations depending on which side of the map it was on. The
+    three-period gap is what separates the two conventions; with a one-period
+    gap they agree and the mutation survives.
+    """
+    from ti26.ratings.glicko import GlickoRating, update_rating
+
+    model = GlickoModel(period_seconds=WEEK)
+    model.update(row(1, 0, A, B, radiant_win=True))
+    model.update(row(2, 3 * WEEK, A, B, radiant_win=True))
+    model.flush()
+
+    initial = GlickoRating(1500.0, 350.0, 0.06)
+    a0 = update_rating(initial, [(initial, 1.0)], tau=0.5)
+    b0 = update_rating(initial, [(initial, 0.0)], tau=0.5)
+    expected = update_rating(
+        _start_of_period(a0, 2), [(_start_of_period(b0, 2), 1.0)], tau=0.5
+    )
+
+    observed = model.rating_of(roster_version_id(A), at_period=3)
+    assert observed.rd == pytest.approx(expected.rd, abs=1e-9)
+    assert observed.rating == pytest.approx(expected.rating, abs=1e-9)
+
+
+def test_an_inheriting_roster_is_seeded_from_the_start_of_period_prior():
+    """Kills mutation: seed `_inherit` from `rating_of` on the update path.
+
+    `_rating_for_update` delegates to `_inherit` for a roster with no rating
+    of its own, and `_inherit` read the predecessor with `rating_of` at the
+    full elapsed gap -- one increment more than the same code charges a roster
+    that already has a rating. That branch is the majority of updates over the
+    real store, so leaving it uncorrected keeps most of the defect.
+
+    The blend itself is re-derived here from the index's own measured weight,
+    so what this pins is the inflation count reaching the blend, not the
+    blending formula.
+    """
+    from ti26.ratings.glicko import GlickoRating, update_rating
+
+    index = RosterIndex()
+    model = GlickoModel(roster_index=index, period_seconds=WEEK)
+    model.update(row(1, 0, A, B, radiant_win=True))
+    model.flush()
+
+    swapped = [1, 2, 3, 4, 99]
+    model.update(row(2, 3 * WEEK, swapped, C, radiant_win=True))
+    model.flush()
+
+    initial = GlickoRating(1500.0, 350.0, 0.06)
+    a0 = update_rating(initial, [(initial, 1.0)], tau=0.5)
+    prior = _start_of_period(a0, 2)
+
+    weight = index.continuity_with_predecessor(roster_version_id(swapped))
+    blended_rd = math.sqrt(weight * prior.rd**2 + (1.0 - weight) * 350.0**2)
+    seed = GlickoRating(
+        weight * prior.rating + (1.0 - weight) * 1500.0,
+        max(blended_rd, prior.rd),
+        prior.volatility,
+    )
+    expected = update_rating(seed, [(initial, 1.0)], tau=0.5)
+
+    observed = model.rating_of(roster_version_id(swapped), at_period=3)
+    assert observed.rd == pytest.approx(expected.rd, abs=1e-9)
+    assert observed.rating == pytest.approx(expected.rating, abs=1e-9)
+
+
 def test_idle_inflation_never_exceeds_the_never_seen_prior():
     """Otherwise a long-idle roster becomes more uncertain than one that has
     never played, which is incoherent."""

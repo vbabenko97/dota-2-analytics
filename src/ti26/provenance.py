@@ -165,8 +165,23 @@ def write_run_manifest(
     return manifest_path
 
 
-def verify_run_bundle(bundle: Path, repo_root: Path | None = None) -> dict[str, object]:
-    """Fail closed on malformed paths, changed files, or unbound reports."""
+def verify_run_bundle(
+    bundle: Path, repo_root: Path | None = None, against_revision: str | None = None
+) -> dict[str, object]:
+    """Fail closed on malformed paths, changed files, or unbound reports.
+
+    Every check here is INTERNAL: it establishes that a bundle still describes
+    the bytes it was built from. It cannot establish that the current source
+    tree still produces those bytes, and for a while it did not occur to anyone
+    that those are different questions -- a rating-model defect was corrected,
+    every published number moved, and this function went on exiting 0 on a
+    bundle no longer reproducible from HEAD.
+
+    Pass `against_revision` to close that gap: the bundle is then also required
+    to name that revision as the source it was generated from. Callers that are
+    verifying a HISTORICAL bundle should leave it unset, because an old bundle
+    naming an old revision is correct rather than stale.
+    """
     root = _bundle_root(bundle)
     manifest_path = root / "manifest.json"
     try:
@@ -195,6 +210,11 @@ def verify_run_bundle(bundle: Path, repo_root: Path | None = None) -> dict[str, 
             first_line = (root / output["path"]).read_text(encoding="utf-8").split("\n", 1)[0]
             if first_line != f"<!-- ti26-run: {expected_run_id} manifest.json -->":
                 raise RunManifestError(f"report run reference mismatch: {output['path']}")
+    if against_revision is not None and manifest["source_revision"] != against_revision:
+        raise RunManifestError(
+            f"run manifest names source revision {manifest['source_revision']}, "
+            f"not {against_revision}; the bundle does not describe this tree"
+        )
     return manifest
 
 

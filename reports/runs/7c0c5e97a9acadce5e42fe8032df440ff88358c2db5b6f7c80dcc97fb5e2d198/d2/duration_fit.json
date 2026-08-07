@@ -1,0 +1,11 @@
+{
+  "log_mean": 7.579288849767151,
+  "log_sigma": 0.2805980274352356,
+  "gap_coefficient": -0.0015315533534133576,
+  "gap_se": 0.005811777605844415,
+  "gap_effect_material": false,
+  "n": 41082,
+  "placeholder_log_mean": 7.65,
+  "placeholder_log_sigma": 0.25,
+  "note": "spec XII: this parameter steers ~30% of every ranking"
+}
