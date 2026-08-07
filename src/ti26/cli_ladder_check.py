@@ -35,9 +35,8 @@ import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from ti26.cli_d4 import naive_strength_ladder
 from ti26.montecarlo import category_marginals, monte_carlo_stderr
-from ti26.optimize import solve_card
+from ti26.optimize import naive_strength_ladder, solve_card
 from ti26.rules import load_rules
 from ti26.types import Category
 

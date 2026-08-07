@@ -58,10 +58,9 @@ from scipy.stats import spearmanr
 
 from ti26.cli_card import apply_correction, derive_glicko_calibration_slope
 from ti26.data.store import load_rows, open_store
-from ti26.identity import order_key
 from ti26.montecarlo import card_score_distribution, category_marginals, monte_carlo_stderr
 from ti26.observed import SwissOutcome, derive_outcome, load_backtest_truth, score_card
-from ti26.optimize import solve_card
+from ti26.optimize import naive_strength_ladder, solve_card
 from ti26.ratings import load_gate_config
 from ti26.ratings.glicko import GlickoModel
 from ti26.roster import RosterIndex, load_aliases
@@ -135,27 +134,6 @@ def random_card_control(
         "mean_score": total / samples,
         "score_counts": {str(score): count for score, count in sorted(score_counts.items())},
     }
-
-
-def naive_strength_ladder(
-    strengths: Mapping[str, float],
-    capacities: Mapping[Category, int],
-    *,
-    team_ids: Mapping[str, object],
-) -> dict[str, Category]:
-    """Assign categories straight down strength order -- no simulation, no optimiser.
-
-    Ties are broken by the configured team id, never the display name, for
-    the same reason `optimize.solve_card` and `montecarlo.canonical_labels`
-    do: a name-based break would make this comparator's card depend on which
-    org rebranded most recently rather than on strength.
-    """
-    tie_break = order_key(strengths, team_ids)
-    order = sorted(strengths, key=lambda t: (-strengths[t], tie_break(t)))
-    slots = [c for c in Category for _ in range(capacities[c])]
-    if len(order) != len(slots):
-        raise ValueError(f"{len(order)} teams cannot fill {len(slots)} slots")
-    return dict(zip(order, slots, strict=True))
 
 
 def rank_diagnostics(

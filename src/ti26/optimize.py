@@ -7,6 +7,32 @@ from ti26.identity import order_key
 from ti26.types import Category
 
 
+def naive_strength_ladder(
+    strengths: Mapping[str, float],
+    capacities: Mapping[Category, int],
+    *,
+    team_ids: Mapping[str, object],
+) -> dict[str, Category]:
+    """Assign categories straight down strength order -- no simulation, no optimiser.
+
+    Lives here rather than in a diagnostic because it is a card constructor, and
+    because `cli_card` reports how far the shipped card sits from it: at the
+    production seed the two have been identical, so a reader of the card should
+    not have to run a separate tool to learn that the simulation changed nothing.
+
+    Ties are broken by the configured team id, never the display name, for
+    the same reason `solve_card` and `montecarlo.canonical_labels` do: a
+    name-based break would make this card depend on which org rebranded most
+    recently rather than on strength.
+    """
+    tie_break = order_key(strengths, team_ids)
+    order = sorted(strengths, key=lambda t: (-strengths[t], tie_break(t)))
+    slots = [c for c in Category for _ in range(capacities[c])]
+    if len(order) != len(slots):
+        raise ValueError(f"{len(order)} teams cannot fill {len(slots)} slots")
+    return dict(zip(order, slots, strict=True))
+
+
 def _break_ties(
     assignment: dict[str, Category],
     order: list[str],

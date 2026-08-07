@@ -34,15 +34,23 @@ duration_model:
   fitted_from_n_maps: 41082
 
 # `reported_official` means: a secondhand report of Valve's published rules that
-# NOTHING in this repository can check. The design spec records that the rules
-# page is JavaScript-rendered, that two fetch attempts returned no body, and that
-# the values were relayed with citations the session could not open; the D1 pass
-# that was to confirm them has since been withdrawn. No archived copy of the page
-# is committed. These values were tagged `official` until 2026-08-06, which
-# asserted a verification status that has never existed. Every published marginal
-# and the whole card depend on them, so the tag has to say what is actually
-# known. Confirming them against the live rules page is an owner task: it needs
-# sources outside `explorer_query`, which is this project's only network path.
+# nothing in this repository can check against the SOURCE. The design spec
+# records that the rules page is JavaScript-rendered, that two fetch attempts
+# returned no body, and that the values were relayed with citations the session
+# could not open; the D1 pass that was to confirm them has since been withdrawn,
+# and no archived copy of the page is committed. These were tagged `official`
+# until 2026-08-06, which asserted a verification that has never existed.
+#
+# They are, however, CORROBORATED BY OBSERVATION. `ti26.cli_pairing_check`
+# reconstructs TI 2025 -- the only event that has ever run this format -- from
+# the committed store and reproduces this structure exactly: all 44 series pair
+# equal records, two groups of 8, rounds 1-3 entirely within group, round 4
+# entirely cross-group in all 8 series, five Swiss rounds then one elimination
+# round of 5 series each pairing a 3-2 team against a 2-3 team. Teams played 4,
+# 5 or 6 series, matching that shape. So the tag stays `reported_official`
+# because the source is still unreadable, but the values are no longer merely
+# asserted. Confirming that TI 2026 uses the same format remains an owner task:
+# it needs sources outside `explorer_query`, this project's only network path.
 provenance:
   n_teams: reported_official
   total_rounds: reported_official
@@ -56,13 +64,24 @@ provenance:
   category_capacities: logically_forced
   # The base pairing preference -- minimum ranking distance inside a record
   # bucket, uniform random among exact ties -- came from the consultation
-  # document, not from any recorded official source, and had NO provenance key
-  # at all until 2026-08-06 while adjacent inferences carried one. The spec's
-  # own acceptance criterion for it, reproducing TI 2025's pairings exactly from
-  # actual results, was never discharged: no producer exists and the
-  # `schedule_sensitivity.csv` deliverable was never written. The card's
-  # sensitivity to this rule is therefore unquantified.
-  base_pairing_preference: inferred_unvalidated
+  # document, not from any recorded official source. The spec's acceptance
+  # criterion for it, reproducing TI 2025's pairings from actual results, has
+  # now been discharged by `ti26.cli_pairing_check` and it FAILED: the real
+  # pairing is among the engine's candidates in 4 of the 11 buckets where the
+  # rule had a choice, which is about what indifference gives. The real bracket
+  # sits at minimum distance in 5 buckets, maximum in 4 and between in 2, so it
+  # follows neither this rule nor its opposite, and conventional Swiss folding
+  # fits worse still at 2 of 11.
+  #
+  # `ti26.cli_schedule_sensitivity` then measured what that costs, and the
+  # answer is nothing. Signal-to-noise 1.08: discarding the ranking-distance
+  # criterion ENTIRELY moves category marginals less than re-running the same
+  # rule under a different simulation seed does, and changes no assignment.
+  # So the rule is wrong and immaterial, which is why it is still here.
+  base_pairing_preference: refuted_immaterial
+  # Same measurement, same conclusion: forcing minimisation everywhere moves
+  # marginals by 0.00101 against a single-marginal standard error of 0.001.
+  max_distance_when_loser_eliminated_preference: refuted_immaterial
   # Round 4's 0-3 group also eliminates its loser, but the published rule
   # names Round 5 only. Applying max-distance at R4 would be an inference
   # and is deliberately NOT enabled.

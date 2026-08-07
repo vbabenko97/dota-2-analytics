@@ -122,6 +122,38 @@ Provenance answers "is this bundle internally consistent". It does not answer "i
 this bundle still what the code produces", and the second question is the one that
 mattered. `verify-run --against-revision` now asks it.
 
+## The machinery downstream of the ratings does not do anything
+
+Added 2026-08-07, from three committed diagnostics run after the Glicko
+correction. None of them gates anything.
+
+The spec's pairing acceptance criterion -- reproduce TI 2025's pairings from
+actual results -- was never discharged, and it has now been discharged and
+failed. The structural rules reproduce the event exactly, which nothing had
+previously established. The within-bucket pairing preference does not: it matches
+4 of the 11 buckets where it had a choice, and the real bracket follows neither
+that rule nor its opposite nor conventional Swiss folding.
+
+Then the sensitivity analysis the spec also asked for, and also never got, showed
+that this costs nothing. Signal-to-noise 1.08 -- discarding the ranking-distance
+criterion entirely moves marginals less than re-seeding does, and changes no
+assignment.
+
+Then the comparison nobody had run: at the production seed the shipped card is
+identical to sorting the teams by strength and cutting the ranking into the
+capacities. All sixteen assignments, objective gap exactly 0.0. At other seeds
+twelve of sixteen agree and the four that differ are not the same four, so the
+pipeline's departures from a sort are sampling noise.
+
+The register's concern has always been claims outrunning evidence. This is the
+inverse and worth recording as such: an elaborate apparatus, correctly built and
+faithfully reproduced, whose output equals a spreadsheet sort. Nothing here was
+overclaimed -- the reports never said the simulation was load-bearing. Nobody had
+checked, and it took three producers to find out that the honest description of
+the deliverable is much shorter than the pipeline that produces it.
+
+`cli_card` now reports this itself, so it cannot go unnoticed again.
+
 ## What is still unverified
 
 - The pre-registration timing of D3b as a one-condition test rests on commit

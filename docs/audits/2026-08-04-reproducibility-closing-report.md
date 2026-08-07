@@ -255,23 +255,72 @@ the numbered verdicts and lettered findings of
   Every published marginal depends on these values. They are now tagged
   `reported_official` rather than `official`, which is what is actually known;
   confirming them needs sources outside `explorer_query` and is an owner task.
-- **The pairing rule.** Minimum ranking distance inside a record bucket, uniform
-  random among exact ties, comes from the consultation document rather than any
-  official source. The spec's acceptance criterion for it — reproduce TI 2025's
-  pairings exactly from actual results — was never discharged, no producer exists,
-  and the card's sensitivity to the rule is unquantified.
+- **Why the real bracket paired as it did.** The engine's rule is now known not
+  to reproduce TI 2025, and known not to matter, but no alternative rule fits
+  either. Part of the disagreement may be the ranking rather than the pairing:
+  after one or two rounds that ranking is mostly ties resolved by coin toss,
+  plus a real-world initial seeding neither the model nor the check possesses.
+  The check fails in rounds 4 and 5 too, where that explanation is weakest.
 - **The corrected model's out-of-period behaviour at scale.** The three fixed
   instances are pinned by unit tests against a Glicko-2 reference. Nothing here
   independently re-derives the full-store fit against a second implementation.
 - **Every claim about a future TI 2026 result.** Nothing here forecasts anything;
   it makes an existing forecast checkable.
 
+## What the simulation contributes
+
+Three diagnostics run after the Glicko correction, all committed producers, all
+gating nothing.
+
+**The bracket rules are corroborated; the pairing rule is not.**
+`ti26.cli_pairing_check` reconstructs TI 2025 -- the only event that has ever run
+this format -- and reproduces the structure exactly: equal-record pairing across
+all 44 series, two groups of eight, rounds 1-3 within group, round 4 entirely
+cross-group, five Swiss rounds then a five-series elimination round pairing 3-2
+against 2-3. The within-bucket pairing preference does not reproduce: the real
+pairing is among the engine's candidates in 4 of the 11 buckets where the rule
+had a choice, and the real bracket follows neither this rule nor its opposite.
+
+**And the pairing rule does not matter.** `ti26.cli_schedule_sensitivity`
+compares changing the rule against changing the simulation seed. Signal-to-noise
+is 1.08. Discarding the ranking-distance criterion entirely moves marginals less
+than re-seeding does and changes no assignment, so the failure above is harmless
+and the criterion is decorative.
+
+**The card is a strength sort.** `ti26.cli_ladder_check` compares the shipped
+card with the naive alternative -- sort by calibrated strength, cut the ranking
+into the capacities, no simulation and no optimiser. At the production seed all
+sixteen assignments are identical and the objective gap is exactly 0.0. At seeds
+2 and 3 twelve of sixteen agree, and the four that differ are not the same four,
+so the departures are sampling noise rather than information. The optimiser's
+advantage is at most 0.0041 on the model's own objective, against a claimed edge
+over random of 4.59 - 3.75 = 0.84.
+
+None of this touches the rating work that produces the strengths. It bounds what
+the simulation and assignment layers CONTRIBUTE, and the bound is approximately
+zero. Both methods read the same strengths, so agreement is expected wherever the
+strength ordering is decisive -- that is the point, not a caveat against it.
+
+The card report now states this itself, so a reader does not have to run a
+separate tool to learn that the simulation changed nothing.
+
 ## What may be claimed for this card
 
 It is a deterministic, manifest-bound output of the calibrated-Glicko pipeline on
 a committed input: anyone with this repository can rebuild the store, regenerate
 the card, and verify that every published number came from those exact bytes. That
-is the entire claim, and it is a claim about reproducibility, not accuracy. The
+is the entire claim, and it is a claim about reproducibility, not accuracy.
+
+**And it is a claim about less machinery than it appears to be.** At the shipping
+seed the card is the strength sort, so what is really being submitted is a ranking
+of sixteen teams cut into six buckets. The simulation, the pairing rules and the
+assignment solver are all reproducible, all correct as far as they have been
+tested, and all contributing nothing to the answer. A card that equals the sort
+can be submitted without any dependence on a random seed, which also disposes of
+the six seed-unstable slots -- they are only unstable in a pipeline whose output
+does not differ from the sort anyway.
+
+The
 evidence for the card's forecasting value is weak and points one way. The D2
 forecast-value gate failed and no rating model beat a constant 50/50 floor. D3's
 Elo gate failed all three of its pre-registered conditions. D3b passed, but as a

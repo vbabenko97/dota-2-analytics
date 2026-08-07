@@ -168,6 +168,10 @@ def test_every_rule_carries_a_provenance_tag_and_none_claims_official():
         "logically_forced",
         "inferred",
         "inferred_unvalidated",
+        # A rule tested against TI 2025, found not to reproduce it, and then
+        # measured to make no difference to any marginal. Kept because removing
+        # it would need a replacement that is no better evidenced.
+        "refuted_immaterial",
         "arbitrary",
         "empirical",
     }
