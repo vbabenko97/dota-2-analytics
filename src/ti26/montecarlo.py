@@ -84,14 +84,19 @@ def category_marginals(
     seed: int,
     policy: ChoicePolicy = ChoicePolicy.RATIONAL,
     team_ids: Mapping[str, object] | None = None,
+    pairing_preference: str | None = None,
 ) -> dict[str, dict[Category, float]]:
-    """Run n_sims tournaments and return P[team][category]."""
+    """Run n_sims tournaments and return P[team][category].
+
+    `pairing_preference` reaches `choose_pairing` unchanged and is only for the
+    schedule-sensitivity diagnostic; `None` is the shipping rule.
+    """
     labels = canonical_labels(strengths, team_ids)
     internal = {labels[team]: strength for team, strength in strengths.items()}
     tally: dict[str, Counter[Category]] = {label: Counter() for label in internal}
     for i in range(n_sims):
         rng = random.Random(seed * 1_000_003 + i)
-        run = run_swiss(internal, rules, rng)
+        run = run_swiss(internal, rules, rng, pairing_preference=pairing_preference)
         outcome = run_elimination(run, internal, rules, rng, policy=policy)
         for label, category in outcome.categories.items():
             tally[label][category] += 1
