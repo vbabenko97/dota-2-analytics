@@ -59,6 +59,22 @@ def test_every_owner_submission_name_maps_to_a_configured_team():
     assert len(entries) == len(configured) == 16
 
 
+def test_the_runbook_confirms_the_field_against_a_source_outside_the_repository():
+    """Kills mutation: rewrite the field check as something the store can answer.
+
+    Which sixteen organisations are invited is not in the store, which holds
+    match rows and no invitations. Every other pre-lock check verifies internal
+    consistency against the configured sixteen, so a field that is wrong by one
+    team passes all of them. The step therefore has to send the reader outside
+    `explorer_query` and stop on failure, not resolve it locally.
+    """
+    text = RUNBOOK.read_text()
+    assert "Confirm the sixteen-team field" in text
+    assert "outside `explorer_query`" in text
+    assert "The store holds match rows, not invitations." in text
+    assert "if the official field is not exactly the" in text
+
+
 def test_the_runbook_stops_on_identity_ambiguity_and_checks_account_sets():
     """Kills mutation: let the pre-lock roster review proceed on names alone.
 

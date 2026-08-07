@@ -59,7 +59,7 @@ from ti26.cli import main as cli_main
 from ti26.data.store import load_rows, open_store
 from ti26.gate_artifacts import format_gate_lineage, load_frozen_gate_artifact
 from ti26.montecarlo import category_marginals, monte_carlo_stderr
-from ti26.optimize import solve_card
+from ti26.optimize import naive_strength_ladder, solve_card
 from ti26.public_ratings import observed_recent_form
 from ti26.ratings import load_gate_config
 from ti26.ratings.glicko import SCALE, GlickoModel, _g
@@ -114,6 +114,27 @@ def derive_glicko_calibration_slope(
             "refusing to apply a NaN correction to the card's strengths"
         )
     return slope, intercept
+
+
+def ladder_disagreements(
+    shipped: dict[str, str], ladder: dict[str, str]
+) -> list[str]:
+    """Teams the shipped card places differently from a plain strength sort.
+
+    A named function rather than an inline comprehension because the obvious
+    slip -- comparing `shipped` against itself -- yields an empty list, and an
+    empty list is ALSO the true answer at the production seed. The bug would
+    print the striking-but-correct conclusion and nothing would look wrong.
+    Both dicts must name the same teams, so a card that quietly lost one
+    surfaces here instead of shrinking the comparison.
+    """
+    if set(shipped) != set(ladder):
+        missing = sorted(set(ladder) - set(shipped))
+        extra = sorted(set(shipped) - set(ladder))
+        raise ValueError(
+            f"card and ladder must name the same teams; missing {missing}, extra {extra}"
+        )
+    return sorted(team for team in shipped if shipped[team] != ladder[team])
 
 
 def apply_correction(strengths: dict[str, float], slope: float) -> dict[str, float]:
@@ -294,6 +315,20 @@ def main(argv: list[str] | None = None) -> int:
         calibrated_strengths, rules, seeds, args.card_sims, team_ids=team_ids
     )
 
+    # --- 5b. What did the simulation add over sorting by strength? -----------
+    # Measured here rather than left to a separate diagnostic because at the
+    # production seed the answer has been "nothing": the shipped card and a
+    # plain strength sort were the same 16 assignments. A reader of this report
+    # should not have to run another tool to find that out.
+    ladder = {
+        team: category.value
+        for team, category in naive_strength_ladder(
+            calibrated_strengths, rules.category_capacities, team_ids=team_ids
+        ).items()
+    }
+    shipped = json.loads((out / "recommended_card.json").read_text())["assignments"]
+    ladder_diff = ladder_disagreements(shipped, ladder)
+
     # --- 6. Observed recent form (reused, not reimplemented) -------------------
     reference_time = max(r.start_time for r in rows)
     observed_form = observed_recent_form(rows, resolved, calibrated_strengths, reference_time)
@@ -433,6 +468,41 @@ def main(argv: list[str] | None = None) -> int:
             )
     else:
         lines.append("**All teams are seed-stable across the seeds checked.**")
+    lines += [
+        "",
+        "## What the simulation added over a strength sort",
+        "",
+        (
+            "The naive alternative to this whole pipeline is to sort the teams by "
+            "calibrated strength and cut the ranking into the category capacities "
+            "-- no simulation, no optimiser. Comparing the two bounds what the "
+            "simulation and assignment layers contribute. It bounds their "
+            "CONTRIBUTION, not their correctness: both methods read the same "
+            "strengths, so agreement is expected wherever the strength ordering "
+            "is decisive, and this says nothing about the rating work itself."
+        ),
+        "",
+    ]
+    if ladder_diff:
+        lines += [
+            (
+                f"**The shipped card differs from the strength sort on "
+                f"{len(ladder_diff)} of {len(shipped)} slot(s):** "
+                + ", ".join(ladder_diff)
+                + "."
+            ),
+            "",
+            "| team | shipped | strength sort |",
+            "|---|---|---|",
+        ]
+        lines += [f"| {t} | {shipped[t]} | {ladder[t]} |" for t in ladder_diff]
+    else:
+        lines.append(
+            "**The shipped card IS the strength sort** -- all "
+            f"{len(shipped)} assignments identical. At this seed the simulation "
+            "and the optimiser changed nothing, so the card could be reproduced "
+            "with a sort and no random seed at all."
+        )
     lines += [
         "",
         "## Observed recent form (diagnostic only)",

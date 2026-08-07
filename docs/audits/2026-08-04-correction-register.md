@@ -122,6 +122,68 @@ Provenance answers "is this bundle internally consistent". It does not answer "i
 this bundle still what the code produces", and the second question is the one that
 mattered. `verify-run --against-revision` now asks it.
 
+## A headline number that was mostly a configuration defect
+
+Added 2026-08-07. D4's 1/16 was quoted throughout this project as the pipeline's
+only out-of-sample result. It was measured on a training window 41% the size of
+production's -- 16,958 maps over 6.8 months against 41,140 over 17.7 -- because
+the pinned snapshot did not reach back far enough to give the held-out event a
+matched window. Re-run on a 30-month snapshot with the window matched by
+construction, the score is **4/16**.
+
+This one is worth separating from the register's usual material. It was not a
+claim outrunning evidence, and nothing was misreported: every number was
+correctly computed and correctly labelled. The defect was in the experiment, and
+it was stateable without reference to the result -- *the backtest trains on 41% of
+production's data* would have been equally true had it returned 12/16. That is
+the test that distinguishes fixing a misconfiguration from re-running until the
+answer improves, and it is why the re-run was registered in advance, run once,
+and published beside the original rather than in place of it.
+
+What the correction does not do is rescue the conclusion. 4/16 is barely above
+the 3.75 random baseline, sits at the 23rd percentile of the model's own
+predictive distribution, and exactly matches what a naive strength ladder scores.
+One claim is withdrawn outright: that the pipeline scored worse the more
+precisely it optimised. That came from the sweep under the short window; under
+the matched window the sweep is flat at 4.
+
+The lesson for this register is that a number can be reproducible, manifest-bound,
+correctly computed and still answer the wrong question. Provenance discipline
+catches numbers that do not come from the code. It does not catch a well-built
+measurement of something other than what you meant to measure.
+
+## The machinery downstream of the ratings does not do anything
+
+Added 2026-08-07, from three committed diagnostics run after the Glicko
+correction. None of them gates anything.
+
+The spec's pairing acceptance criterion -- reproduce TI 2025's pairings from
+actual results -- was never discharged, and it has now been discharged and
+failed. The structural rules reproduce the event exactly, which nothing had
+previously established. The within-bucket pairing preference does not: it matches
+4 of the 11 buckets where it had a choice, and the real bracket follows neither
+that rule nor its opposite nor conventional Swiss folding.
+
+Then the sensitivity analysis the spec also asked for, and also never got, showed
+that this costs nothing. Signal-to-noise 1.08 -- discarding the ranking-distance
+criterion entirely moves marginals less than re-seeding does, and changes no
+assignment.
+
+Then the comparison nobody had run: at the production seed the shipped card is
+identical to sorting the teams by strength and cutting the ranking into the
+capacities. All sixteen assignments, objective gap exactly 0.0. At other seeds
+twelve of sixteen agree and the four that differ are not the same four, so the
+pipeline's departures from a sort are sampling noise.
+
+The register's concern has always been claims outrunning evidence. This is the
+inverse and worth recording as such: an elaborate apparatus, correctly built and
+faithfully reproduced, whose output equals a spreadsheet sort. Nothing here was
+overclaimed -- the reports never said the simulation was load-bearing. Nobody had
+checked, and it took three producers to find out that the honest description of
+the deliverable is much shorter than the pipeline that produces it.
+
+`cli_card` now reports this itself, so it cannot go unnoticed again.
+
 ## What is still unverified
 
 - The pre-registration timing of D3b as a one-condition test rests on commit

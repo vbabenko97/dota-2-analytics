@@ -58,10 +58,9 @@ from scipy.stats import spearmanr
 
 from ti26.cli_card import apply_correction, derive_glicko_calibration_slope
 from ti26.data.store import load_rows, open_store
-from ti26.identity import order_key
 from ti26.montecarlo import card_score_distribution, category_marginals, monte_carlo_stderr
 from ti26.observed import SwissOutcome, derive_outcome, load_backtest_truth, score_card
-from ti26.optimize import solve_card
+from ti26.optimize import naive_strength_ladder, solve_card
 from ti26.ratings import load_gate_config
 from ti26.ratings.glicko import GlickoModel
 from ti26.roster import RosterIndex, load_aliases
@@ -135,27 +134,6 @@ def random_card_control(
         "mean_score": total / samples,
         "score_counts": {str(score): count for score, count in sorted(score_counts.items())},
     }
-
-
-def naive_strength_ladder(
-    strengths: Mapping[str, float],
-    capacities: Mapping[Category, int],
-    *,
-    team_ids: Mapping[str, object],
-) -> dict[str, Category]:
-    """Assign categories straight down strength order -- no simulation, no optimiser.
-
-    Ties are broken by the configured team id, never the display name, for
-    the same reason `optimize.solve_card` and `montecarlo.canonical_labels`
-    do: a name-based break would make this comparator's card depend on which
-    org rebranded most recently rather than on strength.
-    """
-    tie_break = order_key(strengths, team_ids)
-    order = sorted(strengths, key=lambda t: (-strengths[t], tie_break(t)))
-    slots = [c for c in Category for _ in range(capacities[c])]
-    if len(order) != len(slots):
-        raise ValueError(f"{len(order)} teams cannot fill {len(slots)} slots")
-    return dict(zip(order, slots, strict=True))
 
 
 def rank_diagnostics(
@@ -363,6 +341,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--store", default="data/processed/d2.sqlite")
     parser.add_argument("--gate-config", default="config/d2_gate.yaml")
     parser.add_argument("--min-train", type=int, default=500)
+    parser.add_argument(
+        "--train-from",
+        type=int,
+        default=None,
+        help=(
+            "lower bound on training rows, as epoch seconds. Unset reproduces "
+            "D4's original behaviour, where the store's own start is the "
+            "effective bound. Set it to match production's window length: on a "
+            "deeper snapshot the cutoff alone would give the backtest MORE "
+            "history than production has, which flatters the score"
+        ),
+    )
     parser.add_argument("--card-sims", type=int, default=250_000)
     parser.add_argument("--card-seed", type=int, default=1)
     parser.add_argument(
@@ -414,11 +404,23 @@ def main(argv: list[str] | None = None) -> int:
     outcome = derive_outcome(all_rows, truth)
 
     # --- 2. The strict cutoff. Everything below sees only these rows ---------
+    # `--train-from` is the LOWER bound, and it exists because the cutoff alone
+    # is not a window. On the pinned 18-month snapshot the store's own start is
+    # the effective lower bound and the backtest sees 6.8 months where
+    # production gets 17.7. On a deeper snapshot the same code would hand the
+    # backtest a LONGER window than production, which flatters the result by
+    # exactly the mechanism it was meant to correct. Set it and the span is
+    # matched deliberately; leave it unset and the behaviour is D4's original.
     train = [r for r in all_rows if r.start_time < truth.training_cutoff]
+    if args.train_from is not None:
+        train = [r for r in train if r.start_time >= args.train_from]
     if not train:
-        raise SystemExit("no maps before the training cutoff")
+        raise SystemExit("no maps in the training window")
     if max(r.start_time for r in train) >= truth.training_cutoff:
         raise SystemExit("training rows include a map at or after the cutoff")
+    if args.train_from is not None and min(r.start_time for r in train) < args.train_from:
+        raise SystemExit("training rows precede --train-from")
+    train_span_days = (max(r.start_time for r in train) - min(r.start_time for r in train)) / 86400
 
     # --- 3. The production comparator, measured fresh over the FULL store ----
     # This is cli_card.py's own production slope, computed exactly the way it
@@ -485,6 +487,11 @@ def main(argv: list[str] | None = None) -> int:
         "status": "DIAGNOSTIC -- not a gate; does not alter the shipping card",
         "league_id": truth.league_id,
         "training_maps": len(train),
+        # Reported so the window can be CHECKED against production's rather
+        # than assumed to match: 41% of production's maps was the defect that
+        # made a matched-window re-run necessary in the first place.
+        "training_from": args.train_from,
+        "training_window_days": round(train_span_days, 1),
         "observed_score": score,
         "random_baseline": baseline,
         "optimizer_marginal_objective": optimizer_marginal_objective,

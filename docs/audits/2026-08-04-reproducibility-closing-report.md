@@ -241,6 +241,14 @@ the numbered verdicts and lettered findings of
   convention was originally intended is not recoverable.
 - **Historical before/after counts** for the display-name and tie-tolerance
   changes. No retained input/output pair; withdrawn rather than restated.
+- **The sixteen-team field itself.** `config/ti2026_teams.yaml` names sixteen
+  `team_id`s and the whole pipeline takes that as given — the capacities sum to
+  sixteen, the simulation seeds sixteen rosters. Nothing here confirms those are
+  the sixteen that will play, and nothing could: the store holds match rows, not
+  invitations. Every other pre-lock check verifies internal consistency against
+  the configured sixteen, so a field wrong by one team would pass all of them.
+  Added as step 3 of the runbook on 2026-08-07, as an owner task; it was absent
+  before that.
 - **Real-world team identity.** That a given OpenDota `team_id` is the
   organisation the owner submits under a given name is not decidable from the
   store, which holds no organisation names. Five configured teams already show
@@ -255,31 +263,129 @@ the numbered verdicts and lettered findings of
   Every published marginal depends on these values. They are now tagged
   `reported_official` rather than `official`, which is what is actually known;
   confirming them needs sources outside `explorer_query` and is an owner task.
-- **The pairing rule.** Minimum ranking distance inside a record bucket, uniform
-  random among exact ties, comes from the consultation document rather than any
-  official source. The spec's acceptance criterion for it — reproduce TI 2025's
-  pairings exactly from actual results — was never discharged, no producer exists,
-  and the card's sensitivity to the rule is unquantified.
+- **Why the real bracket paired as it did.** The engine's rule is now known not
+  to reproduce TI 2025, and known not to matter, but no alternative rule fits
+  either. Part of the disagreement may be the ranking rather than the pairing:
+  after one or two rounds that ranking is mostly ties resolved by coin toss,
+  plus a real-world initial seeding neither the model nor the check possesses.
+  The check fails in rounds 4 and 5 too, where that explanation is weakest.
 - **The corrected model's out-of-period behaviour at scale.** The three fixed
   instances are pinned by unit tests against a Glicko-2 reference. Nothing here
   independently re-derives the full-store fit against a second implementation.
 - **Every claim about a future TI 2026 result.** Nothing here forecasts anything;
   it makes an existing forecast checkable.
 
+## D4 was confounded by data poverty, and the corrected number is 4/16
+
+Registered in advance at
+[the matched-window spec](../ti26/2026-08-07-d4-matched-window-spec.md), run once,
+both numbers published as that spec required.
+
+D4 trains on maps before 2025-09-04, and the pinned snapshot only reaches back to
+2025-02-08, so it saw **16,958 maps over 6.8 months where production has 41,140
+over 17.7**. It tested the procedure on 41% of the data. A 30-month snapshot and
+a `--train-from` bound give a genuinely matched window: **44,097 maps over 17.7
+months**, against production's 41,140 over 17.7.
+
+| | D4, as registered | D4-MW, matched window |
+|---|---|---|
+| training maps / months | 16,958 / 6.8 | 44,097 / 17.7 |
+| **observed score** | **1 / 16** | **4 / 16** |
+| naive strength ladder | 2 / 16 | 4 / 16 |
+| random baseline | 3.75 | 3.75 |
+| percentile in the model's own distribution | 0.7% / 5.0% | 23.2% / 42.8% |
+| calibration slope, refit pre-cutoff | 0.2016 | 0.4352 |
+| sim-count sweep, observed scores | 5,3,3 / 3,2,2 / 1,2,1 | 4,4,3 / 4,4,4 / 4,4,4 |
+
+**The 1/16 was substantially an artifact of a seven-month training window.** The
+registered result stands as what it was, and it is not withdrawn, but it should
+not be quoted as the pipeline's out-of-sample performance without this beside it.
+Statements elsewhere that leaned on 1/16 as evidence of the pipeline being worse
+than chance were resting on a confounded number.
+
+Two things the correction does NOT rescue.
+
+**4/16 is not a good score.** It is barely above the 3.75 random baseline, and it
+sits at the 23rd percentile of the model's OWN predictive distribution -- the
+model expected 4.92 and got 4. Scoring below your own expectation is not evidence
+of skill.
+
+**The naive strength ladder also scores 4/16.** With adequate data the pipeline
+draws level with a sort rather than beating it, which is the same finding the
+ladder comparison reports on the 2026 field.
+
+One earlier claim does not survive and is withdrawn: that the pipeline "scored
+worse the more precisely it optimised". That pattern came from the sweep under
+the seven-month window. Under the matched window the sweep is flat at 4 across
+every simulation count.
+
+Unchanged: n=1, permanently, because TI 2025 is the only event that has ever run
+this format; and design-time leakage, because the architecture was chosen by
+people who had already seen TI 2025.
+
+## What the simulation contributes
+
+Three diagnostics run after the Glicko correction, all committed producers, all
+gating nothing.
+
+**The bracket rules are corroborated; the pairing rule is not.**
+`ti26.cli_pairing_check` reconstructs TI 2025 -- the only event that has ever run
+this format -- and reproduces the structure exactly: equal-record pairing across
+all 44 series, two groups of eight, rounds 1-3 within group, round 4 entirely
+cross-group, five Swiss rounds then a five-series elimination round pairing 3-2
+against 2-3. The within-bucket pairing preference does not reproduce: the real
+pairing is among the engine's candidates in 4 of the 11 buckets where the rule
+had a choice, and the real bracket follows neither this rule nor its opposite.
+
+**And the pairing rule does not matter.** `ti26.cli_schedule_sensitivity`
+compares changing the rule against changing the simulation seed. Signal-to-noise
+is 1.08. Discarding the ranking-distance criterion entirely moves marginals less
+than re-seeding does and changes no assignment, so the failure above is harmless
+and the criterion is decorative.
+
+**The card is a strength sort.** `ti26.cli_ladder_check` compares the shipped
+card with the naive alternative -- sort by calibrated strength, cut the ranking
+into the capacities, no simulation and no optimiser. At the production seed all
+sixteen assignments are identical and the objective gap is exactly 0.0. At seeds
+2 and 3 twelve of sixteen agree, and the four that differ are not the same four,
+so the departures are sampling noise rather than information. The optimiser's
+advantage is at most 0.0041 on the model's own objective, against a claimed edge
+over random of 4.59 - 3.75 = 0.84.
+
+None of this touches the rating work that produces the strengths. It bounds what
+the simulation and assignment layers CONTRIBUTE, and the bound is approximately
+zero. Both methods read the same strengths, so agreement is expected wherever the
+strength ordering is decisive -- that is the point, not a caveat against it.
+
+The card report now states this itself, so a reader does not have to run a
+separate tool to learn that the simulation changed nothing.
+
 ## What may be claimed for this card
 
 It is a deterministic, manifest-bound output of the calibrated-Glicko pipeline on
 a committed input: anyone with this repository can rebuild the store, regenerate
 the card, and verify that every published number came from those exact bytes. That
-is the entire claim, and it is a claim about reproducibility, not accuracy. The
+is the entire claim, and it is a claim about reproducibility, not accuracy.
+
+**And it is a claim about less machinery than it appears to be.** At the shipping
+seed the card is the strength sort, so what is really being submitted is a ranking
+of sixteen teams cut into six buckets. The simulation, the pairing rules and the
+assignment solver are all reproducible, all correct as far as they have been
+tested, and all contributing nothing to the answer. A card that equals the sort
+can be submitted without any dependence on a random seed, which also disposes of
+the six seed-unstable slots -- they are only unstable in a pipeline whose output
+does not differ from the sort anyway.
+
+The
 evidence for the card's forecasting value is weak and points one way. The D2
 forecast-value gate failed and no rating model beat a constant 50/50 floor. D3's
 Elo gate failed all three of its pre-registered conditions. D3b passed, but as a
 one-condition test clearing its slope band by 0.0049, which is weaker than a fresh
 three-condition pass. The only card-level out-of-sample test available scored 1/16
-against a random baseline of 3.75, and scored worse the more precisely it
-optimised — while a naive strength ladder with no simulation scored better. One
-event is one sample and a random card reaches 1/16 about 5% of the time, so this
-does not establish that the pipeline is worse than chance; it removes the last
-reason to believe it is better. Making a misspecified optimum reproducible does
+against a random baseline of 3.75 on a seven-month training window, and 4/16 once
+the window was matched to production's eighteen — barely above the baseline, at
+the 23rd percentile of the model's own expectation, and exactly level with a
+naive strength ladder that runs no simulation at all. One event is one sample, so
+none of this establishes the pipeline is worse than chance; it removes the reason
+to believe it is better. Making a misspecified optimum reproducible does
 not make it right, and nothing in this work was intended to.

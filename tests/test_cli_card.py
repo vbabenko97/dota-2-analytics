@@ -7,10 +7,16 @@ import re
 import pytest
 
 from ti26.backtest import calibration as backtest_calibration
-from ti26.cli_card import apply_correction, derive_glicko_calibration_slope, seed_stability
+from ti26.cli_card import (
+    apply_correction,
+    derive_glicko_calibration_slope,
+    ladder_disagreements,
+    seed_stability,
+)
 from ti26.cli_card import main as card_main
 from ti26.data.schema import MapRow
 from ti26.data.store import insert_rows, load_rows, open_store
+from ti26.optimize import naive_strength_ladder
 from ti26.ratings.glicko import GlickoModel
 from ti26.roster import RosterIndex
 from ti26.rules import load_rules
@@ -208,6 +214,73 @@ def test_writes_16_row_csv_and_a_card_from_our_team_names(tmp_path):
     assert set(card["assignments"]) == {f"Team{t:02d}" for t in range(N_CONFIGURED)}, (
         "the card must name OUR teams, not D1's synthetic t00..t15 fallback ladder"
     )
+
+
+def test_ladder_disagreements_compares_the_two_cards_not_one_against_itself():
+    """Kills mutation: compare the shipped card against itself.
+
+    Self-comparison always returns an empty list, and an empty list is also the
+    TRUE answer at the production seed -- so the report would print "the shipped
+    card IS the strength sort", which is both wrong-by-construction and exactly
+    the striking conclusion a reader expects. Nothing would look broken. An
+    end-to-end assertion cannot catch this whenever the fixture happens to agree,
+    which is why the comparison is a function with its own test.
+    """
+    shipped = {"a": "4-0", "b": "4-1", "c": "elim_win"}
+    same = dict(shipped)
+    assert ladder_disagreements(shipped, same) == []
+
+    ladder = {"a": "4-1", "b": "4-1", "c": "elim_loss"}
+    assert ladder_disagreements(shipped, ladder) == ["a", "c"]
+
+    with pytest.raises(ValueError, match="same teams"):
+        ladder_disagreements(shipped, {"a": "4-0"})
+
+
+def test_the_report_compares_the_card_against_the_strength_sort(tmp_path):
+    """Kills mutation: compare the shipped card against itself.
+
+    Comparing `shipped` with `shipped` always yields zero differences, so the
+    report would print "the shipped card IS the strength sort" unconditionally
+    -- which is also the true answer at the production seed, so the bug would
+    read as a correct and rather striking finding. This asserts the section is
+    driven by a real `naive_strength_ladder` call: the disagreement list must
+    match one computed independently here, whatever it turns out to be.
+    """
+    store = tmp_path / "d2.sqlite"
+    card_store(store)
+    teams_path = write_team_config(tmp_path / "teams.yaml")
+    out = tmp_path / "reports"
+
+    rc = card_main([
+        "--teams", str(teams_path), "--store", str(store), "--out", str(out),
+        "--min-train", "150", "--card-sims", "2000", "--card-seed", "1",
+        "--stability-seeds", "1,2,3",
+    ])
+    assert rc == 0
+
+    with (out / "strengths_calibrated.csv").open() as fh:
+        strengths_rows = list(csv.DictReader(fh))
+    strengths = {r["team"]: float(r["strength"]) for r in strengths_rows}
+    team_ids = {r["team"]: str(r["team_id"]) for r in strengths_rows}
+    rules = load_rules("config/ti2026_rules.yaml")
+    ladder = {
+        t: c.value
+        for t, c in naive_strength_ladder(
+            strengths, rules.category_capacities, team_ids=team_ids
+        ).items()
+    }
+    shipped = json.loads((out / "recommended_card.json").read_text())["assignments"]
+    expected = sorted(t for t in shipped if shipped[t] != ladder[t])
+
+    report = (out / "card_provenance.md").read_text()
+    assert "## What the simulation added over a strength sort" in report
+    if expected:
+        assert f"differs from the strength sort on {len(expected)} of 16 slot(s)" in report
+        for team in expected:
+            assert team in report
+    else:
+        assert "**The shipped card IS the strength sort**" in report
 
 
 @pytest.mark.slow

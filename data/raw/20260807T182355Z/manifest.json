@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "20260807T182355Z",
+  "source": "opendota /explorer",
+  "source_endpoint": "https://api.opendota.com/api/explorer",
+  "retrieved_at": "2026-08-07T18:23:55.987711Z",
+  "total_rows": 70188,
+  "entries": [
+    {
+      "name": "2024-02",
+      "rows": 903,
+      "start": 1708367035,
+      "end": 1709251200,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1708367035 and m.start_time < 1709251200\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "0f10713d8443690fe5990bfceeedb1c999e88d58a581aa9981781d6d168dd024"
+    },
+    {
+      "name": "2024-03",
+      "rows": 2966,
+      "start": 1709251200,
+      "end": 1711929600,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1709251200 and m.start_time < 1711929600\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "fc01dd23f87bdf10b45039ee3638592f134822406cbd0b88962c71529f3b59d1"
+    },
+    {
+      "name": "2024-04",
+      "rows": 2183,
+      "start": 1711929600,
+      "end": 1714521600,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1711929600 and m.start_time < 1714521600\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "c0bc627341fa1ea48168bf04fe0b74a77b5c4586d926cd35f4386f2ad8b08bd0"
+    },
+    {
+      "name": "2024-05",
+      "rows": 2420,
+      "start": 1714521600,
+      "end": 1717200000,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1714521600 and m.start_time < 1717200000\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "8521a9f9e7a7fbbf2b35ad45d0543942906e7dd737fe0a1d84ade6190a19b6ee"
+    },
+    {
+      "name": "2024-06",
+      "rows": 2635,
+      "start": 1717200000,
+      "end": 1719792000,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1717200000 and m.start_time < 1719792000\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "7e7f12f618150e47274ee1644259efefacc957e1e83ae606709f4f6ad59321bc"
+    },
+    {
+      "name": "2024-07",
+      "rows": 2409,
+      "start": 1719792000,
+      "end": 1722470400,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1719792000 and m.start_time < 1722470400\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "7b940f5218176a62399126cdd7668278a13f6fade3d6a1f75ee3c742730bb62a"
+    },
+    {
+      "name": "2024-08",
+      "rows": 2437,
+      "start": 1722470400,
+      "end": 1725148800,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1722470400 and m.start_time < 1725148800\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "1bbf41b0ec721c73943e4323be1b17745289b11df8ea226d787166224f4a2d86"
+    },
+    {
+      "name": "2024-09",
+      "rows": 2571,
+      "start": 1725148800,
+      "end": 1727740800,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1725148800 and m.start_time < 1727740800\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "3b6680e4edaf3eeee6524e486788f8797a386f1ff340ddabdf0f9d31dbc7c03a"
+    },
+    {
+      "name": "2024-10",
+      "rows": 2288,
+      "start": 1727740800,
+      "end": 1730419200,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1727740800 and m.start_time < 1730419200\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "f25968eb57b9b3f0fa94475f7bdb45b2cfb74bb7a2d556eb93c7aef35ec998b2"
+    },
+    {
+      "name": "2024-11",
+      "rows": 2565,
+      "start": 1730419200,
+      "end": 1733011200,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1730419200 and m.start_time < 1733011200\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "0291104f370f26228f8153ddfb2969f481c1fc2025b856d20d7f7e0c0c141d4a"
+    },
+    {
+      "name": "2024-12",
+      "rows": 2049,
+      "start": 1733011200,
+      "end": 1735689600,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1733011200 and m.start_time < 1735689600\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "fa53de481ca1dee53918f75e547c5b99adfeae91a19738c170e1f373f831e709"
+    },
+    {
+      "name": "2025-01",
+      "rows": 2972,
+      "start": 1735689600,
+      "end": 1738368000,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1735689600 and m.start_time < 1738368000\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "098e4866f7ba5ca9bc993aeb4245306b01830028490d70e19f9619bdb9601b52"
+    },
+    {
+      "name": "2025-02",
+      "rows": 2334,
+      "start": 1738368000,
+      "end": 1740787200,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1738368000 and m.start_time < 1740787200\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "0c603423200588b0d52ea966ed36e3c4bd1a75db9658b58e5ce4fa788768e89b"
+    },
+    {
+      "name": "2025-03",
+      "rows": 2408,
+      "start": 1740787200,
+      "end": 1743465600,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1740787200 and m.start_time < 1743465600\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "e2c70aa33fef662508c2003a99f7b601765a6a5bb6d5c2342bc3c991a988c34e"
+    },
+    {
+      "name": "2025-04",
+      "rows": 2535,
+      "start": 1743465600,
+      "end": 1746057600,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1743465600 and m.start_time < 1746057600\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "fdbdd75e87cec854b5b1f292a7ed7c9c567e02f76cfa2ad343fd9c9a7d5abcbd"
+    },
+    {
+      "name": "2025-05",
+      "rows": 2273,
+      "start": 1746057600,
+      "end": 1748736000,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1746057600 and m.start_time < 1748736000\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "1d16d8f3a919f5c266ec5863e118bd49bf660bf0e9a26eb1624e91da86df3d0a"
+    },
+    {
+      "name": "2025-06",
+      "rows": 2381,
+      "start": 1748736000,
+      "end": 1751328000,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1748736000 and m.start_time < 1751328000\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "947e727f25e805ee1dc054725448354f48628335f5443e3c24f080d982456138"
+    },
+    {
+      "name": "2025-07",
+      "rows": 2640,
+      "start": 1751328000,
+      "end": 1754006400,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1751328000 and m.start_time < 1754006400\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "77c294ef270cbd73f25f7c4648e42fbd82b8affa8adfd14392c6c8835255ca00"
+    },
+    {
+      "name": "2025-08",
+      "rows": 2651,
+      "start": 1754006400,
+      "end": 1756684800,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1754006400 and m.start_time < 1756684800\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "20a6f67b40f87bce9d025c452e663c9bb36c5c5d5b38fc08fe9eb70bb699f8f6"
+    },
+    {
+      "name": "2025-09",
+      "rows": 3011,
+      "start": 1756684800,
+      "end": 1759276800,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1756684800 and m.start_time < 1759276800\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "aded5951d412d2db3059071e54df7b04ffafc3db7583222ed7f85fd64c52e847"
+    },
+    {
+      "name": "2025-10",
+      "rows": 2993,
+      "start": 1759276800,
+      "end": 1761955200,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1759276800 and m.start_time < 1761955200\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "df579793b394fccf35ffeaefc3c5c357874b0fcfddd73850d34faa180cfde02b"
+    },
+    {
+      "name": "2025-11",
+      "rows": 2477,
+      "start": 1761955200,
+      "end": 1764547200,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1761955200 and m.start_time < 1764547200\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "5206e028454b3e76abbb8a0b8ac7b1f7e735f531e8b22bb3421d91007166d429"
+    },
+    {
+      "name": "2025-12",
+      "rows": 2130,
+      "start": 1764547200,
+      "end": 1767225600,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1764547200 and m.start_time < 1767225600\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "93bcb8ddde5457922641bec894e81d631449ab6f0e1a18b04bbe636784b903a4"
+    },
+    {
+      "name": "2026-01",
+      "rows": 2693,
+      "start": 1767225600,
+      "end": 1769904000,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1767225600 and m.start_time < 1769904000\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "737805094487c55e1197cbe9bc67e22b71ef117dd568c004ec60d69eddb7999f"
+    },
+    {
+      "name": "2026-02",
+      "rows": 2188,
+      "start": 1769904000,
+      "end": 1772323200,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1769904000 and m.start_time < 1772323200\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "bd6b63ff221cd55714405eda41dc15f91a712b429e77ab4eeb0f760a7a853a7d"
+    },
+    {
+      "name": "2026-03",
+      "rows": 2413,
+      "start": 1772323200,
+      "end": 1775001600,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1772323200 and m.start_time < 1775001600\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "7337beeca1639fb33514d82d2a1214e3076bcc0fc4d8e6f89ddc9199f98152bc"
+    },
+    {
+      "name": "2026-04",
+      "rows": 2494,
+      "start": 1775001600,
+      "end": 1777593600,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1775001600 and m.start_time < 1777593600\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "1213d653dad56ce474ba0bc866ab1a5a5d22781297457a379154b5fa49110e67"
+    },
+    {
+      "name": "2026-05",
+      "rows": 2480,
+      "start": 1777593600,
+      "end": 1780272000,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1777593600 and m.start_time < 1780272000\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "0a83cbdb40dcb396d32d0e208d3e0b7d7d38b0d219ae2b09f1c3b4675974791c"
+    },
+    {
+      "name": "2026-06",
+      "rows": 1113,
+      "start": 1780272000,
+      "end": 1782864000,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1780272000 and m.start_time < 1782864000\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "647cb6b5035c51e4a84efba393e65ccd5bc1835118f671e4983d591f894a8e7c"
+    },
+    {
+      "name": "2026-07",
+      "rows": 435,
+      "start": 1782864000,
+      "end": 1785542400,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1782864000 and m.start_time < 1785542400\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "7cf5d162fc79c5a976de5709d1c5e949ac676cae255258b5364ffcf689f613aa"
+    },
+    {
+      "name": "2026-08",
+      "rows": 141,
+      "start": 1785542400,
+      "end": 1786127035,
+      "query": "\nselect m.match_id, m.start_time, m.duration, m.radiant_win, m.leagueid, l.tier,\n       m.radiant_team_id, m.dire_team_id, m.series_id, m.series_type, mp.patch,\n       array_agg(pm.account_id  order by pm.player_slot) as accounts,\n       array_agg(pm.hero_id     order by pm.player_slot) as heroes,\n       array_agg(pm.player_slot order by pm.player_slot) as slots\nfrom matches m\njoin match_patch    mp on mp.match_id = m.match_id\njoin player_matches pm on pm.match_id = m.match_id\nleft join leagues    l on l.leagueid  = m.leagueid\nwhere m.start_time >= 1785542400 and m.start_time < 1786127035\ngroup by 1,2,3,4,5,6,7,8,9,10,11\n",
+      "sha256": "fe7e4782c1ba45c3304d541aba031df094aa747122807fabe8da8c32678a6cc8"
+    }
+  ]
+}

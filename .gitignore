@@ -27,6 +27,13 @@ __pycache__/
 reports/*
 !reports/runs/
 !reports/runs/**
+# The matched-window backtest is a one-off registered diagnostic run outside
+# cli_release, so it has no run bundle. Its outputs are tracked because the
+# closing report quotes them and a reader should be able to check the numbers
+# without a 20-minute re-run; the exact command that produced them is in
+# docs/ti26/2026-08-07-d4-matched-window-spec.md.
+!reports/d4_matched_window/
+!reports/d4_matched_window/**
 
 # Agent harness local state — machine-local config, plugin caches, and skill
 # scratch workspaces. None of it is project source.
