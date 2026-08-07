@@ -267,6 +267,54 @@ the numbered verdicts and lettered findings of
 - **Every claim about a future TI 2026 result.** Nothing here forecasts anything;
   it makes an existing forecast checkable.
 
+## D4 was confounded by data poverty, and the corrected number is 4/16
+
+Registered in advance at
+[the matched-window spec](../ti26/2026-08-07-d4-matched-window-spec.md), run once,
+both numbers published as that spec required.
+
+D4 trains on maps before 2025-09-04, and the pinned snapshot only reaches back to
+2025-02-08, so it saw **16,958 maps over 6.8 months where production has 41,140
+over 17.7**. It tested the procedure on 41% of the data. A 30-month snapshot and
+a `--train-from` bound give a genuinely matched window: **44,097 maps over 17.7
+months**, against production's 41,140 over 17.7.
+
+| | D4, as registered | D4-MW, matched window |
+|---|---|---|
+| training maps / months | 16,958 / 6.8 | 44,097 / 17.7 |
+| **observed score** | **1 / 16** | **4 / 16** |
+| naive strength ladder | 2 / 16 | 4 / 16 |
+| random baseline | 3.75 | 3.75 |
+| percentile in the model's own distribution | 0.7% / 5.0% | 23.2% / 42.8% |
+| calibration slope, refit pre-cutoff | 0.2016 | 0.4352 |
+| sim-count sweep, observed scores | 5,3,3 / 3,2,2 / 1,2,1 | 4,4,3 / 4,4,4 / 4,4,4 |
+
+**The 1/16 was substantially an artifact of a seven-month training window.** The
+registered result stands as what it was, and it is not withdrawn, but it should
+not be quoted as the pipeline's out-of-sample performance without this beside it.
+Statements elsewhere that leaned on 1/16 as evidence of the pipeline being worse
+than chance were resting on a confounded number.
+
+Two things the correction does NOT rescue.
+
+**4/16 is not a good score.** It is barely above the 3.75 random baseline, and it
+sits at the 23rd percentile of the model's OWN predictive distribution -- the
+model expected 4.92 and got 4. Scoring below your own expectation is not evidence
+of skill.
+
+**The naive strength ladder also scores 4/16.** With adequate data the pipeline
+draws level with a sort rather than beating it, which is the same finding the
+ladder comparison reports on the 2026 field.
+
+One earlier claim does not survive and is withdrawn: that the pipeline "scored
+worse the more precisely it optimised". That pattern came from the sweep under
+the seven-month window. Under the matched window the sweep is flat at 4 across
+every simulation count.
+
+Unchanged: n=1, permanently, because TI 2025 is the only event that has ever run
+this format; and design-time leakage, because the architecture was chosen by
+people who had already seen TI 2025.
+
 ## What the simulation contributes
 
 Three diagnostics run after the Glicko correction, all committed producers, all
@@ -326,9 +374,10 @@ forecast-value gate failed and no rating model beat a constant 50/50 floor. D3's
 Elo gate failed all three of its pre-registered conditions. D3b passed, but as a
 one-condition test clearing its slope band by 0.0049, which is weaker than a fresh
 three-condition pass. The only card-level out-of-sample test available scored 1/16
-against a random baseline of 3.75, and scored worse the more precisely it
-optimised — while a naive strength ladder with no simulation scored better. One
-event is one sample and a random card reaches 1/16 about 5% of the time, so this
-does not establish that the pipeline is worse than chance; it removes the last
-reason to believe it is better. Making a misspecified optimum reproducible does
+against a random baseline of 3.75 on a seven-month training window, and 4/16 once
+the window was matched to production's eighteen — barely above the baseline, at
+the 23rd percentile of the model's own expectation, and exactly level with a
+naive strength ladder that runs no simulation at all. One event is one sample, so
+none of this establishes the pipeline is worse than chance; it removes the reason
+to believe it is better. Making a misspecified optimum reproducible does
 not make it right, and nothing in this work was intended to.

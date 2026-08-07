@@ -57,6 +57,34 @@ gates nothing, it cannot promote or demote the card, and it has no pass
 threshold. D4's registration is not transferable to it: D4 was registered before
 its own code existed, and this cannot be.
 
+## The run, and its result
+
+Executed once, 2026-08-07, on snapshot `20260807T182355Z` (70,188 maps,
+2024-02-19 to 2026-08-07), committed before the run:
+
+```
+.venv/bin/python -m ti26.cli_d4 \
+  --store data/processed/release-deep.sqlite \
+  --min-train 500 --card-sims 250000 --card-seed 1 --eval-seed 90001 \
+  --train-from 1710295805 \
+  --sweep-sims 2000,20000,250000 --sweep-seeds 1,2,3 \
+  --random-samples 200000 --random-seed 1 \
+  --out reports/d4_matched_window
+```
+
+Window achieved: 44,097 maps over 539.9 days (17.7 months), against production's
+41,140 over 17.7. Matched by construction.
+
+**Observed score 4/16**, against D4's registered 1/16. Random baseline 3.75. The
+naive strength ladder also scores 4/16. The score sits at the 23.2nd percentile
+strictly below / 42.8th at-or-below of the model's own predictive distribution,
+which expected 4.92. The sim-count sweep is flat at 4 across every count, so the
+"scores worse as the optimisation gets more precise" pattern from the short
+window does not survive.
+
+No stop condition fired: the reconstructed TI 2025 outcome still matches the
+frozen truth file on the deeper store.
+
 ## What it can and cannot settle
 
 It can settle whether the 1/16 is confounded by data poverty. If the matched
