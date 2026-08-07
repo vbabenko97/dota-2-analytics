@@ -65,8 +65,13 @@ def run_swiss(
     rng: random.Random,
     groups: dict[str, str] | None = None,
     round_one: list[tuple[str, str]] | None = None,
+    pairing_preference: str | None = None,
 ) -> SwissRun:
-    """Run all Swiss rounds, returning final states plus a full round log."""
+    """Run all Swiss rounds, returning final states plus a full round log.
+
+    `pairing_preference` is passed straight to `choose_pairing` and exists for
+    the schedule-sensitivity diagnostic. `None` is the shipping rule.
+    """
     team_ids = sorted(strengths)
     if groups is None:
         groups = random_initial_groups(team_ids, rng)
@@ -124,6 +129,7 @@ def run_swiss(
                 maximize_distance=(
                     loser_out and round_no in rules.max_distance_elimination_rounds
                 ),
+                preference=pairing_preference,
             )
             repeat_count += choice.repeat_count
             min_possible += choice.min_possible_repeats

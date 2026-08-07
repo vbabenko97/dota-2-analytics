@@ -44,6 +44,7 @@ def choose_pairing(
     group_of: dict[str, str] | None = None,
     cross_group: bool = False,
     maximize_distance: bool = False,
+    preference: str | None = None,
 ) -> PairingChoice:
     """Select a legal pairing by lexicographic preference.
 
@@ -55,6 +56,20 @@ def choose_pairing(
     the official text, so the engine minimises repeats instead of forbidding
     them — whether a forced repeat is reachable in the real bracket is
     unproven, and the engine does not assume either way.
+
+    `preference` overrides ONLY the distance step, for the schedule-sensitivity
+    diagnostic. `None` is the shipping rule and every other value exists to
+    measure what that rule is worth, because `cli_pairing_check` established
+    that it does not reproduce TI 2025's real pairings:
+
+      "random"  ignore distance entirely — the no-information floor
+      "min"     always minimise, even where the rules say maximise
+      "max"     always maximise
+      "fold"    conventional Swiss: seed the bucket, pair top half vs bottom
+
+    The group and repeat filters apply under every setting, because those ARE
+    corroborated by TI 2025. Leave it unset and this function behaves exactly
+    as it did before the parameter existed, consuming the RNG identically.
     """
     if len(team_ids) % 2 != 0:
         raise NoLegalPairingError(f"cannot pair an odd number of teams: {len(team_ids)}")
@@ -80,9 +95,20 @@ def choose_pairing(
     def distance(matching: list[tuple[str, str]]) -> int:
         return sum(abs(rank_index[a] - rank_index[b]) for a, b in matching)
 
-    sign = -1 if maximize_distance else 1
-    best = min(sign * distance(m) for m in candidates)
-    candidates = [m for m in candidates if sign * distance(m) == best]
+    if preference == "fold":
+        seeded = sorted(team_ids, key=lambda t: rank_index[t])
+        half = len(seeded) // 2
+        target = {frozenset((seeded[i], seeded[i + half])) for i in range(half)}
+        folded = [m for m in candidates if {frozenset(p) for p in m} == target]
+        candidates = folded or candidates
+    elif preference != "random":
+        sign = -1 if maximize_distance else 1
+        if preference == "min":
+            sign = 1
+        elif preference == "max":
+            sign = -1
+        best = min(sign * distance(m) for m in candidates)
+        candidates = [m for m in candidates if sign * distance(m) == best]
 
     chosen = rng.choice(candidates)
     return PairingChoice(
