@@ -241,6 +241,14 @@ the numbered verdicts and lettered findings of
   convention was originally intended is not recoverable.
 - **Historical before/after counts** for the display-name and tie-tolerance
   changes. No retained input/output pair; withdrawn rather than restated.
+- **The sixteen-team field itself.** `config/ti2026_teams.yaml` names sixteen
+  `team_id`s and the whole pipeline takes that as given — the capacities sum to
+  sixteen, the simulation seeds sixteen rosters. Nothing here confirms those are
+  the sixteen that will play, and nothing could: the store holds match rows, not
+  invitations. Every other pre-lock check verifies internal consistency against
+  the configured sixteen, so a field wrong by one team would pass all of them.
+  Added as step 3 of the runbook on 2026-08-07, as an owner task; it was absent
+  before that.
 - **Real-world team identity.** That a given OpenDota `team_id` is the
   organisation the owner submits under a given name is not decidable from the
   store, which holds no organisation names. Five configured teams already show

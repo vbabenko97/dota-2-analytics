@@ -5,9 +5,10 @@ times, and solving a capacity-constrained assignment over the resulting
 marginals. The naive alternative skips all of that: sort the teams by strength,
 cut the ranking into the category capacities, done. No simulation, no optimiser.
 
-D4 already compared the two on TI 2025, where the naive ladder scored 2/16 and
-the full pipeline scored 1/16. This asks the prior question on the 2026 field:
-do they even DISAGREE?
+D4 already compared the two on TI 2025. On its registered seven-month training
+window the ladder scored 2/16 and the pipeline 1/16; on a window matched to
+production's eighteen months both score 4/16. This asks the prior question on the
+2026 field: do they even DISAGREE?
 
 Two quantities matter, and they are different questions:
 
