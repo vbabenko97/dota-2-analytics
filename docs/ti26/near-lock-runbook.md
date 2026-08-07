@@ -60,6 +60,18 @@ opened. `cli_pairing_check` corroborates the structure against TI 2025, which is
 the only event that has ever run it, but a rule change for 2026 would be
 invisible here. Confirming those values needs the same class of source.
 
+**Done once already, on 2026-08-07.** All sixteen configured teams matched the
+published field exactly — seven direct invites and nine qualifier winners — under
+four rebrands (BetBoom→BoomBoys, 1w→Iron Wing, PARIVISION→Team Vision,
+L1GA→HULIGANI). Five rounds, sixteen teams, Bo3 throughout and the 3/10/3
+advancement split were corroborated; the win and loss thresholds, the tiebreak
+order and the two-groups-of-eight structure were not, and Valve's own page still
+returns no body. The evidence is recorded in `config/ti2026_rules.yaml`.
+
+**Do it again anyway.** That check ran six days before the deadline. A withdrawal
+or a substitution after it would land in exactly the blind spot this step exists
+to cover, and the earlier pass is not evidence about the field on lock day.
+
 ## 4. Roster staleness, confirmed by account set
 
 ```

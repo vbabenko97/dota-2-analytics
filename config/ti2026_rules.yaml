@@ -51,6 +51,41 @@ duration_model:
 # because the source is still unreadable, but the values are no longer merely
 # asserted. Confirming that TI 2026 uses the same format remains an owner task:
 # it needs sources outside `explorer_query`, this project's only network path.
+#
+# 2026-08-07: that check was carried out, with the owner's permission, against
+# public web sources rather than `explorer_query`. NO VALUE BELOW CHANGED and no
+# tag was upgraded. What changed is the quality of the corroboration: it now
+# comes from pages that were actually retrieved and can be re-retrieved, rather
+# than from citations the originating session could not open.
+#
+#   CONFIRMED, from Liquipedia's api.php (the HTML page returns 403, the API
+#   does not) and a GosuGamers report:
+#     - n_teams 16
+#     - total_rounds 5
+#     - every group-stage series is Bo3, which matches `series.py`'s best_of=3
+#       default. Nothing outside this repository had previously checked that.
+#     - the advancement split: top 3 straight to playoffs, 4th-13th into an
+#       elimination round where 5 of 10 advance, 14th-16th out. That is exactly
+#       the record and category capacities rules.py derives.
+#
+#   NOT CONFIRMED, and deliberately still tagged as before:
+#     - advance_at_wins and eliminate_at_losses are not stated by any source
+#       retrieved. They are strongly implied -- the compendium's own prediction
+#       categories are 4-0, 4-1, 1-4 and 0-4, and those records exist only under
+#       this rule -- but implied is not stated.
+#     - tiebreak_order: no source at all.
+#     - within_group / cross_group rounds: no source at all. Two groups of eight
+#       with rounds 1-3 inside them still rests solely on cli_pairing_check
+#       reproducing TI 2025.
+#
+# Valve's own rules page was re-attempted the same day and again returned a
+# heading with no body -- the identical JavaScript-rendering failure the design
+# spec recorded. `official` therefore remains unavailable, and the test that
+# forbids it stays.
+#
+# These are dated external observations, not inputs. No snapshot binds them and
+# no manifest hashes them; they are reproducible only in the weak sense that the
+# URLs can be fetched again and may have changed. Treat them accordingly.
 provenance:
   n_teams: reported_official
   total_rounds: reported_official

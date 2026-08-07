@@ -241,14 +241,20 @@ the numbered verdicts and lettered findings of
   convention was originally intended is not recoverable.
 - **Historical before/after counts** for the display-name and tie-tolerance
   changes. No retained input/output pair; withdrawn rather than restated.
-- **The sixteen-team field itself.** `config/ti2026_teams.yaml` names sixteen
-  `team_id`s and the whole pipeline takes that as given — the capacities sum to
-  sixteen, the simulation seeds sixteen rosters. Nothing here confirms those are
-  the sixteen that will play, and nothing could: the store holds match rows, not
-  invitations. Every other pre-lock check verifies internal consistency against
-  the configured sixteen, so a field wrong by one team would pass all of them.
-  Added as step 3 of the runbook on 2026-08-07, as an owner task; it was absent
-  before that.
+- **The sixteen-team field itself — checked once, on 2026-08-07, outside the
+  pipeline.** `config/ti2026_teams.yaml` names sixteen `team_id`s and the whole
+  pipeline takes that as given: the capacities sum to sixteen, the simulation
+  seeds sixteen rosters. Nothing in the code can confirm those are the sixteen
+  that will play, and nothing could — the store holds match rows, not
+  invitations — so every other pre-lock check verifies internal consistency
+  against the configured sixteen and a field wrong by one team would pass all of
+  them. It became step 3 of the runbook on 2026-08-07; it was absent before that.
+  With the owner's permission the check was then run against public web sources,
+  and all sixteen matched the published field exactly, under four documented
+  rebrands. That closed the one display name the team config had flagged as
+  resting only on the owner's list rather than on any source. It is a dated
+  external observation, not an input: no snapshot binds it and no manifest
+  hashes it, and it says nothing about the field on lock day.
 - **Real-world team identity.** That a given OpenDota `team_id` is the
   organisation the owner submits under a given name is not decidable from the
   store, which holds no organisation names. Five configured teams already show
@@ -256,13 +262,24 @@ the numbered verdicts and lettered findings of
   comparison with an owner stop, not a name match.
 - **Rung-3 public ratings.** `cli_rung3` reads a live table with no snapshot here,
   so none of its historical numbers can be replayed offline.
-- **The tournament format itself.** The Swiss structure, win and loss thresholds,
-  series length, tiebreak sequence and round-one seeding reach this repository
-  secondhand, through citations the originating session could not open, from a
-  JavaScript-rendered page that returned no body. No archived copy is committed.
-  Every published marginal depends on these values. They are now tagged
-  `reported_official` rather than `official`, which is what is actually known;
-  confirming them needs sources outside `explorer_query` and is an owner task.
+- **The tournament format — partly corroborated on 2026-08-07, and only partly.**
+  The Swiss structure, win and loss thresholds, series length, tiebreak sequence
+  and round-one seeding reached this repository secondhand, through citations the
+  originating session could not open, from a JavaScript-rendered page that
+  returned no body. No archived copy is committed, and every published marginal
+  depends on these values. The same external check that confirmed the field
+  corroborated four of them — sixteen teams, five rounds, Bo3 throughout, and the
+  three-direct / ten-elimination / three-out split that is exactly the configured
+  capacities. Bo3 is the one the repository had never checked against anything
+  outside itself; `series.py` simply defaulted to it.
+
+  Three did not survive into "confirmed" and are unchanged. The win and loss
+  thresholds are stated by no source retrieved, only implied by the compendium's
+  own 4-0 / 4-1 / 1-4 / 0-4 prediction categories, which exist only under that
+  rule. The tiebreak sequence has no source at all. Nor does the two-groups-of-
+  eight structure, which still rests solely on `cli_pairing_check` reproducing
+  TI 2025. Valve's page was re-attempted and again returned a heading with no
+  body, so `official` remains unavailable and every tag is unchanged.
 - **Why the real bracket paired as it did.** The engine's rule is now known not
   to reproduce TI 2025, and known not to matter, but no alternative rule fits
   either. Part of the disagreement may be the ranking rather than the pairing:
