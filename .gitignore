@@ -68,3 +68,9 @@ gpt-pro-output.md
 # check them rather than trust the prose.
 !reports/data_health/
 !reports/data_health/**
+
+# Expert cards published before TI 2025, scored against the frozen truth. The
+# external calibration in the weaknesses document rests on these two numbers,
+# and an outside benchmark is worth nothing if a reader cannot re-derive it.
+!reports/external_cards/
+!reports/external_cards/**

@@ -313,7 +313,7 @@ entirely in its least stable decision.
 
 ---
 
-## 5. Card-level skill is undetectable
+## 5. A sixteen-slot card cannot measure skill — for anyone
 
 **[bundle: `reports/d4_matched_window_corrected/`]**, training window matched to
 production's 17.7 months:
@@ -326,13 +326,49 @@ production's 17.7 months:
 n = 1 tournament. The simulation and assignment layers have never been shown to
 beat `sorted()` on the one event available to score them against.
 
+### 5a. What an expert scored, and why it reframes the whole section
+
+**[producer: `ti26.cli_external_cards`, `reports/external_cards/`]**
+
+Every benchmark above is internal — the pipeline against itself, against a
+strength sort, against noise. None of them answers the prior question: **is this
+task measurable at all?** An expert card does, because it is the strongest
+realistic attempt available, and Noxville published two before TI 2025 with a
+Glicko-2 model and domain knowledge this project does not have.
+
+| card | published | score | P(random card scores at least this) |
+|---|---|---|---|
+| final, night before the event | 2025-09-08 | **5/16** | 0.3090 |
+| first, twelve days out | 2025-08-22 | **4/16** | 0.5402 |
+
+The null here is computed exactly rather than sampled: a random card is a
+uniformly random arrangement of the capacities, so the hit distribution has a
+closed form. Its mean is forced to Σc²/n = **3.75**, which is the same random
+baseline quoted everywhere else in this project — the computation reproduces it
+as an identity rather than an estimate.
+
+**A random card matches or beats the expert's final card 31% of the time.** You
+need **7/16** to reach p ≈ 0.05 and **8/16** to be clear of it. Nobody was close:
+not this pipeline at 4/16, not the strength sort at 4/16, not the best public
+analyst at 5/16.
+
+So the honest reading of this section is not "our pipeline is weak". It is that
+**one sixteen-slot card carries almost no information about forecasting skill**,
+and a single event's card score cannot distinguish a good model from a lucky
+one in either direction. The pipeline's failure to beat `sorted()` on one event
+is a statement about the measurement, not only about the pipeline.
+
+That has a direct consequence for what this project should optimise: the
+series-level scoring below has 58 data points to the card's 16 slots, and it is
+the only place a real signal has shown up.
+
 The only positive out-of-sample result is series-level
 **[bundle: `reports/series_score/`]**: 36/58 = 62.1%, one-sided p = 0.0435. At
 35/58 it would be p = 0.074 and would fail its own pre-registered threshold. Its
 own report states that 58 series sharing a patch, venue, meta and field are not
 58 independent draws.
 
-### 5a. Calibration contradicts itself across levels
+### 5b. Calibration contradicts itself across levels
 
 - Per-map, 44k maps: overconfident, needs shrinking to 0.435.
 - Per-series, TI 2025: slope **2.1165**, 95% CI [0.699, 3.534] — *under*confident.

@@ -157,12 +157,17 @@ is correct and is recorded as `group_draw: null` in the payload.
 
 **Effort:** minutes.
 
-## A7. Emit data health into the release bundle
+## A7. Emit the standalone diagnostics into the release bundle
 
-`cli_data_health` currently runs standalone. Adding it to `cli_release`'s
-producer list puts the corpus's tier mix, patch mix, recency and per-team
-volume into the manifest-bound bundle, so the card ships alongside a statement
-of what it was trained on.
+`cli_data_health` and `cli_external_cards` both run standalone today. Adding
+them to `cli_release`'s producer list puts the corpus's tier mix, patch mix,
+recency and per-team volume — and the external-card ceiling result — into the
+manifest-bound bundle, so the card ships alongside a statement of what it was
+trained on and of how much a card score can prove.
+
+Both configs are already hashed into the manifest, so this is a producer-list
+change only. Note it moves the run id, since the id is derived from the
+descriptor and the descriptor contains the producer list.
 
 **Effort:** ~30 minutes.
 
@@ -269,7 +274,7 @@ Glicko on held-out data, with connectivity reported alongside.
 
 *(§II Metrics and Losses, §VIII Features)*
 
-**Attacks:** [§5a](2026-08-08-known-weaknesses.md#5a-calibration-contradicts-itself-across-levels) (map says overconfident, series says underconfident).
+**Attacks:** [§5b](2026-08-08-known-weaknesses.md#5b-calibration-contradicts-itself-across-levels) (map says overconfident, series says underconfident).
 
 [`series.py`](../../src/ti26/series.py) converts map probability to series
 probability with `math.comb` under independence. Maps within a series are not
@@ -287,6 +292,16 @@ One parameter, one pre-registered gate.
 than the current [0.699, 3.534].
 
 **Effort:** ~1-2 days.
+
+**Promoted since the first draft of this document.** The external-card
+diagnostic ([§5a](2026-08-08-known-weaknesses.md#5a-what-an-expert-scored-and-why-it-reframes-the-whole-section))
+showed that a random card matches the best published expert card 31% of the
+time, and that 7 of 16 is the threshold for even a marginal result. A sixteen-slot
+card is therefore not a measuring instrument, for us or anyone. Series scoring
+has 58 observations to the card's 16 and is the only place a signal has appeared,
+so **series-level work should be treated as the project's primary metric track
+and the card score demoted to a reported headline.** That is a stronger argument
+for B3 than the calibration contradiction it was originally justified by.
 
 ## B4. Propagate rating uncertainty into the simulation
 
@@ -468,3 +483,12 @@ Concretely, so this document can be marked wrong later:
 
 Item 2 is the one that matters. Until a model beats a coin flip on its own,
 everything else in this repository is scaffolding around a 55.8% edge.
+
+**A criterion deliberately NOT on this list: a card score.** Not "beat 4/16",
+not "beat the expert's 5/16", not any single-event card target. The external-card
+diagnostic showed a random card reaching 5/16 about 31% of the time and 7/16
+being the threshold for even a marginal result, so a card-score target would be
+a coin-flip dressed as a goal — hit it and learn nothing, miss it and learn
+nothing. Item 4 survives only because it is a *paired* comparison against the
+ladder on the same event, which cancels most of the shared luck, and even that
+needs several events before it means much.
