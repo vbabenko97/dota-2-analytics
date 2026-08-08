@@ -8,10 +8,23 @@ def map_win_prob(s_a: float, s_b: float) -> float:
 
 
 def series_win_prob(p_map: float, best_of: int = 3) -> float:
-    """Closed-form series win probability assuming independent maps."""
-    if best_of != 3:
-        raise ValueError("only best-of-3 has a closed form here")
-    return p_map**2 * (3.0 - 2.0 * p_map)
+    """Closed-form series win probability assuming independent maps.
+
+    Generalised from Bo3 on 2026-08-08 for the TI 2025 series scoring, whose
+    population is 57 Bo3 plus one Bo5 grand final. A race to `need` wins is a
+    negative binomial: sum over the number of maps the loser takes of
+    C(need - 1 + losses, losses) * p**need * (1 - p)**losses.
+
+    At best_of=3 this is algebraically `p**2 * (3 - 2p)`, the expression this
+    function used to hardcode, so Bo3 callers are unaffected.
+    """
+    if best_of <= 0 or best_of % 2 == 0:
+        raise ValueError(f"best_of must be a positive odd integer, got {best_of}")
+    need = best_of // 2 + 1
+    return sum(
+        math.comb(need - 1 + losses, losses) * p_map**need * (1.0 - p_map) ** losses
+        for losses in range(need)
+    )
 
 
 def simulate_series(

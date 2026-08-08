@@ -1,0 +1,597 @@
+{
+  "calibration_slope_precutoff": 0.4352376944511801,
+  "excluded": [],
+  "league_id": 18324,
+  "metrics": {
+    "all": {
+      "accuracy": 0.6206896551724138,
+      "baseline_accuracy_constant_half": 0.5,
+      "baseline_brier_constant_half": 0.25,
+      "baseline_log_loss_constant_half": 0.6931471805599453,
+      "brier": 0.21469311068784724,
+      "calibration_intercept": -0.18033981183711925,
+      "calibration_slope": 2.1164929673557333,
+      "calibration_slope_ci95": [
+        0.6987471089848114,
+        3.5342388257266553
+      ],
+      "calibration_slope_stderr": 0.7233397236586336,
+      "log_loss": 0.6182399928146911,
+      "n": 58,
+      "orientation_base_rate": 0.4827586206896552
+    },
+    "playoff": {
+      "accuracy": 0.7142857142857143,
+      "baseline_accuracy_constant_half": 0.5,
+      "baseline_brier_constant_half": 0.25,
+      "baseline_log_loss_constant_half": 0.6931471805599453,
+      "brier": 0.22493250153944108,
+      "calibration_intercept": -0.047963052737859994,
+      "calibration_slope": 2.241829777496148,
+      "calibration_slope_ci95": [
+        -1.3314186366096044,
+        5.8150781916019
+      ],
+      "calibration_slope_stderr": 1.8230859255641594,
+      "log_loss": 0.6417639943194006,
+      "n": 14,
+      "orientation_base_rate": 0.42857142857142855
+    },
+    "swiss": {
+      "accuracy": 0.5909090909090909,
+      "baseline_accuracy_constant_half": 0.5,
+      "baseline_brier_constant_half": 0.25,
+      "baseline_log_loss_constant_half": 0.6931471805599453,
+      "brier": 0.21143512268961284,
+      "calibration_intercept": -0.22357936051743468,
+      "calibration_slope": 2.1321680245113863,
+      "calibration_slope_ci95": [
+        0.5532406043382092,
+        3.711095444684563
+      ],
+      "calibration_slope_stderr": 0.80557521437407,
+      "log_loss": 0.6107550832450108,
+      "n": 44,
+      "orientation_base_rate": 0.5
+    }
+  },
+  "p_values": {
+    "all": 0.043474449864955494,
+    "playoff": 0.08978271484375,
+    "swiss": 0.14560761827294755
+  },
+  "scored": [
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.8079204119558552,
+      "series_id": 1008275,
+      "start": 1756973096,
+      "team_a": "7119388",
+      "team_b": "9651185"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.7255141081723511,
+      "series_id": 1008276,
+      "start": 1756973140,
+      "team_a": "9247354",
+      "team_b": "9691969"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.5408904273430118,
+      "series_id": 1008274,
+      "start": 1756973144,
+      "team_a": "8261500",
+      "team_b": "9467224"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.6428272656495343,
+      "series_id": 1008277,
+      "start": 1756973357,
+      "team_a": "8291895",
+      "team_b": "9351740"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.687477428965337,
+      "series_id": 1008284,
+      "start": 1756981242,
+      "team_a": "2163",
+      "team_b": "7732977"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.35034223494086136,
+      "series_id": 1008285,
+      "start": 1756982604,
+      "team_a": "9303484",
+      "team_b": "9572001"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.3725679859502118,
+      "series_id": 1008288,
+      "start": 1756984807,
+      "team_a": "36",
+      "team_b": "9640842"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.35031873288139953,
+      "series_id": 1008291,
+      "start": 1756987264,
+      "team_a": "7554697",
+      "team_b": "8255888"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.45056404350876994,
+      "series_id": 1008312,
+      "start": 1756992618,
+      "team_a": "8291895",
+      "team_b": "9247354"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5536504392201961,
+      "series_id": 1008326,
+      "start": 1756996209,
+      "team_a": "7119388",
+      "team_b": "8261500"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.5448341607758702,
+      "series_id": 1008330,
+      "start": 1756997323,
+      "team_a": "9351740",
+      "team_b": "9691969"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.7393425189254781,
+      "series_id": 1008357,
+      "start": 1757004304,
+      "team_a": "9467224",
+      "team_b": "9651185"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.31625819881306305,
+      "series_id": 1008365,
+      "start": 1757007449,
+      "team_a": "7554697",
+      "team_b": "9572001"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.46250838832538865,
+      "series_id": 1008370,
+      "start": 1757008706,
+      "team_a": "36",
+      "team_b": "9303484"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5284051681762563,
+      "series_id": 1008371,
+      "start": 1757008860,
+      "team_a": "2163",
+      "team_b": "9640842"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.3167841671582335,
+      "series_id": 1008390,
+      "start": 1757012819,
+      "team_a": "7732977",
+      "team_b": "8255888"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.42610109080840575,
+      "series_id": 1008480,
+      "start": 1757059241,
+      "team_a": "9651185",
+      "team_b": "9691969"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.4837822250041157,
+      "series_id": 1008478,
+      "start": 1757059262,
+      "team_a": "8261500",
+      "team_b": "9247354"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.3642588926820247,
+      "series_id": 1008477,
+      "start": 1757059344,
+      "team_a": "9351740",
+      "team_b": "9467224"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.5864135651560798,
+      "series_id": 1008479,
+      "start": 1757059425,
+      "team_a": "7119388",
+      "team_b": "8291895"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.42536675215294106,
+      "series_id": 1008485,
+      "start": 1757066538,
+      "team_a": "7732977",
+      "team_b": "9303484"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.35061667327984636,
+      "series_id": 1008487,
+      "start": 1757067866,
+      "team_a": "36",
+      "team_b": "8255888"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.6541412943542888,
+      "series_id": 1008498,
+      "start": 1757072781,
+      "team_a": "2163",
+      "team_b": "7554697"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5611498083121671,
+      "series_id": 1008512,
+      "start": 1757077153,
+      "team_a": "9572001",
+      "team_b": "9640842"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.5280786836249035,
+      "series_id": 1008539,
+      "start": 1757086780,
+      "team_a": "7732977",
+      "team_b": "9691969"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.6712308913483096,
+      "series_id": 1008543,
+      "start": 1757088571,
+      "team_a": "9303484",
+      "team_b": "9651185"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.3765975251999805,
+      "series_id": 1008549,
+      "start": 1757088595,
+      "team_a": "36",
+      "team_b": "8291895"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5204076706376244,
+      "series_id": 1008557,
+      "start": 1757089151,
+      "team_a": "7554697",
+      "team_b": "9351740"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.529058511445794,
+      "series_id": 1008680,
+      "start": 1757145612,
+      "team_a": "8261500",
+      "team_b": "9640842"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.4831275957597808,
+      "series_id": 1008681,
+      "start": 1757145668,
+      "team_a": "2163",
+      "team_b": "9247354"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5214873917753537,
+      "series_id": 1008678,
+      "start": 1757145693,
+      "team_a": "7119388",
+      "team_b": "9572001"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.5354019757293338,
+      "series_id": 1008679,
+      "start": 1757145737,
+      "team_a": "8255888",
+      "team_b": "9467224"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.6012289108439577,
+      "series_id": 1008708,
+      "start": 1757154588,
+      "team_a": "7732977",
+      "team_b": "9651185"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5003238634212991,
+      "series_id": 1008710,
+      "start": 1757155566,
+      "team_a": "36",
+      "team_b": "7554697"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5873530603580652,
+      "series_id": 1008718,
+      "start": 1757157507,
+      "team_a": "8291895",
+      "team_b": "9303484"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.6726025250269204,
+      "series_id": 1008719,
+      "start": 1757157592,
+      "team_a": "2163",
+      "team_b": "9351740"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5938076946866391,
+      "series_id": 1008747,
+      "start": 1757165426,
+      "team_a": "7119388",
+      "team_b": "9467224"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.4622115792503567,
+      "series_id": 1008760,
+      "start": 1757169359,
+      "team_a": "8255888",
+      "team_b": "9572001"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.545200512740866,
+      "series_id": 1008759,
+      "start": 1757169417,
+      "team_a": "9247354",
+      "team_b": "9640842"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.5580620785591002,
+      "series_id": 1008850,
+      "start": 1757187804,
+      "team_a": "9303484",
+      "team_b": "9351740"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.3835136178966969,
+      "series_id": 1008945,
+      "start": 1757232059,
+      "team_a": "7554697",
+      "team_b": "9467224"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.7935483092205141,
+      "series_id": 1008979,
+      "start": 1757246747,
+      "team_a": "9572001",
+      "team_b": "9651185"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5326604680223757,
+      "series_id": 1009049,
+      "start": 1757256376,
+      "team_a": "2163",
+      "team_b": "8291895"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5375489061604515,
+      "series_id": 1009134,
+      "start": 1757271305,
+      "team_a": "7119388",
+      "team_b": "9247354"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.5333131990992624,
+      "series_id": 1009970,
+      "start": 1757579584,
+      "team_a": "8261500",
+      "team_b": "8291895"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.35034223494086136,
+      "series_id": 1009984,
+      "start": 1757590806,
+      "team_a": "9303484",
+      "team_b": "9572001"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.545200512740866,
+      "series_id": 1010019,
+      "start": 1757602045,
+      "team_a": "9247354",
+      "team_b": "9640842"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.35031873288139953,
+      "series_id": 1010058,
+      "start": 1757612407,
+      "team_a": "7554697",
+      "team_b": "8255888"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.5873530603580652,
+      "series_id": 1010199,
+      "start": 1757664696,
+      "team_a": "8291895",
+      "team_b": "9303484"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.3722629588371948,
+      "series_id": 1010213,
+      "start": 1757674623,
+      "team_a": "7554697",
+      "team_b": "9640842"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.46770449118800195,
+      "series_id": 1010237,
+      "start": 1757683223,
+      "team_a": "8261500",
+      "team_b": "9572001"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.4782722783006136,
+      "series_id": 1010268,
+      "start": 1757693574,
+      "team_a": "8255888",
+      "team_b": "9247354"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.34525941425479,
+      "series_id": 1010392,
+      "start": 1757750941,
+      "team_a": "7554697",
+      "team_b": "8261500"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.6141780373539336,
+      "series_id": 1010424,
+      "start": 1757760703,
+      "team_a": "8255888",
+      "team_b": "9303484"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.48389226238665695,
+      "series_id": 1010499,
+      "start": 1757775551,
+      "team_a": "9247354",
+      "team_b": "9572001"
+    },
+    {
+      "a_won": false,
+      "best_of": 3,
+      "p_a": 0.4944831404943268,
+      "series_id": 1010577,
+      "start": 1757790768,
+      "team_a": "8255888",
+      "team_b": "8261500"
+    },
+    {
+      "a_won": true,
+      "best_of": 3,
+      "p_a": 0.46770449118800195,
+      "series_id": 1010684,
+      "start": 1757837307,
+      "team_a": "8261500",
+      "team_b": "9572001"
+    },
+    {
+      "a_won": false,
+      "best_of": 5,
+      "p_a": 0.47973094150409357,
+      "series_id": 1010717,
+      "start": 1757854950,
+      "team_a": "8261500",
+      "team_b": "9247354"
+    }
+  ],
+  "series_playoff": 14,
+  "series_swiss": 44,
+  "series_total": 58,
+  "spec": "docs/ti26/2026-08-08-ti2025-series-scoring-spec.md",
+  "status": "DIAGNOSTIC -- no threshold, gates nothing, cannot alter the card",
+  "store": "data/processed/release-deep.sqlite",
+  "training_cutoff": 1756944000,
+  "training_from": 1710295805,
+  "training_maps": 44097,
+  "training_window_days": 539.9
+}

@@ -58,9 +58,30 @@ def test_different_seeds_produce_different_sequences():
     assert seq_a != seq_b
 
 
-def test_unsupported_best_of_raises():
-    with pytest.raises(ValueError, match="best-of-3"):
-        series_win_prob(0.5, best_of=5)
+def test_series_win_prob_rejects_even_and_non_positive_best_of():
+    """Was `test_unsupported_best_of_raises`, asserting Bo5 was rejected.
+
+    `series_win_prob` was Bo3-only until 2026-08-08, when the TI 2025 series
+    scoring needed the Bo5 grand final. Bo5 is now computed, so what remains
+    rejectable is what has no "first to N" reading at all.
+    """
+    for bad in (0, -1, 2, 4):
+        with pytest.raises(ValueError, match="odd"):
+            series_win_prob(0.5, best_of=bad)
+
+
+def test_longer_series_amplify_a_map_edge():
+    """Kills mutation: keep the Bo3 closed form for every best_of.
+
+    The generalisation is only worth having if it actually varies with length:
+    a 60% map edge is worth more over five maps than three, and nothing over
+    one. Bo3 must still equal the exact expression it used to hardcode.
+    """
+    assert series_win_prob(0.6, 1) == pytest.approx(0.6)
+    assert series_win_prob(0.6, 3) == pytest.approx(0.6**2 * (3 - 2 * 0.6))
+    assert series_win_prob(0.6, 5) > series_win_prob(0.6, 3) > series_win_prob(0.6, 1)
+    for best_of in (1, 3, 5, 7):
+        assert series_win_prob(0.5, best_of) == pytest.approx(0.5)
 
 
 def test_simulate_series_rejects_even_best_of():
