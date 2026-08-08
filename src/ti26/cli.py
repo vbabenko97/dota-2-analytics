@@ -3,6 +3,7 @@ import csv
 import json
 from pathlib import Path
 
+from ti26.groups import load_group_draw
 from ti26.montecarlo import category_marginals, monte_carlo_stderr
 from ti26.optimize import solve_card
 from ti26.rules import load_rules
@@ -49,6 +50,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rules", default="config/ti2026_rules.yaml")
     parser.add_argument("--n-sims", type=int, default=250_000)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--groups",
+        default=None,
+        help=(
+            "YAML with the organiser's own group draw, and optionally the "
+            "round-one matchups. Unset, every simulation invents its own "
+            "split, which averages over a fact that is known once announced"
+        ),
+    )
     parser.add_argument("--out", default="reports")
     args = parser.parse_args(argv)
 
@@ -58,12 +68,17 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError(
             f"loaded {len(strengths)} strengths but rules.n_teams requires {rules.n_teams}"
         )
+    groups, round_one = (
+        load_group_draw(args.groups, sorted(strengths)) if args.groups else (None, None)
+    )
     marginals = category_marginals(
         strengths,
         rules,
         n_sims=args.n_sims,
         seed=args.seed,
         team_ids=team_ids,
+        groups=groups,
+        round_one=round_one,
     )
     # `tie_magnitude` is the largest standard error ONE marginal can carry at
     # this simulation count (p=0.5 maximises p(1-p)). It is a magnitude
@@ -98,6 +113,12 @@ def main(argv: list[str] | None = None) -> int:
         "elimination_maximizes_ranking_distance": (
             rules.elimination_maximizes_ranking_distance
         ),
+        # Which bracket this card is a forecast OF. `null` means the groups
+        # were not known and every simulation drew its own, so the marginals
+        # average over draws rather than describing the real one.
+        "group_draw": args.groups,
+        "groups": dict(sorted(groups.items())) if groups else None,
+        "round_one_supplied": bool(round_one),
         "tie_magnitude_heuristic": tie_magnitude,
         "note": (
             "optimizer_marginal_objective is the sum of the model's own "
