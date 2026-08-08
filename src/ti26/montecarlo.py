@@ -3,7 +3,7 @@ import random
 from collections import Counter
 from collections.abc import Mapping, Sequence
 
-from ti26.elimination import run_elimination
+from ti26.elimination import ChoicePolicy, run_elimination
 from ti26.identity import order_key
 from ti26.rules import Rules
 from ti26.swiss import run_swiss
@@ -70,7 +70,9 @@ def card_score_distribution(
     for i in range(n_sims):
         rng = random.Random(seed * 1_000_003 + i)
         run = run_swiss(internal, rules, rng)
-        outcome = run_elimination(run, internal, rules, rng)
+        outcome = run_elimination(
+            run, internal, rules, rng, policy=ChoicePolicy(rules.elimination_choice_policy)
+        )
         hits = sum(1 for label, c in outcome.categories.items() if target[label] == c)
         scores[hits] += 1
     return scores
@@ -85,11 +87,18 @@ def category_marginals(
     pairing_preference: str | None = None,
     groups: Mapping[str, str] | None = None,
     round_one: Sequence[tuple[str, str]] | None = None,
+    elimination_policy: str | None = None,
 ) -> dict[str, dict[Category, float]]:
     """Run n_sims tournaments and return P[team][category].
 
     `pairing_preference` reaches `choose_pairing` unchanged and is only for the
     schedule-sensitivity diagnostic; `None` is the shipping rule.
+
+    `elimination_policy` overrides how a 3-2 team picks its elimination
+    opponent, and exists for the same diagnostic. `None` uses the configured
+    policy, which is the shipping behaviour. TI 2026's rules fix the ORDER of
+    choosing and not the basis, so this parameter is the shape of an assumption
+    rather than of a rule.
 
     `groups` and `round_one` are the organiser's own draw, keyed by the SAME
     team names as `strengths`, and are translated to internal labels here.
@@ -98,6 +107,7 @@ def category_marginals(
     which averages over a fact that will be known before the lock. `None` keeps
     that averaging behaviour and is byte-identical to not passing them at all.
     """
+    policy = elimination_policy or rules.elimination_choice_policy
     labels = canonical_labels(strengths, team_ids)
     internal = {labels[team]: strength for team, strength in strengths.items()}
     internal_groups = {labels[t]: g for t, g in groups.items()} if groups else None
@@ -115,7 +125,9 @@ def category_marginals(
             round_one=list(internal_round_one) if internal_round_one else None,
             pairing_preference=pairing_preference,
         )
-        outcome = run_elimination(run, internal, rules, rng)
+        outcome = run_elimination(
+            run, internal, rules, rng, policy=ChoicePolicy(policy)
+        )
         for label, category in outcome.categories.items():
             tally[label][category] += 1
     return {

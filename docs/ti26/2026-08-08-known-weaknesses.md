@@ -198,14 +198,78 @@ fix that on the day.
 
 ---
 
-## 3. The rules engine is sound. The organiser is the risk.
+## 3. The rules engine modelled the wrong year, and the format changed
+
+**Superseded twice in one day.** This section first said the elimination rule
+was contradicted by TI 2025, then that it was corroborated by it. Both were
+answering the wrong question: **TI 2026 does not use TI 2025's rules.** Valve
+published the 2026 Group Stage Rules during 2026-08-08 and they were fetched
+and archived the same evening
+([verbatim](2026-08-08-ti2026-rules-fetched.md)).
+
+Four differences, and the engine was wrong on all four for about eleven hours:
+
+| # | TI 2026 | TI 2025 | engine, 09:33-20:00 |
+|---|---|---|---|
+| 1 | criterion 3 is opponents' match wins, 4 is % games won | reversed | TI 2025's |
+| 2 | criterion 6 is **Average Game Duration**, 7 criteria | no duration, 6 criteria | TI 2025's |
+| 3 | Round 5 **maximizes distance where the loser is eliminated** | no R5 modification | TI 2025's |
+| 4 | Elimination Round: best 3-2 team **chooses** its opponent | distance is maximized | TI 2025's |
+
+**The engine held all four correctly before 2026-08-08**, from the design
+spec's original values. Commit `23beac3` replaced them with a better-sourced
+transcript of the wrong year's rules, on the reasonable assumption that the
+format carried over. It did not.
+
+The lesson is not "check your sources" — the transcript was accurate and
+correctly applied. It is that **a well-evidenced value from an adjacent context
+beats an unsourced one on every axis except being right.** Provenance tags
+record where a value came from; they cannot record that it describes a
+different tournament.
+
+Now corrected, with the tags naming the fetch and its date
+(`valve_rules_page_2026_08_08`).
+
+### 3a. What is still uncertain about the elimination round, and what it costs
+
+The rules fix the ORDER in which 3-2 teams choose and say **nothing about the
+basis**. That is not a gap this project can close by reading more carefully; it
+is genuinely unspecified, and it governs 10 of 16 card slots.
+
+`elimination_choice_policy` is therefore tagged
+`unspecified_by_published_rules`, and all three candidates were measured rather
+than assumed **[producer: `ti26.cli_schedule_sensitivity`,
+`reports/schedule_sensitivity_2026/`, 250,000 sims, seeds 1/2/3]**:
+
+| policy | max marginal delta vs configured | assignments changed | objective |
+|---|---|---|---|
+| rational (configured) | 0.00000 | 0 | 4.5903 |
+| noisy | 0.00418 | **0** | 4.5795 |
+| random | 0.00371 | **0** | 4.5860 |
+
+Reseeding the *same* policy, for comparison: max delta 0.00310, and **4
+assignments changed**.
+
+**No policy changes a single card slot, and the seed changes four.** The
+assumption that looked like it drove ten slots drives none of them, and the
+thing that does drive them is Monte Carlo noise — which is §4's problem, not
+this one's.
+
+`rational` stays configured. That is a deliberate departure from the "when it
+does not matter, assume least" rule that would have selected `random`: uniform
+choice is not a weaker assumption, it is a different and less plausible one.
+Valve gave the best 3-2 team a choice precisely because it is worth something,
+and professionals playing for seven figures will not exercise it by coin flip.
+`noisy` would model that best of the three but carries a free temperature
+parameter, and buying an unregistered parameter for a measured benefit of zero
+is the wrong trade.
+
+### 3b. The TI 2025 diagnostic, and why its verdict field misleads
 
 **[producer: `ti26.cli_pairing_check`, run against `release-deep.sqlite`]**
 
-### 3a. The elimination round: the engine is right and its raw output says otherwise
-
 This entry was written backwards in the first draft of this document and is
-corrected here, because the way it misleads is worth preserving.
+kept, because the way it misleads is worth preserving.
 
 The producer reports:
 
@@ -216,10 +280,13 @@ best_reachable_distance:            10
 pairs_shared_with_engine:           3 of 5
 ```
 
-Read alone, that is damning: `config/ti2026_rules.yaml` asserts
-`elimination_round.maximize_ranking_distance: true`, and the real bracket scored
-8 where 10 was reachable, so it apparently did not maximise. **That reading is
-wrong**, and
+That measures the engine against **TI 2025's** elimination rule, which is what
+`pair_elimination` still implements and what `cli_pairing_check` needs, since
+TI 2025 is the event being checked. It says nothing about TI 2026's rule, which
+is a sequential choice.
+
+Read alone, the `false` is damning: it looks as though maximum ranking distance
+is refuted by the only event that ran it. **That reading is wrong**, and
 [the format-rules document](2026-08-08-published-format-rules.md#ti-2025s-elimination-round-did-not-follow-the-published-rule)
 already said so:
 
@@ -246,18 +313,22 @@ forecastable, not a model defect, and not fixable — but it is a floor on how
 accurate the elimination categories can ever be, and those are 10 of the 16 card
 slots.
 
+And it is the same hazard as the section above, on a shorter timescale: rules
+that change during an event, and rules published mid-preparation, are both the
+organiser moving the target after you have aimed.
+
 The producer's own field name is a trap: `engine_reproduces_the_real_bracket:
 false` is literally true and reads as "the rule is wrong". It should carry the
 known deviation alongside it.
 
-### 3b. Swiss pairing is much healthier, but not clean
+### 3c. Swiss pairing is much healthier, but not clean
 
 15 of 17 buckets agree across all 5 seeds; 16 of 17 real pairings sit at
 minimum ranking distance. Both disagreements are Round 2, Group A, where the
 ranking is most tie-dominated, and one of them sat at distance 8 — the
 *maximum* — against a minimum-distance rule.
 
-### 3c. The config's own justification for the pairing tag is stale
+### 3d. The config's own justification for the pairing tag is stale
 
 [`config/ti2026_rules.yaml:155`](../../config/ti2026_rules.yaml#L155) tags
 `base_pairing_preference: refuted_immaterial`, justified by a comment saying
@@ -270,23 +341,22 @@ A load-bearing tag resting on a number its own producer no longer reproduces is
 the exact failure mode the correction register exists to prevent, reappearing
 in a config file rather than in an audit.
 
-### 3d. Most of the format is still inherited assumption
+### 3e. What remains unsourced, now that the rules are published
 
-`tiebreak_order`, `within_group`/`cross_group`, the elimination rule and soft
-repeat avoidance are all tagged `owner_transcript_2025_inherited`. TI 2026
-published no pairing rules as of 2026-08-08. The compendium screenshot fixed
-`n_teams`, `total_rounds`, `advance_at_wins` and `eliminate_at_losses`; it says
-nothing about pairing.
+Most of what this section used to list is resolved: `tiebreak_order`, the
+group-round assignments, the Round 5 modification and soft repeat avoidance all
+now come from Valve's own page. Three things do not.
 
-These values are well corroborated — §3a and §3b show the engine reproducing TI
-2025 closely under them — but corroboration against last year's event is not the
-same as publication for this one. And per §3a the organiser has already
-demonstrated willingness to introduce an unpublished constraint mid-event, so
-even a published 2026 ruleset would not close this entirely.
-
-Groups are also still unannounced, so the card currently averages over draws
-rather than conditioning on the real one. The machinery to condition is in
-place (`--groups`); the input does not exist yet.
+- **The elimination choice basis**, per §3a. Genuinely unspecified, and it
+  drives 10 of 16 slots.
+- **The page can change under us.** It gained its entire pairing section during
+  2026-08-08, hours after the owner checked and found none. No test here can
+  detect that — tests never reach the network — so the tag carries the fetch
+  date and the near-lock runbook must re-fetch rather than trust this archive.
+- **The groups are still unannounced**, so the card averages over draws rather
+  than conditioning on the real one. `--groups` accepts both the split and
+  exact Round 1 pairings, which the rules say the organiser sets; the input
+  does not exist yet.
 
 ---
 
@@ -310,6 +380,32 @@ of them **[bundle: `card/card_provenance.md`]**.
 Those same two slots are the *only* places the card differs from sorting teams
 by strength. So the pipeline's whole visible contribution is concentrated
 entirely in its least stable decision.
+
+### 4a. And under the corrected TI 2026 rules, that contribution is zero
+
+Regenerating on the fetched rules (§3) moves **exactly those two slots, and
+nothing else** — Spirit and Vision swap back:
+
+```
+objective   4.5979 -> 4.5903
+Team Spirit   4-0  ->  4-1
+Team Vision   4-1  ->  4-0
+```
+
+Which makes the corrected card **identical to the naive strength sort on all 16
+slots**. It previously differed on 2.
+
+So the simulation and the optimiser now add nothing at all to `sorted()` on this
+field — and the two slots where they appeared to add something were an artifact
+of modelling last year's elimination round. The pipeline's only visible
+contribution over a sort was a bug.
+
+That is not an argument for deleting the pipeline: on a different field, or once
+the group draw is known, it could separate from the sort for real reasons, and
+§5 shows a single card cannot measure which of them is better anyway. But it
+does mean **nothing in the current shipping card requires any of the simulation
+machinery to produce**, and any claim that the pipeline earns its complexity has
+to come from somewhere other than this card.
 
 ---
 
@@ -385,15 +481,28 @@ not decisive.
 
 ---
 
-## 6. Dead machinery
+## 6. WITHDRAWN — "dead machinery"
 
-**`duration_log_sigma` moves nothing.** Duration was removed from the tiebreak
-order on 2026-08-08, but [`duration.py:196-210`](../../src/ti26/duration.py#L196)
-still sweeps it and [`cli_d2.py:210`](../../src/ti26/cli_d2.py#L210) still
-aborts the run if the fitted value drifts from config. Verified: sigma 0.05 vs
-5.00 — a 100x change — moves the category marginals by a maximum absolute delta
-of **0.0**. A staleness gate on a parameter with no path into the model can only
-ever produce false alarms.
+This section claimed `duration_log_sigma` moved nothing and that the duration
+machinery should be deleted. The measurement was correct and the conclusion was
+exactly backwards.
+
+Duration moved nothing **because it had been removed from the tiebreak order
+that morning**. It is criterion 6 in TI 2026's published ranking — "Average
+Game Duration (Shorter is Better)" — so the right response was to put it back,
+which is done. A test now pins that a surviving tie consults duration rather
+than falling through to the coin toss.
+
+Kept rather than deleted because the failure is instructive: the measurement
+was sound, reproducible and irrelevant. *"This parameter does not affect the
+output"* was a fact about the code, and it was read as a fact about the
+tournament. The strengthening plan's A1, which proposed ripping the rest of it
+out, would have hard-coded the error.
+
+The one real observation survives in weaker form: `cli_d2` warns loudly when
+the fitted duration parameters drift from config, the runbook does not mention
+it, and a fresh snapshot on lock day will very likely trip it. That is now
+worth a runbook line rather than a deletion.
 
 ---
 

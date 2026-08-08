@@ -1,11 +1,68 @@
+"""The elimination round, which TI 2026 runs differently from TI 2025.
+
+TWO RULES LIVE HERE, deliberately, because two events used two of them and this
+repository has to model one while validating against the other.
+
+`run_elimination` implements TI 2026's published rule, fetched 2026-08-08 (see
+docs/ti26/2026-08-08-ti2026-rules-fetched.md): the best 3-2 team CHOOSES any of
+the five 2-3 teams, then the next best chooses from those remaining, and so on.
+That is a sequential decision, not a pairing computation, and it needs an
+assumption about how a team chooses -- `ChoicePolicy` names the candidates.
+
+`pair_elimination` implements TI 2025's, where the round was paired by maximum
+ranking distance with no choice involved. Nothing in the 2026 simulation calls
+it; it exists for `cli_pairing_check`, which validates the engine against TI
+2025's real bracket and therefore needs TI 2025's rule.
+
+Keeping both is not indecision. Deleting the 2025 rule would leave the only
+event we can check against unmodellable, and reusing the 2026 rule to
+"validate" against 2025 would be validating against the wrong tournament.
+"""
+
+import math
 import random
+from enum import Enum
 from functools import lru_cache
 from itertools import permutations
 
 from ti26.rules import Rules, category_for_terminal_record
-from ti26.series import simulate_series
+from ti26.series import map_win_prob, series_win_prob, simulate_series
 from ti26.tiebreak import rank_teams
 from ti26.types import Category, EliminationMatch, EliminationRun, SwissRun
+
+
+class ChoicePolicy(str, Enum):
+    """How a 3-2 team picks its opponent. The rules do not say.
+
+    Valve's text fixes the ORDER of choosing and says nothing about the basis,
+    so any implementation is an assumption about team behaviour rather than a
+    reading of the rules. Naming the assumptions makes them priceable: the
+    schedule-sensitivity diagnostic runs all three and reports what the card
+    does in response.
+    """
+
+    RATIONAL = "rational"
+    """Take the opponent this team is most likely to beat, by our own ratings.
+
+    Assumes teams scout accurately, agree with our model, and act on it. The
+    strongest assumption of the three, and the one a reader would guess.
+    """
+
+    NOISY = "noisy"
+    """Softmax over series win probability: usually the weakest, not always.
+
+    One free parameter. If it is ever used for the shipping card its
+    temperature must be registered in advance, not tuned until the card looks
+    right.
+    """
+
+    RANDOM = "random"
+    """Uniform among those still available.
+
+    Certainly wrong as a model of intent, and the only one that cannot be
+    accused of encoding our own ratings twice -- once in the strengths and
+    again in the choice.
+    """
 
 
 @lru_cache(maxsize=8)
@@ -92,24 +149,53 @@ def pair_elimination(
     raise AssertionError("every permutation was filtered out, which cannot happen")
 
 
+def _select_opponent(
+    chooser: str,
+    available: list[str],
+    strengths: dict[str, float],
+    rng: random.Random,
+    policy: ChoicePolicy,
+    softmax_temp: float,
+) -> str:
+    if policy is ChoicePolicy.RANDOM:
+        return rng.choice(available)
+
+    win_probs = [
+        series_win_prob(map_win_prob(strengths[chooser], strengths[opp])) for opp in available
+    ]
+    if policy is ChoicePolicy.RATIONAL:
+        return available[win_probs.index(max(win_probs))]
+
+    weights = [math.exp(p / softmax_temp) for p in win_probs]
+    return rng.choices(available, weights=weights, k=1)[0]
+
+
 def run_elimination(
     run: SwissRun,
     strengths: dict[str, float],
     rules: Rules,
     rng: random.Random,
+    policy: ChoicePolicy = ChoicePolicy.RATIONAL,
+    softmax_temp: float = 1.0,
 ) -> EliminationRun:
     """Resolve the elimination matches and assign every team a category.
 
-    The published rule is two sentences: teams with a 3-2 record are paired
-    against teams with a 2-3 record, and distance in ranking between them is
-    maximised where possible. It is deterministic given the ranking, so nothing
-    here chooses anything -- `pair_elimination` scores it.
+    TI 2026's published rule, verbatim: "Starting with the best 3-2 team, they
+    will choose any of the five 2-3 teams as their opponent. The next best 3-2
+    team will then choose any of the remaining 2-3 teams as their opponent.
+    Repeat the above until all teams have chosen an opponent."
 
-    Until 2026-08-08 this function had each 3-2 team SELECT the opponent it was
-    most likely to beat, under a configurable policy. That model came from the
-    design spec, which cited nothing for it, and it decided the category of ten
-    of the sixteen teams.
+    So the ORDER of choosing is fixed by the Swiss ranking and the BASIS of the
+    choice is not specified anywhere. `policy` is that gap, made explicit.
+
+    Between 2026-08-08 and this commit, this function instead paired the round
+    by maximum ranking distance with no choice at all. That was TI 2025's rule,
+    adopted while TI 2026's pairing section was still unpublished, and it
+    decided the category of ten of the sixteen teams.
     """
+    if softmax_temp <= 0:
+        raise ValueError(f"softmax_temp must be positive, got {softmax_temp}")
+
     categories: dict[str, Category] = {}
     undecided: list[str] = []
     for tid, state in run.states.items():
@@ -128,49 +214,47 @@ def run_elimination(
             for record in undecided_records
         }
         raise ValueError(
-            "expected exactly two undecided record groups (higher and lower), "
+            "expected exactly two undecided record groups (choosers and pool), "
             f"found {len(undecided_records)}: {counts}"
         )
 
-    ranking = rank_teams(list(run.states.values()), rng)
+    ranking = rank_teams(list(run.states.values()), rng, duration_fn=run.resolver.bind(run.states))
     order = {tid: i for i, tid in enumerate(ranking)}
 
     top_record = max(run.states[t].record for t in undecided)
-    higher = sorted(
+    choosers = sorted(
         (t for t in undecided if run.states[t].record == top_record),
         key=lambda t: order[t],
     )
-    lower = sorted(
+    available = sorted(
         (t for t in undecided if run.states[t].record != top_record),
         key=lambda t: order[t],
     )
-    if len(higher) != len(lower):
+    if len(choosers) != len(available):
         raise ValueError(
-            f"higher-record count {len(higher)} for {top_record} != "
-            f"lower-record count {len(lower)} for the other undecided record"
+            f"chooser count {len(choosers)} for record {top_record} != "
+            f"pool count {len(available)} for the other undecided record"
         )
 
-    prior = {t: set(run.states[t].opponents) for t in higher}
-    pairs = pair_elimination(
-        higher, lower, prior, rng,
-        maximize=rules.elimination_maximizes_ranking_distance,
-    )
-
     matches: list[EliminationMatch] = []
-    for team, opponent in pairs:
-        wins_h, wins_l = simulate_series(strengths[team], strengths[opponent], rng)
-        if wins_h > wins_l:
-            categories[team] = Category.ELIM_WIN
+    for chooser in choosers:
+        snapshot = list(available)
+        opponent = _select_opponent(chooser, available, strengths, rng, policy, softmax_temp)
+        available.remove(opponent)
+        wins_c, wins_o = simulate_series(strengths[chooser], strengths[opponent], rng)
+        if wins_c > wins_o:
+            categories[chooser] = Category.ELIM_WIN
             categories[opponent] = Category.ELIM_LOSS
         else:
-            categories[team] = Category.ELIM_LOSS
+            categories[chooser] = Category.ELIM_LOSS
             categories[opponent] = Category.ELIM_WIN
         matches.append(
             EliminationMatch(
-                higher=team,
-                lower=opponent,
-                wins_higher=wins_h,
-                wins_lower=wins_l,
+                chooser=chooser,
+                opponent=opponent,
+                available_when_choosing=snapshot,
+                wins_chooser=wins_c,
+                wins_opponent=wins_o,
             )
         )
 

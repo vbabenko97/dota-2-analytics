@@ -37,6 +37,7 @@ reports/*
 
 # Agent harness local state — machine-local config, plugin caches, and skill
 # scratch workspaces. None of it is project source.
+.playwright-mcp/
 .superpowers/
 .claude/
 .claude-plugin/
@@ -74,3 +75,16 @@ gpt-pro-output.md
 # and an outside benchmark is worth nothing if a reader cannot re-derive it.
 !reports/external_cards/
 !reports/external_cards/**
+
+# The elimination choice policy priced across all three candidates at 250k sims.
+# TI 2026's rules leave the basis of that choice unspecified, so the decision to
+# ship `rational` rests entirely on this measurement showing it changes no card
+# slot. Tracked so the decision can be checked rather than taken on trust.
+!reports/schedule_sensitivity_2026/
+!reports/schedule_sensitivity_2026/**
+
+# The card regenerated on the corrected TI 2026 rules, kept alongside the
+# pre-correction bundle it supersedes so the two-slot difference -- and the fact
+# that the corrected card equals the naive strength sort -- can be diffed.
+!reports/card_ti2026_rules/
+!reports/card_ti2026_rules/**

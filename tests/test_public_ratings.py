@@ -227,7 +227,7 @@ def test_scale_sensitivity_sweep_reports_a_noise_floor_and_resolvability(monkeyp
         ]
     )
 
-    def fake_category_marginals(strengths, _rules, n_sims, seed):
+    def fake_category_marginals(strengths, _rules, n_sims, seed, policy=None):
         return next(scripted)
 
     monkeypatch.setattr("ti26.montecarlo.category_marginals", fake_category_marginals)

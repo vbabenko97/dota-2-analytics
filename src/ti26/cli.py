@@ -110,9 +110,11 @@ def main(argv: list[str] | None = None) -> int:
         "random_baseline": rules.random_baseline,
         "n_sims": args.n_sims,
         "seed": args.seed,
-        "elimination_maximizes_ranking_distance": (
-            rules.elimination_maximizes_ranking_distance
-        ),
+        # TI 2026's elimination round is a sequential choice, and its BASIS is
+        # not in the rules. Recorded here because a reader of this card cannot
+        # otherwise tell which behavioural assumption produced ten of its slots.
+        "elimination_choice_policy": rules.elimination_choice_policy,
+        "max_distance_elimination_rounds": list(rules.max_distance_elimination_rounds),
         # Which bracket this card is a forecast OF. `null` means the groups
         # were not known and every simulation drew its own, so the marginals
         # average over draws rather than describing the real one.

@@ -24,48 +24,51 @@ Assumptions that are not established by the repository are tagged inline as
 
 # Part A — Before the compendium locks (12-13 August)
 
-Four to five days. The honest headline first:
+Four to five days.
 
-> **Nothing in Part A will make the card more accurate.** No model change can be
-> made, validated and regenerated safely in four days without breaking the
-> pre-registration discipline that is this project's main asset. Part A is about
-> making sure the run does not break and the record is not wrong.
+**The original headline of this section was "nothing in Part A will make the
+card more accurate", and it was overtaken within hours.** Valve published the
+TI 2026 Group Stage Rules during 2026-08-08. They differ from TI 2025's in four
+places, the engine was wrong on all four, and correcting them changes the card.
 
-Ranked by risk of the thing going wrong on the day.
+That is not a breach of pre-registration discipline, and the distinction
+matters enough to state: pre-registration exists to stop a result being shopped
+for. Updating an INPUT when the ground truth is published is the opposite
+failure to guard against — an engine that knowingly models the wrong
+tournament, held in place by a rule meant to prevent cheating.
 
-## A1. Remove the dead duration machinery and its lock-day false alarm
+So the ranking below changed. Rules reconciliation first, everything else after.
 
-**Problem:** [weakness §6](2026-08-08-known-weaknesses.md#6-dead-machinery).
-Duration was removed from the tiebreak on 2026-08-08 and now provably moves
-nothing: sigma 0.05 vs 5.00 — a 100x change — shifts the category marginals by a
-maximum absolute delta of 0.0.
+## A1. DONE — reconcile the engine against the published TI 2026 rules
 
-**Why it is first:** the near-lock run ingests a *fresh* snapshot, which refits
-duration, which will very likely trip the staleness comparison at
-[`cli_d2.py:209-221`](../../src/ti26/cli_d2.py#L209). That prints:
+**Problem:** [weakness §3](2026-08-08-known-weaknesses.md#3-the-rules-engine-modelled-the-wrong-year-and-the-format-changed).
+Valve's TI 2026 Group Stage Rules were fetched on 2026-08-08 and archived
+verbatim in [the fetched rules doc](2026-08-08-ti2026-rules-fetched.md). The
+engine differed in four places, all of them introduced that morning by aligning
+to a transcript of TI 2025's rules while 2026's were still unpublished:
 
-> `WARNING: ... Any card built this run used the STALE config values -- update
-> the rules config from duration_fit.json and re-run before trusting it.`
+1. ranking criteria 3 and 4 transposed;
+2. Average Game Duration missing as criterion 6;
+3. Round 5's max-distance-when-loser-eliminated modification deleted;
+4. the elimination round modelled as distance maximisation rather than as the
+   sequential choice the 2026 rules describe.
 
-The check **warns rather than aborts** — the code comment says hard-failing was
-deliberately avoided so it would not break the documented build sequence — so
-this does not block the run. What it does is worse in a different way: on lock
-day the operator sees an unexplained warning stating the card cannot be trusted
-and instructing a config sync plus a full re-run, for a parameter that cannot
-affect the output. The near-lock runbook does not mention duration anywhere, so
-there is nothing to tell them to ignore it.
+All four are corrected, with the provenance tags now naming the fetch and its
+date. `pair_elimination` is retained for `cli_pairing_check`, which validates
+against TI 2025 and therefore needs TI 2025's rule.
 
-**Fix:** delete `duration_model` from the rules dataclass, the staleness check,
-and `duration.py`'s sensitivity sweep. If deletion is too broad for the
-remaining time, the minimum viable fix is a runbook line saying the warning is
-expected and harmless — but that leaves a staleness gate on a dead parameter,
-which will mislead the next person instead.
+**This supersedes the previous A1**, which proposed DELETING the duration
+machinery as dead code. It was measurably inert only because it had been
+removed from the tiebreak hours earlier; TI 2026 lists it as criterion 6. Had
+that item been executed it would have hard-coded the defect.
 
-**Done when:** `pytest` unfiltered passes with the duration tests removed or
-rewritten, and `cli_release` completes on the pinned snapshot with no duration
-warning.
+**What survives of the old A1:** `cli_d2` warns when the fitted duration
+parameters drift from config, the runbook never mentions it, and a fresh
+snapshot on lock day will probably trip it. That is now a runbook line, not a
+deletion.
 
-**Effort:** ~1 hour.
+**Done when:** the card regenerates under the corrected rules and the runbook
+explains the duration warning.
 
 ## A2. Correct the stale pairing justification in config
 
@@ -86,38 +89,36 @@ reality far more often than "refuted" implies, and
 
 ## A3. Stop `cli_pairing_check` from misrepresenting its own result
 
-**Problem:** [weakness §3a](2026-08-08-known-weaknesses.md#3a-the-elimination-round-the-engine-is-right-and-its-raw-output-says-otherwise).
+**Problem:** [weakness §3b](2026-08-08-known-weaknesses.md#3b-the-ti-2025-diagnostic-and-why-its-verdict-field-misleads).
 
-**Do not change the elimination rule.** It is published TI 2025 text, it sits in
-the Elimination Round section below the Swiss pairing rules, and the engine
-reproduces the real bracket to within one swap — a swap fully explained by the
-unannounced two-series-per-day constraint of 6 September. This entry previously
-proposed measuring the reachable minimum before deciding; that was written from
-a misreading of the producer's output and is withdrawn. The question is settled
-and the answer is in
-[the format-rules document](2026-08-08-published-format-rules.md#ti-2025s-elimination-round-did-not-follow-the-published-rule).
-
-**The actual defect is the report, not the rule.** `cli_pairing_check` emits
+`cli_pairing_check` emits
 
 ```
 engine_reproduces_the_real_bracket: false
 pairs_shared_with_engine: 3 of 5
 ```
 
-with no indication that the discrepancy is a known, documented, external
-constraint. Anyone reading the raw JSON — including the author of this document,
-who did — concludes the rule is refuted. That is a producer emitting a true
-number that reliably causes a false inference, which is the same class of
-problem as an unbound number and deserves the same treatment.
+with no indication of two things a reader needs. The discrepancy has a known,
+documented, external cause — the unannounced two-series-per-day constraint of
+6 September, which forced HEROIC onto Yakult and accounts for exactly the 10→8
+distance gap. And the check now measures **TI 2025's** elimination rule, which
+TI 2026 has replaced entirely, so a `false` here says nothing at all about the
+shipping engine.
 
-**Fix:** carry the known deviation in the output. A `known_deviations` field
-naming the 6 September constraint, the pairs it moved (HEROIC/Yakult in place of
-HEROIC/Spirit and Falcons/Yakult), and its distance cost (10 → 8), so the
-verdict field is never read alone. Cite the format-rules document from the
-producer's docstring.
+This entry has been through two wrong versions, both caused by reading that
+`false` without either piece of context: first "the rule is refuted", then
+"measure the reachable minimum before deciding whether to flip it". A producer
+emitting a true number that reliably causes a false inference is the same class
+of problem as an unbound number and deserves the same treatment.
 
-**Done when:** the JSON explains its own `false`, and a reader who has never
-seen the format-rules document cannot draw the wrong conclusion from it.
+**Fix:** carry both in the output. A `known_deviations` field naming the
+constraint, the pairs it moved and its distance cost; and a `rule_year` field
+saying which tournament's rule is being checked, so nobody reads a TI 2025
+diagnostic as a verdict on the TI 2026 card.
+
+**Done when:** the JSON explains its own `false`, and a reader who has seen
+neither this document nor the format-rules archive cannot draw the wrong
+conclusion from it.
 
 **Effort:** ~1 hour.
 

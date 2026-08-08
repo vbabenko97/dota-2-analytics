@@ -1,7 +1,6 @@
-from dataclasses import replace
-
 import pytest
 
+from ti26.elimination import ChoicePolicy
 from ti26.montecarlo import (
     card_score_distribution,
     category_marginals,
@@ -52,24 +51,40 @@ def test_different_seeds_produce_different_marginals():
     assert a != b
 
 
-def test_the_elimination_distance_rule_is_plumbed_through():
-    """Kills mutation: ignore the rule and hardcode one pairing direction.
+def test_policy_choice_is_plumbed_through():
+    """A rational chooser always picks its weakest available opponent; a
+    random chooser does not. With the same seed and differentiated
+    strengths, that mechanical difference must show up as a difference in
+    the resulting marginals -- a row-sums-to-one check alone cannot tell
+    the two policies apart."""
+    strengths = {t: (i - 7.5) * 0.3 for i, t in enumerate(TEAMS)}
+    rational = category_marginals(
+        strengths, RULES, n_sims=300, seed=3, elimination_policy=ChoicePolicy.RATIONAL
+    )
+    randomised = category_marginals(
+        strengths, RULES, n_sims=300, seed=3, elimination_policy=ChoicePolicy.RANDOM
+    )
+    assert rational != randomised
 
-    Replaces a sweep over the removed opponent-choice policies. Maximising
-    ranking distance pairs the best 3-2 team against the worst 2-3 team;
-    minimising pairs best against best. With differentiated strengths and the
-    same seed, that mechanical difference has to reach the marginals, or the
-    rule is not actually being read.
+
+def test_the_default_policy_is_the_configured_one():
+    """Kills mutation: hardcode a policy in `category_marginals`.
+
+    The choice policy is an assumption the config records and the card payload
+    reports. If the simulation ignores the config and uses its own default, the
+    card would advertise one assumption and be built on another.
     """
     strengths = {t: (i - 7.5) * 0.3 for i, t in enumerate(TEAMS)}
-    maximised = category_marginals(strengths, RULES, n_sims=300, seed=3)
-    minimised = category_marginals(
-        strengths,
-        replace(RULES, elimination_maximizes_ranking_distance=False),
-        n_sims=300,
-        seed=3,
+    default = category_marginals(strengths, RULES, n_sims=200, seed=4)
+    explicit = category_marginals(
+        strengths, RULES, n_sims=200, seed=4, elimination_policy=RULES.elimination_choice_policy
     )
-    assert maximised != minimised
+    assert default == explicit
+
+    other = "random" if RULES.elimination_choice_policy != "random" else "rational"
+    assert default != category_marginals(
+        strengths, RULES, n_sims=200, seed=4, elimination_policy=other
+    )
 
 
 @pytest.mark.slow

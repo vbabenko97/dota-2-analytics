@@ -43,6 +43,13 @@ from ti26.types import Category
 
 VARIANTS = ("random", "min", "max", "fold")
 
+# TI 2026's elimination round is a sequential choice whose BASIS the rules do
+# not state, so unlike the pairing preference there is no "shipping rule" to
+# compare against -- only three assumptions, one of which has to be chosen.
+# Measuring all three is what makes that choice evidence-led rather than a
+# guess dressed as a default.
+ELIMINATION_POLICIES = ("rational", "noisy", "random")
+
 
 def load_strengths(path: str) -> tuple[dict[str, float], dict[str, str]]:
     with Path(path).open(encoding="utf-8") as handle:
@@ -138,8 +145,40 @@ def run(
             }
         )
 
+    # The elimination CHOICE policy, measured the same way and reported
+    # separately. It is a different kind of uncertainty from the pairing
+    # preference: the pairing rule is published and we are asking whether our
+    # reading of it matters, whereas TI 2026 publishes no basis for the choice
+    # at all, so every policy here is an assumption and one of them has to ship.
+    policies = []
+    for policy in ELIMINATION_POLICIES:
+        marginals = category_marginals(
+            strengths,
+            rules,
+            n_sims=n_sims,
+            seed=reference_seed,
+            team_ids=team_ids,
+            elimination_policy=policy,
+        )
+        card, objective = _card(marginals, rules, n_sims, team_ids)
+        policies.append(
+            {
+                "policy": policy,
+                "is_configured": policy == rules.elimination_choice_policy,
+                **spread(reference, marginals),
+                "assignments_changed": sum(
+                    1 for t in reference_card if reference_card[t] != card[t]
+                ),
+                "objective": round(objective, 4),
+                "changed_teams": sorted(
+                    t for t in reference_card if reference_card[t] != card[t]
+                ),
+            }
+        )
+
     worst_noise = max((n["max_abs_delta"] for n in noise), default=0.0)
     worst_signal = max(s["max_abs_delta"] for s in signal)
+    worst_policy = max(p["max_abs_delta"] for p in policies)
     return {
         "status": "DIAGNOSTIC -- no threshold, gates nothing, cannot alter the card",
         "n_sims": n_sims,
@@ -147,12 +186,18 @@ def run(
         "reference_seed": reference_seed,
         "reference_objective": round(reference_objective, 4),
         "reference_card": reference_card,
+        "configured_elimination_policy": rules.elimination_choice_policy,
         "single_marginal_stderr": monte_carlo_stderr(0.5, n_sims),
         "noise_reruns_of_the_shipping_rule": noise,
         "signal_alternative_pairing_rules": signal,
+        "signal_alternative_elimination_policies": policies,
         "worst_noise_max_abs_delta": worst_noise,
         "worst_signal_max_abs_delta": worst_signal,
+        "worst_elimination_policy_max_abs_delta": worst_policy,
         "signal_to_noise": (worst_signal / worst_noise) if worst_noise else None,
+        "elimination_policy_signal_to_noise": (
+            (worst_policy / worst_noise) if worst_noise else None
+        ),
     }
 
 
