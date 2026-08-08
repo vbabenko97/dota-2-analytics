@@ -76,6 +76,44 @@ Remaining teams are eliminated
 days before the lock, Valve has published the shape of the group stage and not
 the rules by which it pairs.
 
+## The compendium card itself, 2026-08-08
+
+The owner also supplied a screenshot of the TI 2026 compendium's group-stage
+card. It labels its six categories in the product's own words, over sixteen
+named team slots:
+
+```
+4-0                       One undefeated team
+4-1                       Two teams with 4 Wins and 1 loss
+ELIMINATION ROUND WINNER  Five teams that win in the Elimination Round
+ELIMINATION ROUND LOSER   Five teams that lose in the Elimination Round
+1-4                       Two teams with 1 win and 4 losses
+0-4                       One unvictorious team
+```
+
+This is the format stated by the thing being predicted. It fixes `n_teams`,
+`advance_at_wins` and `eliminate_at_losses` directly, and `total_rounds`
+follows: a team advances at four wins and is out at four losses, so the longest
+possible Swiss record is 4-1 or 1-4 and the stage is exactly five rounds. The
+capacities `[1, 2, 5, 5, 2, 1]` are the counts it prints.
+
+Those four values were previously tagged `reported_official`, meaning a
+secondhand report nothing here could check against the source. They are no
+longer secondhand, and they now carry `compendium_ui_2026`. **They are still not
+`official`**: this is a screenshot relayed by a human, not a fetch this
+repository can repeat, and no test here can re-verify it. After this change no
+value in `config/ti2026_rules.yaml` carries `reported_official` at all.
+
+The card also confirms the sixteen teams and their compendium-facing names:
+TEAM VISION, TEAM YANDEX, TEAM FALCONS, AURORA GAMING, BOOMBOYS, TEAM SPIRIT,
+TEAM LIQUID, IRON WING, NIGMA GALAXY, XTREME GAMING, LGD GAMING, VICI GAMING,
+OG, GAMERLEGION, TEAM RESILIENCE, HULIGANI — the same sixteen
+`config/ti2026_teams.yaml` configures, independently of the field check run the
+day before.
+
+What it says nothing about: pairing, ranking, tiebreaks or seeding. Those remain
+inherited from TI 2025 and tagged `owner_transcript_2025_inherited`.
+
 ## What this repository takes from each
 
 From the **2026** text, directly: sixteen teams, Bo3 throughout, top three

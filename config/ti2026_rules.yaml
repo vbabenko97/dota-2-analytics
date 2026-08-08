@@ -97,15 +97,43 @@ duration_model:
 # These are dated external observations, not inputs. No snapshot binds them and
 # no manifest hashes them; they are reproducible only in the weak sense that the
 # URLs can be fetched again and may have changed. Treat them accordingly.
+# 2026-08-08, second update. The owner supplied a screenshot of the TI 2026
+# compendium's own group-stage card. It labels the six categories in the
+# product's own words:
+#
+#     4-0                       One undefeated team
+#     4-1                       Two teams with 4 Wins and 1 loss
+#     ELIMINATION ROUND WINNER  Five teams that win in the Elimination Round
+#     ELIMINATION ROUND LOSER   Five teams that lose in the Elimination Round
+#     1-4                       Two teams with 1 win and 4 losses
+#     0-4                       One unvictorious team
+#
+# That is the format, stated by the thing being predicted, over sixteen named
+# team slots. It fixes `n_teams`, `advance_at_wins` and `eliminate_at_losses`
+# directly, and `total_rounds` follows: a team advances at 4 wins and is out at
+# 4 losses, so the longest Swiss record possible is 4-1 or 1-4 and the stage is
+# exactly five rounds. The capacities 1/2/5/5/2/1 are the counts it prints.
+#
+# These four therefore move OFF `reported_official`, which means "a secondhand
+# report nothing here can check against the source". They are no longer
+# secondhand. They are not `official` either -- this is a screenshot relayed by
+# the owner, not a fetch this repository can repeat -- so the tag says exactly
+# that and `tests/test_rules.py` still forbids `official`.
+#
+# Everything below them stays inherited from TI 2025's published rules text.
+# The compendium card says nothing about pairing, ranking or tiebreaks, and
+# TI 2026's own rules section still had none published as of 2026-08-08.
 provenance:
-  n_teams: reported_official
-  total_rounds: reported_official
-  advance_at_wins: reported_official
-  eliminate_at_losses: reported_official
-  tiebreak_order: reported_official
-  within_group_rounds: reported_official
-  cross_group_rounds: reported_official
-  max_distance_when_loser_eliminated: reported_official
+  n_teams: compendium_ui_2026
+  total_rounds: compendium_ui_2026
+  advance_at_wins: compendium_ui_2026
+  eliminate_at_losses: compendium_ui_2026
+  tiebreak_order: owner_transcript_2025_inherited
+  within_group_rounds: owner_transcript_2025_inherited
+  cross_group_rounds: owner_transcript_2025_inherited
+  # Renamed with the config key on 2026-08-08; the old name outlived the value
+  # it described by one commit.
+  elimination_maximizes_ranking_distance: owner_transcript_2025_inherited
   record_capacities: logically_forced
   category_capacities: logically_forced
   # The base pairing preference -- minimum ranking distance inside a record
@@ -136,5 +164,5 @@ provenance:
   coin_toss_resolution: arbitrary
   # Repeat avoidance is "where possible" per the reported official text, which
   # reaches this repository through the same unopenable citations as the rest.
-  repeat_avoidance_is_soft: reported_official
+  repeat_avoidance_is_soft: owner_transcript_2025_inherited
   duration_model: empirical   # fitted in D2; see reports/duration_fit.json
