@@ -58,6 +58,7 @@ from ti26.backtest import calibration, rolling_folds, run_model
 from ti26.cli import main as cli_main
 from ti26.data.store import load_rows, open_store
 from ti26.gate_artifacts import format_gate_lineage, load_frozen_gate_artifact
+from ti26.groups import load_group_draw
 from ti26.montecarlo import category_marginals, monte_carlo_stderr
 from ti26.optimize import naive_strength_ladder, solve_card
 from ti26.public_ratings import observed_recent_form
@@ -185,6 +186,8 @@ def seed_stability(
     seeds: list[int],
     n_sims: int,
     team_ids: dict[str, str] | None = None,
+    groups: dict[str, str] | None = None,
+    round_one: list[tuple[str, str]] | None = None,
 ) -> tuple[dict[int, dict[str, str]], list[str]]:
     """Solve the card under every seed in `seeds` at `n_sims`.
 
@@ -196,7 +199,13 @@ def seed_stability(
     cards_by_seed: dict[int, dict[str, str]] = {}
     for seed in seeds:
         marginals = category_marginals(
-            strengths, rules, n_sims=n_sims, seed=seed, team_ids=team_ids
+            strengths,
+            rules,
+            n_sims=n_sims,
+            seed=seed,
+            team_ids=team_ids,
+            groups=groups,
+            round_one=round_one,
         )
         # Tie tolerance and identity keying MUST match `cli.main`'s, or this
         # diagnostic measures a solver nobody ships: it would report instability
@@ -245,6 +254,14 @@ def main(argv: list[str] | None = None) -> int:
         "--frozen-gates", default=None,
         help="frozen-gate artifact from ti26.cli_gate_artifacts; without it the "
         "report states that gate lineage was not supplied rather than restating it",
+    )
+    parser.add_argument(
+        "--groups",
+        default=None,
+        help=(
+            "YAML with the organiser's group draw. Reaches both the card and "
+            "the seed-stability diagnostic, which must see the same bracket"
+        ),
     )
     parser.add_argument("--out", default="reports")
     args = parser.parse_args(argv)
@@ -301,6 +318,7 @@ def main(argv: list[str] | None = None) -> int:
             "--n-sims", str(args.card_sims),
             "--seed", str(args.card_seed),
             "--out", str(out),
+            *(["--groups", args.groups] if args.groups else []),
         ]
     )
     if card_rc != 0:
@@ -311,8 +329,22 @@ def main(argv: list[str] | None = None) -> int:
         seeds = [int(s) for s in args.stability_seeds.split(",")]
     else:
         seeds = [args.card_seed, args.card_seed + 1, args.card_seed + 2]
+    # The stability diagnostic MUST see the same draw as the card, or it
+    # measures a different tournament and reports instability the card does not
+    # have.
+    groups, round_one = (
+        load_group_draw(args.groups, sorted(calibrated_strengths))
+        if args.groups
+        else (None, None)
+    )
     cards_by_seed, unstable_teams = seed_stability(
-        calibrated_strengths, rules, seeds, args.card_sims, team_ids=team_ids
+        calibrated_strengths,
+        rules,
+        seeds,
+        args.card_sims,
+        team_ids=team_ids,
+        groups=groups,
+        round_one=round_one,
     )
 
     # --- 5b. What did the simulation add over sorting by strength? -----------

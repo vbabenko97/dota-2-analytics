@@ -103,6 +103,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sweep-seeds", default="1,2,3")
     parser.add_argument("--random-samples", type=int, default=200_000)
     parser.add_argument("--random-seed", type=int, default=1)
+    parser.add_argument(
+        "--groups",
+        default=None,
+        help="YAML with the organiser's group draw; forwarded to the card only",
+    )
     args = parser.parse_args(argv)
 
     repo_root = Path.cwd().resolve()
@@ -137,8 +142,11 @@ def main(argv: list[str] | None = None) -> int:
         ["ti26.cli_d2", "--store", str(store_path), "--min-train", str(args.min_train)],
         ["ti26.cli_d3", "--store", str(store_path), "--min-train", str(args.min_train)],
         ["ti26.cli_d3b", "--store", str(store_path), "--min-train", str(args.min_train)],
+        # --groups reaches the CARD only. D4 backtests TI 2025, whose groups
+        # were its own; handing it TI 2026's draw would be a leak, not a fix.
         ["ti26.cli_card", "--store", str(store_path), "--min-train", str(args.min_train),
-         "--card-sims", str(args.card_sims), "--card-seed", str(args.card_seed)],
+         "--card-sims", str(args.card_sims), "--card-seed", str(args.card_seed),
+         *(["--groups", args.groups] if args.groups else [])],
         ["ti26.cli_d4", "--store", str(store_path), "--min-train", str(args.min_train),
          "--card-sims", str(args.card_sims), "--card-seed", str(args.card_seed),
          "--sweep-sims", args.sweep_sims, "--sweep-seeds", args.sweep_seeds,

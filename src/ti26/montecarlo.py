@@ -1,7 +1,7 @@
 import math
 import random
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from ti26.elimination import run_elimination
 from ti26.identity import order_key
@@ -83,18 +83,38 @@ def category_marginals(
     seed: int,
     team_ids: Mapping[str, object] | None = None,
     pairing_preference: str | None = None,
+    groups: Mapping[str, str] | None = None,
+    round_one: Sequence[tuple[str, str]] | None = None,
 ) -> dict[str, dict[Category, float]]:
     """Run n_sims tournaments and return P[team][category].
 
     `pairing_preference` reaches `choose_pairing` unchanged and is only for the
     schedule-sensitivity diagnostic; `None` is the shipping rule.
+
+    `groups` and `round_one` are the organiser's own draw, keyed by the SAME
+    team names as `strengths`, and are translated to internal labels here.
+    Rounds 2 and 3 pair inside the initial group and round 4 pairs across it, so
+    the split is not cosmetic: with it unset every simulation invents its own,
+    which averages over a fact that will be known before the lock. `None` keeps
+    that averaging behaviour and is byte-identical to not passing them at all.
     """
     labels = canonical_labels(strengths, team_ids)
     internal = {labels[team]: strength for team, strength in strengths.items()}
+    internal_groups = {labels[t]: g for t, g in groups.items()} if groups else None
+    internal_round_one = (
+        [(labels[a], labels[b]) for a, b in round_one] if round_one else None
+    )
     tally: dict[str, Counter[Category]] = {label: Counter() for label in internal}
     for i in range(n_sims):
         rng = random.Random(seed * 1_000_003 + i)
-        run = run_swiss(internal, rules, rng, pairing_preference=pairing_preference)
+        run = run_swiss(
+            internal,
+            rules,
+            rng,
+            groups=dict(internal_groups) if internal_groups else None,
+            round_one=list(internal_round_one) if internal_round_one else None,
+            pairing_preference=pairing_preference,
+        )
         outcome = run_elimination(run, internal, rules, rng)
         for label, category in outcome.categories.items():
             tally[label][category] += 1
