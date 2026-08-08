@@ -13,6 +13,21 @@ def _permutations_of(n: int) -> tuple[tuple[int, ...], ...]:
     return tuple(permutations(range(n)))
 
 
+@lru_cache(maxsize=16)
+def _by_distance(n: int, maximize: bool) -> tuple[tuple[tuple[int, ...], ...], ...]:
+    """Permutations grouped by total seed distance, best group first.
+
+    Distance depends only on the permutation, never on the teams, so it is
+    computed once per size instead of once per simulated tournament. Grouping
+    lets the common case stop at the first group rather than scoring all n!.
+    """
+    groups: dict[int, list[tuple[int, ...]]] = {}
+    for perm in _permutations_of(n):
+        groups.setdefault(sum(abs(i - j) for i, j in enumerate(perm)), []).append(perm)
+    order = sorted(groups, reverse=maximize)
+    return tuple(tuple(groups[d]) for d in order)
+
+
 def pair_elimination(
     higher: list[str],
     lower: list[str],
@@ -37,24 +52,44 @@ def pair_elimination(
     Swiss-round engine: the unconstrained optimum on TI 2025 scored 12 and was
     unreachable because it required rematches. Ties are broken uniformly at
     random, as everywhere else here.
+
+    The distance groups are built by walking `_permutations_of` in order, so a
+    group lists its members in that same order and the candidate list handed to
+    `rng.choice` is the one an exhaustive filter would have produced. That is
+    what makes the fast path below an optimisation rather than a silent change
+    of tie-breaking, and therefore of the card.
     """
     if len(higher) != len(lower):
         raise ValueError(f"cannot pair {len(higher)} against {len(lower)}")
 
+    n = len(higher)
+    blocked = tuple(
+        tuple(lower[j] in prior.get(higher[i], ()) for j in range(n)) for i in range(n)
+    )
+
     def repeats(perm: tuple[int, ...]) -> int:
-        return sum(1 for i, j in enumerate(perm) if lower[j] in prior.get(higher[i], ()))
+        return sum(1 for i, j in enumerate(perm) if blocked[i][j])
 
-    def distance(perm: tuple[int, ...]) -> int:
-        return sum(abs(i - j) for i, j in enumerate(perm))
+    # Fast path. Zero is the least achievable repeat count, so the FIRST
+    # distance group containing a rematch-free permutation holds the whole
+    # optimum -- no need to score the rest. Usually that is the very first
+    # group, since few 3-2 teams have already met the 2-3 team at the opposite
+    # seed. Falls through only when every permutation forces a rematch, which
+    # is the case the slow path below exists for.
+    for group in _by_distance(n, maximize):
+        legal = [p for p in group if not repeats(p)]
+        if legal:
+            chosen = rng.choice(legal)
+            return [(higher[i], lower[j]) for i, j in enumerate(chosen)]
 
-    candidates = _permutations_of(len(higher))
-    fewest = min(repeats(p) for p in candidates)
-    candidates = [p for p in candidates if repeats(p) == fewest]
-    pick = max if maximize else min
-    best = pick(distance(p) for p in candidates)
-    candidates = [p for p in candidates if distance(p) == best]
-    chosen = rng.choice(candidates)
-    return [(higher[i], lower[j]) for i, j in enumerate(chosen)]
+    fewest = min(repeats(p) for p in _permutations_of(n))
+    survivors = {p for p in _permutations_of(n) if repeats(p) == fewest}
+    for group in _by_distance(n, maximize):
+        legal = [p for p in group if p in survivors]
+        if legal:
+            chosen = rng.choice(legal)
+            return [(higher[i], lower[j]) for i, j in enumerate(chosen)]
+    raise AssertionError("every permutation was filtered out, which cannot happen")
 
 
 def run_elimination(

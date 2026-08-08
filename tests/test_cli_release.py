@@ -45,3 +45,35 @@ def test_declared_inputs_all_exist():
     """
     missing = [path for path in CONFIG_INPUTS if not Path(path).is_file()]
     assert not missing, f"declared manifest inputs do not exist: {missing}"
+
+
+def test_a_complete_bundle_is_refused_and_an_incomplete_one_is_replaced(tmp_path, monkeypatch):
+    """Kills mutation: refuse on directory existence, as this did until 2026-08-08.
+
+    A run id identifies its inputs exactly, so a COMPLETE bundle must never be
+    overwritten. But a run killed partway leaves a directory with no manifest,
+    and refusing on existence alone made that directory block every retry with
+    no flag to clear it -- which cost a manual recovery during the 2026-08-08
+    regeneration, on the wrong side of a deadline.
+
+    Asserts both halves, because a mutation that always replaces passes the
+    second half alone and is far more dangerous than the bug being fixed.
+    """
+    import json as _json
+
+    from ti26 import cli_release
+
+    runs = tmp_path / "runs"
+    complete = runs / "abc123"
+    complete.mkdir(parents=True)
+    (complete / "manifest.json").write_text(_json.dumps({"run_id": "abc123"}))
+    assert cli_release._bundle_is_complete(complete)
+
+    incomplete = runs / "def456"
+    incomplete.mkdir(parents=True)
+    (incomplete / "d2").mkdir()
+    (incomplete / "d2" / "d2_gate.json").write_text("{}")
+    assert not cli_release._bundle_is_complete(incomplete)
+
+    missing = runs / "ghi789"
+    assert not cli_release._bundle_is_complete(missing)
