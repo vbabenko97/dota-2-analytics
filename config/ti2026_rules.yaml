@@ -9,30 +9,56 @@ format:
   advance_at_wins: 4
   eliminate_at_losses: 4
 
-# Corrected 2026-08-08 against the owner's transcript of the published rules
-# (docs/ti26/2026-08-08-published-format-rules.md). `game_win_pct` and
-# `opponent_series_wins` were in the wrong order, and an `avg_duration`
-# criterion sat between the last real criterion and the coin toss. The
-# published list has six entries and no duration among them.
+# TI 2026's own order, fetched 2026-08-08 from Valve's rules page and archived
+# verbatim in docs/ti26/2026-08-08-ti2026-rules-fetched.md:
+#
+#     Number of Matches Won
+#     Number of Matches Lost
+#     Total Number of Matches Won by Opponents Played
+#     Percentage of Games Won
+#     Average Percentage of Games Won by Opponents Played
+#     Average Game Duration (Shorter is Better)
+#     Coin Toss
+#
+# Seven criteria, with duration sixth. TI 2025 ran SIX, with percentage of games
+# won third and no duration. Earlier the same day, while the 2026 page still had
+# no pairing section, commit 23beac3 rewrote this list to TI 2025's on the
+# assumption the format carried over. Valve transposed criteria 3 and 4 and
+# added duration, so it did not.
 tiebreak_order:
   - series_wins
   - series_losses
-  - game_win_pct
   - opponent_series_wins
+  - game_win_pct
   - opponent_game_win_pct
+  - avg_duration
   - coin_toss
 
 rounds:
   within_group: [2, 3]
   cross_group: [4]
+  # TI 2026 Round 5: "For matches where the loser is eliminated, maximize the
+  # distance in ranking between the teams." TI 2025 gave Round 5 no special
+  # modifications, which is why this key was deleted earlier on 2026-08-08.
+  max_distance_when_loser_eliminated: [5]
 
-# The published text gives Round 5 "no special modifications" and puts distance
-# maximisation in the Elimination Round. This used to read
-# `max_distance_when_loser_eliminated: [5]` under `rounds`, which applied it to
-# every Round 5 bucket where a loss eliminated -- shaping who finished 1-4 --
-# and left the elimination round itself pairing by a different rule entirely.
+# TI 2026's elimination round is a SEQUENTIAL CHOICE, not a pairing rule:
+#
+#     Starting with the best 3-2 team, they will choose any of the five 2-3
+#     teams as their opponent. The next best 3-2 team will then choose any of
+#     the remaining 2-3 teams as their opponent. Repeat the above until all
+#     teams have chosen an opponent.
+#
+# TI 2025 maximised ranking distance here instead, with no choice involved.
+# `elimination.pair_elimination` still implements that and is used ONLY by
+# `cli_pairing_check`, which validates the engine against TI 2025's real
+# bracket and therefore needs TI 2025's rule.
+#
+# The rules fix the ORDER of choosing and say nothing about the BASIS, so
+# `choice_policy` is an assumption about team behaviour rather than a reading of
+# the rules -- tagged accordingly in `provenance` below.
 elimination_round:
-  maximize_ranking_distance: true
+  choice_policy: rational
 
 duration_model:
   # Fitted in D2 from real map durations (reports/duration_fit.json).
@@ -128,12 +154,24 @@ provenance:
   total_rounds: compendium_ui_2026
   advance_at_wins: compendium_ui_2026
   eliminate_at_losses: compendium_ui_2026
-  tiebreak_order: owner_transcript_2025_inherited
-  within_group_rounds: owner_transcript_2025_inherited
-  cross_group_rounds: owner_transcript_2025_inherited
-  # Renamed with the config key on 2026-08-08; the old name outlived the value
-  # it described by one commit.
-  elimination_maximizes_ranking_distance: owner_transcript_2025_inherited
+  # These four came off Valve's own TI 2026 rules page, fetched 2026-08-08 with
+  # a headless browser and archived verbatim in
+  # docs/ti26/2026-08-08-ti2026-rules-fetched.md. That page is JavaScript-
+  # rendered, which is why every previous attempt in this project's history got
+  # a heading with no body and why these values spent a week tagged as hearsay.
+  #
+  # The tag names the relay and the date, as the others do, and stops short of
+  # `official`: no test here can re-read the page (tests never touch the
+  # network), and Valve added this section to the page during the same day it
+  # was first checked, so it is a dated observation rather than a fixed input.
+  tiebreak_order: valve_rules_page_2026_08_08
+  within_group_rounds: valve_rules_page_2026_08_08
+  cross_group_rounds: valve_rules_page_2026_08_08
+  max_distance_when_loser_eliminated: valve_rules_page_2026_08_08
+  # NOT from the rules. The page fixes the ORDER in which 3-2 teams choose and
+  # says nothing about how any of them decides, so this is a behavioural
+  # assumption. `cli_schedule_sensitivity` prices all three policies.
+  elimination_choice_policy: unspecified_by_published_rules
   record_capacities: logically_forced
   category_capacities: logically_forced
   # The base pairing preference -- minimum ranking distance inside a record
@@ -162,7 +200,6 @@ provenance:
   max_distance_at_round_4: inferred
   # No published rule orders teams still exactly tied after duration.
   coin_toss_resolution: arbitrary
-  # Repeat avoidance is "where possible" per the reported official text, which
-  # reaches this repository through the same unopenable citations as the rest.
-  repeat_avoidance_is_soft: owner_transcript_2025_inherited
+  # "Avoid repeat pairings when possible" -- the fetched 2026 page, verbatim.
+  repeat_avoidance_is_soft: valve_rules_page_2026_08_08
   duration_model: empirical   # fitted in D2; see reports/duration_fit.json

@@ -27,10 +27,21 @@ sentence are load-bearing.
   floor. Only Glicko *after* a 0.405 calibration shrinkage clears it, by 0.00673
   nats/map — the information content of a flat 55.8% per-map edge.
 - **Card-level skill is undetectable.** Matched-window backtest on TI 2025:
-  pipeline 4/16, naive strength-sort 4/16, random 3.75. n = 1 event.
+  pipeline 4/16, naive strength-sort 4/16, random 3.75. n = 1 event. On the
+  TI 2026 field, after the rules correction below, the pipeline's card is
+  identical to the strength sort on all 16 slots.
 - **One positive out-of-sample result.** Series-level scoring on TI 2025:
   36/58 = 62.1%, one-sided p = 0.0435. One series from failing its own
   pre-registered threshold.
+- **A card is not a measuring instrument.** Noxville's card, published the night
+  before TI 2025 with his own Glicko-2 model, scored 5/16 — and a random card
+  matches or beats that 31% of the time. You need 7/16 to reach p ≈ 0.05.
+  Nobody was close. Read the card score as a headline, not as evidence.
+- **The tournament rules moved on 2026-08-08.** Valve published TI 2026's Group
+  Stage Rules mid-day; they differ from TI 2025's in four places, including a
+  ranking criterion and the entire elimination-round mechanism. The engine is
+  reconciled against [the fetched text](docs/ti26/2026-08-08-ti2026-rules-fetched.md),
+  and the near-lock runbook now re-fetches and diffs that page.
 
 Full accounting in [docs/ti26/2026-08-08-known-weaknesses.md](docs/ti26/2026-08-08-known-weaknesses.md).
 What to do about it: [docs/ti26/2026-08-08-strengthening-plan.md](docs/ti26/2026-08-08-strengthening-plan.md).
@@ -112,6 +123,7 @@ bundle, never retried with different arguments.
 | `cli_d4` | Card backtest against TI 2025 — diagnostic, never a gate |
 | `cli_series_score` | Score the strengths against all 58 TI 2025 series |
 | `cli_data_health` | What the training corpus actually contains |
+| `cli_external_cards` | Score expert cards published before TI 2025 against the frozen truth |
 | `cli_pairing_check` | Check the bracket rules against the only event that ran them |
 | `cli_ladder_check` | What does the simulation add over sorting by strength? |
 | `cli_schedule_sensitivity` | How much does the pairing rule move the card? |

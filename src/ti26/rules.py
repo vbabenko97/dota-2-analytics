@@ -73,10 +73,11 @@ class Rules:
     tiebreak_order: list[str]
     within_group_rounds: list[int]
     cross_group_rounds: list[int]
-    # The elimination round pairs 3-2 against 2-3 at maximum ranking distance.
-    # No SWISS round maximises distance; this used to be a list of rounds and
-    # named Round 5, which the published text gives no modifications at all.
-    elimination_maximizes_ranking_distance: bool
+    max_distance_elimination_rounds: list[int]
+    # How a 3-2 team picks its elimination opponent. TI 2026 fixes the order of
+    # choosing and says nothing about the basis, so this is an assumption about
+    # team behaviour rather than a rule -- see `elimination.ChoicePolicy`.
+    elimination_choice_policy: str
     duration_log_mean: float
     duration_log_sigma: float
     provenance: dict[str, str]
@@ -118,9 +119,8 @@ def load_rules(path: str) -> Rules:
         tiebreak_order=configured_order,
         within_group_rounds=list(rounds["within_group"]),
         cross_group_rounds=list(rounds["cross_group"]),
-        elimination_maximizes_ranking_distance=bool(
-            raw["elimination_round"]["maximize_ranking_distance"]
-        ),
+        max_distance_elimination_rounds=list(rounds["max_distance_when_loser_eliminated"]),
+        elimination_choice_policy=str(raw["elimination_round"]["choice_policy"]),
         duration_log_mean=float(duration["log_mean"]),
         duration_log_sigma=float(duration["log_sigma"]),
         provenance=dict(raw["provenance"]),

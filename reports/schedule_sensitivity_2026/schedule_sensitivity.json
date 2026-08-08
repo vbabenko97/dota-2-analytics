@@ -1,0 +1,122 @@
+{
+  "configured_elimination_policy": "rational",
+  "elimination_policy_signal_to_noise": 1.350129198966395,
+  "n_sims": 250000,
+  "noise_reruns_of_the_shipping_rule": [
+    {
+      "assignments_changed": 4,
+      "max_abs_delta": 0.003096000000000043,
+      "mean_abs_delta": 0.0007536666666666658,
+      "objective": 4.5955,
+      "seed": 2
+    },
+    {
+      "assignments_changed": 4,
+      "max_abs_delta": 0.0027600000000000124,
+      "mean_abs_delta": 0.0007305833333333309,
+      "objective": 4.5921,
+      "seed": 3
+    }
+  ],
+  "reference_card": {
+    "Aurora Gaming": "elim_win",
+    "BoomBoys": "elim_win",
+    "GamerLegion": "1-4",
+    "HULIGANI": "1-4",
+    "Iron Wing": "elim_loss",
+    "LGD Gaming": "elim_loss",
+    "Nigma Galaxy": "elim_win",
+    "OG": "elim_loss",
+    "Team Falcons": "elim_win",
+    "Team Liquid": "elim_win",
+    "Team Resilience": "0-4",
+    "Team Spirit": "4-1",
+    "Team Vision": "4-0",
+    "Team Yandex": "4-1",
+    "Vici Gaming": "elim_loss",
+    "Xtreme Gaming": "elim_loss"
+  },
+  "reference_objective": 4.5903,
+  "reference_seed": 1,
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "signal_alternative_elimination_policies": [
+    {
+      "assignments_changed": 0,
+      "changed_teams": [],
+      "is_configured": true,
+      "max_abs_delta": 0.0,
+      "mean_abs_delta": 0.0,
+      "objective": 4.5903,
+      "policy": "rational"
+    },
+    {
+      "assignments_changed": 0,
+      "changed_teams": [],
+      "is_configured": false,
+      "max_abs_delta": 0.004180000000000017,
+      "mean_abs_delta": 0.0005429999999999992,
+      "objective": 4.5795,
+      "policy": "noisy"
+    },
+    {
+      "assignments_changed": 0,
+      "changed_teams": [],
+      "is_configured": false,
+      "max_abs_delta": 0.0037120000000000486,
+      "mean_abs_delta": 0.000406666666666666,
+      "objective": 4.586,
+      "policy": "random"
+    }
+  ],
+  "signal_alternative_pairing_rules": [
+    {
+      "assignments_changed": 0,
+      "changed_teams": [],
+      "max_abs_delta": 0.0027880000000000127,
+      "mean_abs_delta": 0.0007760000000000003,
+      "objective": 4.5952,
+      "preference": "random"
+    },
+    {
+      "assignments_changed": 0,
+      "changed_teams": [],
+      "max_abs_delta": 0.0010120000000000129,
+      "mean_abs_delta": 0.00019925,
+      "objective": 4.5938,
+      "preference": "min"
+    },
+    {
+      "assignments_changed": 2,
+      "changed_teams": [
+        "GamerLegion",
+        "Team Resilience"
+      ],
+      "max_abs_delta": 0.0033320000000000016,
+      "mean_abs_delta": 0.0007469166666666669,
+      "objective": 4.5927,
+      "preference": "max"
+    },
+    {
+      "assignments_changed": 3,
+      "changed_teams": [
+        "Team Falcons",
+        "Team Spirit",
+        "Team Vision"
+      ],
+      "max_abs_delta": 0.0031999999999999806,
+      "mean_abs_delta": 0.0007616666666666645,
+      "objective": 4.5919,
+      "preference": "fold"
+    }
+  ],
+  "signal_to_noise": 1.076227390180864,
+  "single_marginal_stderr": 0.001,
+  "status": "DIAGNOSTIC -- no threshold, gates nothing, cannot alter the card",
+  "worst_elimination_policy_max_abs_delta": 0.004180000000000017,
+  "worst_noise_max_abs_delta": 0.003096000000000043,
+  "worst_signal_max_abs_delta": 0.0033320000000000016
+}

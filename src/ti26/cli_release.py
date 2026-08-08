@@ -33,14 +33,24 @@ from ti26.provenance import (
     write_run_manifest,
 )
 
-# Every configuration file a producer below reads. Hashed into the manifest so a
-# report cannot be traced to a config that has since changed.
+# EVERY configuration file in `config/`, hashed into the manifest so a report
+# cannot be traced to a config that has since changed. `tests/test_cli_release.py`
+# asserts this list equals `config/*.yaml` exactly, so adding a config without
+# adding it here fails the suite.
+#
+# The invariant is deliberately "every config", not "every config a producer
+# below reads". Those differ -- `ti2025_external_cards.yaml` feeds a diagnostic
+# that is not yet a bundle producer -- and the stricter rule is the useful one:
+# the manifest then records the repository's whole configuration state at run
+# time, so a reader comparing two bundles can tell what changed between them
+# without knowing which producer consumed what.
 CONFIG_INPUTS = (
     "config/d2_gate.yaml",
     "config/team_aliases.yaml",
     "config/ti2026_rules.yaml",
     "config/ti2026_teams.yaml",
     "config/ti2025_backtest.yaml",
+    "config/ti2025_external_cards.yaml",
     "pyproject.toml",
 )
 

@@ -24,48 +24,51 @@ Assumptions that are not established by the repository are tagged inline as
 
 # Part A — Before the compendium locks (12-13 August)
 
-Four to five days. The honest headline first:
+Four to five days.
 
-> **Nothing in Part A will make the card more accurate.** No model change can be
-> made, validated and regenerated safely in four days without breaking the
-> pre-registration discipline that is this project's main asset. Part A is about
-> making sure the run does not break and the record is not wrong.
+**The original headline of this section was "nothing in Part A will make the
+card more accurate", and it was overtaken within hours.** Valve published the
+TI 2026 Group Stage Rules during 2026-08-08. They differ from TI 2025's in four
+places, the engine was wrong on all four, and correcting them changes the card.
 
-Ranked by risk of the thing going wrong on the day.
+That is not a breach of pre-registration discipline, and the distinction
+matters enough to state: pre-registration exists to stop a result being shopped
+for. Updating an INPUT when the ground truth is published is the opposite
+failure to guard against — an engine that knowingly models the wrong
+tournament, held in place by a rule meant to prevent cheating.
 
-## A1. Remove the dead duration machinery and its lock-day false alarm
+So the ranking below changed. Rules reconciliation first, everything else after.
 
-**Problem:** [weakness §6](2026-08-08-known-weaknesses.md#6-dead-machinery).
-Duration was removed from the tiebreak on 2026-08-08 and now provably moves
-nothing: sigma 0.05 vs 5.00 — a 100x change — shifts the category marginals by a
-maximum absolute delta of 0.0.
+## A1. DONE — reconcile the engine against the published TI 2026 rules
 
-**Why it is first:** the near-lock run ingests a *fresh* snapshot, which refits
-duration, which will very likely trip the staleness comparison at
-[`cli_d2.py:209-221`](../../src/ti26/cli_d2.py#L209). That prints:
+**Problem:** [weakness §3](2026-08-08-known-weaknesses.md#3-the-rules-engine-modelled-the-wrong-year-and-the-format-changed).
+Valve's TI 2026 Group Stage Rules were fetched on 2026-08-08 and archived
+verbatim in [the fetched rules doc](2026-08-08-ti2026-rules-fetched.md). The
+engine differed in four places, all of them introduced that morning by aligning
+to a transcript of TI 2025's rules while 2026's were still unpublished:
 
-> `WARNING: ... Any card built this run used the STALE config values -- update
-> the rules config from duration_fit.json and re-run before trusting it.`
+1. ranking criteria 3 and 4 transposed;
+2. Average Game Duration missing as criterion 6;
+3. Round 5's max-distance-when-loser-eliminated modification deleted;
+4. the elimination round modelled as distance maximisation rather than as the
+   sequential choice the 2026 rules describe.
 
-The check **warns rather than aborts** — the code comment says hard-failing was
-deliberately avoided so it would not break the documented build sequence — so
-this does not block the run. What it does is worse in a different way: on lock
-day the operator sees an unexplained warning stating the card cannot be trusted
-and instructing a config sync plus a full re-run, for a parameter that cannot
-affect the output. The near-lock runbook does not mention duration anywhere, so
-there is nothing to tell them to ignore it.
+All four are corrected, with the provenance tags now naming the fetch and its
+date. `pair_elimination` is retained for `cli_pairing_check`, which validates
+against TI 2025 and therefore needs TI 2025's rule.
 
-**Fix:** delete `duration_model` from the rules dataclass, the staleness check,
-and `duration.py`'s sensitivity sweep. If deletion is too broad for the
-remaining time, the minimum viable fix is a runbook line saying the warning is
-expected and harmless — but that leaves a staleness gate on a dead parameter,
-which will mislead the next person instead.
+**This supersedes the previous A1**, which proposed DELETING the duration
+machinery as dead code. It was measurably inert only because it had been
+removed from the tiebreak hours earlier; TI 2026 lists it as criterion 6. Had
+that item been executed it would have hard-coded the defect.
 
-**Done when:** `pytest` unfiltered passes with the duration tests removed or
-rewritten, and `cli_release` completes on the pinned snapshot with no duration
-warning.
+**What survives of the old A1:** `cli_d2` warns when the fitted duration
+parameters drift from config, the runbook never mentions it, and a fresh
+snapshot on lock day will probably trip it. That is now a runbook line, not a
+deletion.
 
-**Effort:** ~1 hour.
+**Done when:** the card regenerates under the corrected rules and the runbook
+explains the duration warning.
 
 ## A2. Correct the stale pairing justification in config
 
@@ -84,30 +87,40 @@ reality far more often than "refuted" implies, and
 
 **Effort:** ~30 minutes.
 
-## A3. Resolve the elimination rule honestly
+## A3. Stop `cli_pairing_check` from misrepresenting its own result
 
-**Problem:** [weakness §3a](2026-08-08-known-weaknesses.md#3a-the-elimination-rule-does-not-reproduce-the-one-bracket-we-can-check).
-The configured maximise rule reproduces none of TI 2025's elimination bracket
-across 5 seeds. It governs 10 of 16 card slots.
+**Problem:** [weakness §3b](2026-08-08-known-weaknesses.md#3b-the-ti-2025-diagnostic-and-why-its-verdict-field-misleads).
 
-**Do not** flip the rule to minimise on this evidence. The real bracket scored 8
-against a reachable maximum of 10; `cli_pairing_check` does not currently report
-the reachable *minimum*, so we do not know whether 8 is near the minimum, in the
-middle, or neither. Changing a rule to fit a single observation, four days
-before a lock, on a quantity we have not measured, is the exact move this
-project's discipline exists to prevent.
+`cli_pairing_check` emits
 
-**Fix:** extend `cli_pairing_check` to report the reachable minimum alongside
-the maximum, then run `cli_schedule_sensitivity` with the elimination rule
-inverted. `[ASSUMPTION: the elimination rule will prove as immaterial as the
-Swiss pairing rule did — signal-to-noise 1.08 — in which case the correct
-action is to retag it as unresolved-and-immaterial and change nothing.]` If it
-*is* material, that is a finding worth having before the lock even if the
-response is only to document the uncertainty.
+```
+engine_reproduces_the_real_bracket: false
+pairs_shared_with_engine: 3 of 5
+```
 
-**Done when:** the sensitivity number exists and the tag matches it.
+with no indication of two things a reader needs. The discrepancy has a known,
+documented, external cause — the unannounced two-series-per-day constraint of
+6 September, which forced HEROIC onto Yakult and accounts for exactly the 10→8
+distance gap. And the check now measures **TI 2025's** elimination rule, which
+TI 2026 has replaced entirely, so a `false` here says nothing at all about the
+shipping engine.
 
-**Effort:** ~2 hours.
+This entry has been through two wrong versions, both caused by reading that
+`false` without either piece of context: first "the rule is refuted", then
+"measure the reachable minimum before deciding whether to flip it". A producer
+emitting a true number that reliably causes a false inference is the same class
+of problem as an unbound number and deserves the same treatment.
+
+**Fix:** carry both in the output. A `known_deviations` field naming the
+constraint, the pairs it moved and its distance cost; and a `rule_year` field
+saying which tournament's rule is being checked, so nobody reads a TI 2025
+diagnostic as a verdict on the TI 2026 card.
+
+**Done when:** the JSON explains its own `false`, and a reader who has seen
+neither this document nor the format-rules archive cannot draw the wrong
+conclusion from it.
+
+**Effort:** ~1 hour.
 
 ## A4. Run the near-lock runbook
 
@@ -145,12 +158,17 @@ is correct and is recorded as `group_draw: null` in the payload.
 
 **Effort:** minutes.
 
-## A7. Emit data health into the release bundle
+## A7. Emit the standalone diagnostics into the release bundle
 
-`cli_data_health` currently runs standalone. Adding it to `cli_release`'s
-producer list puts the corpus's tier mix, patch mix, recency and per-team
-volume into the manifest-bound bundle, so the card ships alongside a statement
-of what it was trained on.
+`cli_data_health` and `cli_external_cards` both run standalone today. Adding
+them to `cli_release`'s producer list puts the corpus's tier mix, patch mix,
+recency and per-team volume — and the external-card ceiling result — into the
+manifest-bound bundle, so the card ships alongside a statement of what it was
+trained on and of how much a card score can prove.
+
+Both configs are already hashed into the manifest, so this is a producer-list
+change only. Note it moves the run id, since the id is derived from the
+descriptor and the descriptor contains the producer list.
 
 **Effort:** ~30 minutes.
 
@@ -257,7 +275,7 @@ Glicko on held-out data, with connectivity reported alongside.
 
 *(§II Metrics and Losses, §VIII Features)*
 
-**Attacks:** [§5a](2026-08-08-known-weaknesses.md#5a-calibration-contradicts-itself-across-levels) (map says overconfident, series says underconfident).
+**Attacks:** [§5b](2026-08-08-known-weaknesses.md#5b-calibration-contradicts-itself-across-levels) (map says overconfident, series says underconfident).
 
 [`series.py`](../../src/ti26/series.py) converts map probability to series
 probability with `math.comb` under independence. Maps within a series are not
@@ -275,6 +293,16 @@ One parameter, one pre-registered gate.
 than the current [0.699, 3.534].
 
 **Effort:** ~1-2 days.
+
+**Promoted since the first draft of this document.** The external-card
+diagnostic ([§5a](2026-08-08-known-weaknesses.md#5a-what-an-expert-scored-and-why-it-reframes-the-whole-section))
+showed that a random card matches the best published expert card 31% of the
+time, and that 7 of 16 is the threshold for even a marginal result. A sixteen-slot
+card is therefore not a measuring instrument, for us or anyone. Series scoring
+has 58 observations to the card's 16 and is the only place a signal has appeared,
+so **series-level work should be treated as the project's primary metric track
+and the card score demoted to a reported headline.** That is a stronger argument
+for B3 than the calibration contradiction it was originally justified by.
 
 ## B4. Propagate rating uncertainty into the simulation
 
@@ -456,3 +484,12 @@ Concretely, so this document can be marked wrong later:
 
 Item 2 is the one that matters. Until a model beats a coin flip on its own,
 everything else in this repository is scaffolding around a 55.8% edge.
+
+**A criterion deliberately NOT on this list: a card score.** Not "beat 4/16",
+not "beat the expert's 5/16", not any single-event card target. The external-card
+diagnostic showed a random card reaching 5/16 about 31% of the time and 7/16
+being the threshold for even a marginal result, so a card-score target would be
+a coin-flip dressed as a goal — hit it and learn nothing, miss it and learn
+nothing. Item 4 survives only because it is a *paired* comparison against the
+ladder on the same event, which cancels most of the shared luck, and even that
+needs several events before it means much.

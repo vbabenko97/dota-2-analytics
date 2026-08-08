@@ -72,6 +72,32 @@ returns no body. The evidence is recorded in `config/ti2026_rules.yaml`.
 or a substitution after it would land in exactly the blind spot this step exists
 to cover, and the earlier pass is not evidence about the field on lock day.
 
+## 3b. Re-fetch the rules page, and diff it
+
+**This step exists because the rules changed under us once already.** On
+2026-08-08 the TI 2026 page had no Swiss Pairing Rules section in the morning
+and a complete one by evening. The engine spent that day modelling TI 2025's
+format — wrong ranking criteria, wrong Round 5, wrong elimination round — and
+nothing in the repository could have noticed, because every check here verifies
+internal consistency against the configured rules.
+
+The page is JavaScript-rendered, so a plain HTTP fetch returns a heading with no
+body. Render it:
+
+```
+https://www.dota2.com/esports/ti15/tirules
+```
+
+Diff `The International: Group Stage Rules` through `The International: Seeding`
+against [the 2026-08-08 archive](2026-08-08-ti2026-rules-fetched.md).
+
+**STOP — owner decision required** if anything differs. Every value tagged
+`valve_rules_page_2026_08_08` in `config/ti2026_rules.yaml` derives from that
+archive, and a changed rule invalidates the bundle rather than merely dating it.
+
+Re-archive the fetched text with the new date whether or not it changed, so the
+next run diffs against the most recent read rather than the first one.
+
 ## 4. Roster staleness, confirmed by account set
 
 ```
@@ -82,6 +108,19 @@ to cover, and the earlier pass is not evidence about the field on lock day.
 configured team whose accounts now appear under a different `team_id`. Five such
 migrations were already present on the pinned snapshot, four of which appeared in
 a single burst on 2026-07-31, so expect more rather than fewer.
+
+**Expect a second, unrelated warning here and do not act on it.** A fresh
+snapshot refits the duration model, so `cli_d2` will very likely report that
+`config/ti2026_rules.yaml`'s `duration_model` does not match this run's fit, and
+will tell you to sync the config and re-run before trusting the card. That
+instruction is for the build sequence, not for this runbook: the config value is
+the one the card was built on, and syncing it mid-run is what would make the two
+disagree. Note the fitted values, finish the runbook, and update the config
+afterwards if you want the next run to start clean.
+
+Duration is a live TI 2026 tiebreak criterion — sixth, shorter is better — so it
+is not inert and cannot simply be ignored. It is consulted only by ties that
+survive five criteria, which is rare.
 
 For each hit, compare the CONFIGURED and RESOLVED account sets — the five account
 ids a roster actually fielded. Do not compare organisation names. The local store

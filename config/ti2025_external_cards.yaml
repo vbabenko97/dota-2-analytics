@@ -1,0 +1,92 @@
+# Compendium cards published by other people before TI 2025, for scoring against
+# the frozen truth in `ti2025_backtest.yaml`.
+#
+# WHY THIS FILE EXISTS. Every internal benchmark this project has compares the
+# pipeline against itself or against a random card. Neither says whether the
+# TASK is doable. An expert card, published in advance by someone with a rating
+# model and domain knowledge this project does not have, is the only external
+# calibration available for that question.
+#
+# ADMISSION RULE, so this cannot become a curated list of cards that flatter us:
+#   - The card must have been PUBLISHED BEFORE the event began, with a URL and a
+#     date, by someone who was not asked to produce it for this comparison.
+#   - It must be transcribed in full. A card cannot be entered partially, and a
+#     card cannot be removed once entered.
+#   - Its category counts must match the format's capacities exactly, which
+#     `cli_external_cards` asserts rather than trusts.
+#
+# NAMES are as the source wrote them in September 2025. `aliases` maps them onto
+# the CURRENT OpenDota labels the truth file uses (BoomBoys played as BetBoom
+# Team, TEAM VISION as PARIVISION, Yakult Brothers as Yakutou Brothers). The
+# mapping is cosmetic and is checked for completeness at load.
+#
+# TRANSCRIPTION SOURCE: the owner supplied screenshots of the compendium UI from
+# each linked post. These are transcriptions of images, not fetched data; no
+# snapshot binds them and no manifest hashes them. That is a weaker provenance
+# than anything else this pipeline consumes, and it is why this file is an input
+# to a DIAGNOSTIC and reaches no gate.
+
+cards:
+  - id: noxville-final
+    author: Noxville
+    source: https://x.com/Noxville/status/1963387494277550386
+    published: 2025-09-08
+    note: >-
+      Posted the night before TI 2025 began, described by the author as his last
+      update. Accompanied by an explicit tiering (S: Spirit; A: Liquid, Falcons,
+      PVISION; B: BB, Tundra, Aurora, Tidebound, Xtreme, NaVi, Nigma; C: Heroic,
+      Yakutao; D: Wildcard, BOOM, Nemesis) and the caveat "PROBABLY COMPLETELY
+      WRONG".
+    aliases:
+      PVISION: TEAM VISION
+      BB Team: BoomBoys
+      Yakutou Brothers: Yakult Brothers
+    assignments:
+      Team Liquid: "4-0"
+      Team Spirit: "4-1"
+      Team Falcons: "4-1"
+      PVISION: elim_win
+      BB Team: elim_win
+      Aurora Gaming: elim_win
+      Team Tidebound: elim_win
+      Tundra Esports: elim_win
+      Xtreme Gaming: elim_loss
+      Nigma Galaxy: elim_loss
+      Yakutou Brothers: elim_loss
+      Natus Vincere: elim_loss
+      HEROIC: elim_loss
+      BOOM Esports: "1-4"
+      Wildcard: "1-4"
+      Team Nemesis: "0-4"
+
+  - id: noxville-first
+    author: Noxville
+    source: https://x.com/Noxville/status/1958975967688306864
+    published: 2025-08-22
+    note: >-
+      The author's first published card, twelve days before the event, with the
+      Gaimin Gladiators to Yakult Brothers substitution applied as the author
+      himself specified in https://x.com/Noxville/status/1961106551001027014
+      after Gaimin withdrew. Entered so the final card can be read against the
+      author's own starting point rather than only against a random baseline.
+    aliases:
+      PVISION: TEAM VISION
+      BB Team: BoomBoys
+      Yakutou Brothers: Yakult Brothers
+    assignments:
+      Team Liquid: "4-0"
+      Team Spirit: "4-1"
+      PVISION: "4-1"
+      Tundra Esports: elim_win
+      BB Team: elim_win
+      Team Falcons: elim_win
+      Team Tidebound: elim_win
+      Aurora Gaming: elim_win
+      Yakutou Brothers: elim_loss
+      Natus Vincere: elim_loss
+      Xtreme Gaming: elim_loss
+      BOOM Esports: elim_loss
+      Nigma Galaxy: elim_loss
+      HEROIC: "1-4"
+      Wildcard: "1-4"
+      Team Nemesis: "0-4"

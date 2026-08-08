@@ -111,20 +111,32 @@ def test_config_declares_no_capacity_values():
     assert raw["provenance"]["category_capacities"] == "logically_forced"
 
 
-def test_tiebreak_order_is_the_published_six():
-    """Was `..._the_official_seven`, and asserted an order with two defects.
+def test_tiebreak_order_is_ti_2026s_seven_not_ti_2025s_six():
+    """Kills mutation: apply TI 2025's ranking criteria to TI 2026.
 
-    The seventh entry, `avg_duration`, is in no published rules text, and
-    `opponent_series_wins` sat ahead of `game_win_pct`. Both are corrected
-    against docs/ti26/2026-08-08-published-format-rules.md.
+    This test has now asserted three different orders and the history matters,
+    because the failure it guards is not a typo -- it is applying the right
+    rules from the wrong year.
+
+    TI 2026, fetched from Valve's page on 2026-08-08 and archived in
+    docs/ti26/2026-08-08-ti2026-rules-fetched.md, ranks on SEVEN criteria with
+    opponents' match wins THIRD and average game duration SIXTH. TI 2025 ranked
+    on six, with percentage of games won third and no duration at all. Earlier
+    on 2026-08-08, while the 2026 page still had no pairing section, this file
+    asserted TI 2025's order on the assumption that the format carried over.
+
+    Both differences are load-bearing. The transposition changes the ranking
+    that drives every pairing, and dropping duration sends genuinely tied teams
+    to a coin toss the rules do not reach yet.
     """
     rules = load_rules(RULES_PATH)
     assert rules.tiebreak_order == [
         "series_wins",
         "series_losses",
-        "game_win_pct",
         "opponent_series_wins",
+        "game_win_pct",
         "opponent_game_win_pct",
+        "avg_duration",
         "coin_toss",
     ]
 
@@ -148,30 +160,48 @@ def test_mutated_tiebreak_order_raises(tmp_path):
 
 
 def test_round_constraints():
+    """Kills mutation: drop TI 2026's Round 5 modification.
+
+    TI 2026 gives Round 5 one: "For matches where the loser is eliminated,
+    maximize the distance in ranking between the teams." TI 2025 gave it none,
+    which is why this assertion was deleted earlier on 2026-08-08 and why it is
+    back. It shapes who finishes 1-4 rather than 2-3.
+    """
     rules = load_rules(RULES_PATH)
     assert rules.within_group_rounds == [2, 3]
     assert rules.cross_group_rounds == [4]
-    # Round 5 is deliberately absent: the published text gives it no special
-    # modifications. Distance maximisation belongs to the elimination round.
-    assert rules.elimination_maximizes_ranking_distance is True
+    assert rules.max_distance_elimination_rounds == [5]
+
+
+def test_the_elimination_choice_policy_is_configured_and_marked_as_an_assumption():
+    """Kills mutation: tag the choice policy as if the rules specified it.
+
+    TI 2026 fixes the ORDER in which 3-2 teams choose and says nothing about
+    how any of them decides. A policy tagged as published would let a
+    behavioural assumption that drives ten of sixteen slots pass as a rule.
+    """
+    rules = load_rules(RULES_PATH)
+    assert rules.elimination_choice_policy in {"rational", "noisy", "random"}
+    assert rules.provenance["elimination_choice_policy"] == "unspecified_by_published_rules"
 
 
 def test_every_rule_carries_a_provenance_tag_and_none_claims_official():
-    """Kills mutation: retag a secondhand format value as `official`.
+    """Kills mutation: retag a relayed or assumed format value as `official`.
 
-    Nothing in this repository can check Valve's published rules. The design
-    spec records that the page is JavaScript-rendered and that two fetch
-    attempts returned no body, reproduced again on 2026-08-07, and
-    `explorer_query` is the only network path here.
+    Valve's rules page was finally READ on 2026-08-08, with a headless browser,
+    and archived verbatim in docs/ti26/2026-08-08-ti2026-rules-fetched.md. It is
+    JavaScript-rendered, which is why every prior attempt in this project got a
+    heading with no body and why these values spent a week tagged as hearsay.
 
-    The evidence improved twice on 2026-08-08 and `official` still is not the
-    right word. The owner transcribed TI 2025's published rules text, and
-    supplied a screenshot of the TI 2026 compendium card labelling its own six
-    categories. Both are relayed by a human; neither is a fetch this repository
-    can repeat, and neither can be re-verified by any test here. So the tags say
-    which relay they came from -- `compendium_ui_2026`,
-    `owner_transcript_2025_inherited` -- rather than borrowing the authority of
-    the source behind it.
+    `official` is still not the word, for two reasons that outlived the fetch.
+    No test here can re-read the page -- tests never touch the network -- so
+    nothing in this suite can detect the page changing under it. And it demonstrably
+    does change: the pairing section was absent when the owner checked earlier
+    the same day and present hours later.
+
+    So the tag continues to name the relay and now also the date --
+    `valve_rules_page_2026_08_08` -- which is a claim this repository can
+    actually stand behind, unlike `official`.
 
     The second assertion is not redundant with the first: it is what fails if
     someone restores `official` to the allowed set.
@@ -184,8 +214,16 @@ def test_every_rule_carries_a_provenance_tag_and_none_claims_official():
         # categories in the product's own words. Not `official`: a screenshot
         # relayed by the owner, not a fetch this repository can repeat.
         "compendium_ui_2026",
+        # Read from Valve's own TI 2026 rules page with a headless browser on
+        # 2026-08-08 and archived verbatim. The date is in the tag because the
+        # page changed during that day and no test here can re-read it.
+        "valve_rules_page_2026_08_08",
+        # The rules fix the order in which 3-2 teams choose their elimination
+        # opponent and say nothing about the basis. This names that gap so a
+        # behavioural assumption cannot pass as a published rule.
+        "unspecified_by_published_rules",
         # From the owner's transcript of TI 2025's published rules, assumed to
-        # carry to 2026 because 2026 has published no pairing section.
+        # carry to 2026 because 2026 had published no pairing section.
         "owner_transcript_2025_inherited",
         "reported_official",
         "logically_forced",

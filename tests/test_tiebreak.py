@@ -2,7 +2,12 @@ import random
 
 import pytest
 
-from ti26.tiebreak import TIEBREAK_ORDER, game_win_pct, rank_teams
+from ti26.tiebreak import (
+    DurationResolver,
+    DurationUnavailableError,
+    game_win_pct,
+    rank_teams,
+)
 from ti26.types import TeamState
 
 
@@ -33,15 +38,7 @@ def test_series_losses_break_equal_wins():
     assert rank_teams(states, random.Random(0)) == ["fewer", "more"]
 
 
-def test_game_win_pct_is_the_third_criterion():
-    shared = make("shared", 1, 1, 2, 2)
-    a = make("a", 1, 1, 2, 1, opponents=["shared"])
-    b = make("b", 1, 1, 2, 3, opponents=["shared"])
-    ranked = rank_teams([a, b, shared], random.Random(0))
-    assert ranked.index("a") < ranked.index("b")
-
-
-def test_opponent_series_wins_is_the_fourth_criterion():
+def test_opponent_series_wins_break_identical_records():
     strong = make("strong", 3, 0, 6, 0)
     weak = make("weak", 0, 3, 0, 6)
     a = make("a", 1, 1, 2, 2, opponents=["strong"])
@@ -50,21 +47,42 @@ def test_opponent_series_wins_is_the_fourth_criterion():
     assert ranked.index("a") < ranked.index("b")
 
 
-def test_game_win_pct_outranks_opponent_series_wins():
-    """Kills mutation: swap criteria 3 and 4 back, as they were until 2026-08-08.
+def test_opponent_series_wins_outranks_game_win_pct_when_they_disagree():
+    """Kills mutation: transpose criteria 3 and 4 in `_primary_key`.
 
-    Every other ordering test passes under BOTH orders, because it varies only
-    one criterion and leaves the other tied. This one puts them in direct
-    conflict: `a` has the better game-win percentage (0.75 vs 0.25) and the
-    weaker opponent (0 match wins vs 3). The published rules put percentage of
-    games won third and opponents' matches won fourth, so `a` ranks first.
-    Under the transposed order `b` does, and this is the only test that sees it.
+    This is the only test in the file that can see that transposition, and the
+    project has now had it wrong in both directions. Every other ordering test
+    varies ONE criterion and leaves the other tied, so it passes under either
+    order -- which is exactly how the transposition survived before 2026-08-08
+    and how the opposite one survived after it.
+
+    TI 2026 ranks on opponents' match wins THIRD and percentage of games won
+    FOURTH (docs/ti26/2026-08-08-ti2026-rules-fetched.md). TI 2025 had them the
+    other way round. Here the two criteria point in opposite directions, so the
+    order is not a matter of taste:
+
+        tough  has the stronger opponent (4 series wins vs 0) but the worse
+               game-win percentage (0.4 vs 0.6)
+
+    Under TI 2026's order `tough` ranks first. Under TI 2025's, `padded` does.
     """
-    strong = make("strong", 3, 0, 6, 0)
-    weak = make("weak", 0, 3, 0, 6)
-    a = make("a", 1, 1, 3, 1, opponents=["weak"])
-    b = make("b", 1, 1, 1, 3, opponents=["strong"])
-    ranked = rank_teams([a, b, strong, weak], random.Random(0))
+    strong = make("strong", 4, 0, 8, 0)
+    weak = make("weak", 0, 4, 0, 8)
+    tough = make("tough", 2, 2, 4, 6, opponents=["strong"])    # gwp 0.40
+    padded = make("padded", 2, 2, 6, 4, opponents=["weak"])    # gwp 0.60
+
+    ranked = rank_teams([tough, padded, strong, weak], random.Random(0))
+    assert ranked.index("tough") < ranked.index("padded"), (
+        "criterion 3 is opponents' match wins for TI 2026; ranking by game-win "
+        "percentage first is TI 2025's rule"
+    )
+
+
+def test_game_win_pct_breaks_equal_opponent_wins():
+    shared = make("shared", 1, 1, 2, 2)
+    a = make("a", 1, 1, 2, 1, opponents=["shared"])
+    b = make("b", 1, 1, 2, 3, opponents=["shared"])
+    ranked = rank_teams([a, b, shared], random.Random(0))
     assert ranked.index("a") < ranked.index("b")
 
 
@@ -78,50 +96,54 @@ def test_opponent_game_win_pct_is_the_fifth_criterion():
     assert ranked.index("a") < ranked.index("b")
 
 
-def test_a_surviving_tie_goes_straight_to_the_coin_toss():
-    """Kills mutation: reinstate an average-duration criterion before the toss.
+def test_duration_is_not_consulted_when_five_criteria_separate():
+    resolver = DurationResolver(random.Random(0), log_mean=7.65, log_sigma=0.25)
+    states = [make("a", 1, 1, 3, 1), make("b", 1, 1, 1, 3)]
+    rank_teams(states, random.Random(0), duration_fn=resolver.bind({s.team_id: s for s in states}))
+    assert resolver.consultations == 0
 
-    Two teams identical through all five published criteria. This used to
-    RAISE `DurationUnavailableError` unless the caller supplied a duration
-    source, because the implementation had a sixth criterion the published
-    rules do not list. It must now resolve, from the rng alone.
-    """
+
+def test_shorter_average_duration_wins_a_surviving_tie():
     tie_a, tie_b = make("a", 1, 1, 2, 2), make("b", 1, 1, 2, 2)
-    first = rank_teams([tie_a, tie_b], random.Random(7))
-    second = rank_teams([tie_a, tie_b], random.Random(7))
+    consulted = []
+
+    def duration_fn(team_id):
+        consulted.append(team_id)
+        return {"a": 1800.0, "b": 2400.0}[team_id]
+
+    ranked = rank_teams([tie_a, tie_b], random.Random(0), duration_fn=duration_fn)
+    assert sorted(consulted) == ["a", "b"]
+    assert ranked == ["a", "b"]
+
+
+def test_missing_duration_resolver_raises_rather_than_skipping_to_coin_toss():
+    tie_a, tie_b = make("a", 1, 1, 2, 2), make("b", 1, 1, 2, 2)
+    with pytest.raises(DurationUnavailableError, match="tied"):
+        rank_teams([tie_a, tie_b], random.Random(0))
+
+
+def test_exact_duration_ties_fall_to_a_seeded_coin_toss():
+    tie_a, tie_b = make("a", 1, 1, 2, 2), make("b", 1, 1, 2, 2)
+    fn = lambda _team_id: 2000.0  # identical durations by design
+    first = rank_teams([tie_a, tie_b], random.Random(7), duration_fn=fn)
+    second = rank_teams([tie_a, tie_b], random.Random(7), duration_fn=fn)
     assert first == second
     assert sorted(first) == ["a", "b"]
 
 
-def test_the_coin_toss_can_land_either_way():
-    """Kills mutation: resolve surviving ties by team id instead of the rng.
-
-    A stable sort on equal keys returns input order, so a tie-break that does
-    nothing looks identical to a coin toss under any single seed. Only a seed
-    sweep separates them.
-    """
-    orders = set()
-    for seed in range(20):
-        tie_a, tie_b = make("a", 1, 1, 2, 2), make("b", 1, 1, 2, 2)
-        orders.add(tuple(rank_teams([tie_a, tie_b], random.Random(seed))))
-    assert orders == {("a", "b"), ("b", "a")}
+def test_resolver_memoises_and_extends_as_maps_accumulate():
+    resolver = DurationResolver(random.Random(3), log_mean=7.65, log_sigma=0.25)
+    first = resolver.average_for("a", maps_played=2)
+    again = resolver.average_for("a", maps_played=2)
+    assert first == again, "same map count must return the memoised average"
+    extended = resolver.average_for("a", maps_played=5)
+    assert extended != first, "more maps must extend the sample, not reuse it"
 
 
-def test_the_published_order_has_six_criteria_and_no_duration():
-    """Kills mutation: re-add avg_duration to TIEBREAK_ORDER.
-
-    `rules.load_rules` compares the config against this list, so the two can
-    only drift together. This pins the list itself against the transcript in
-    docs/ti26/2026-08-08-published-format-rules.md.
-    """
-    assert TIEBREAK_ORDER == [
-        "series_wins",
-        "series_losses",
-        "game_win_pct",
-        "opponent_series_wins",
-        "opponent_game_win_pct",
-        "coin_toss",
-    ]
+def test_resolver_raises_when_no_maps_have_been_played():
+    resolver = DurationResolver(random.Random(0), log_mean=7.65, log_sigma=0.25)
+    with pytest.raises(DurationUnavailableError, match="no maps"):
+        resolver.average_for("a", maps_played=0)
 
 
 def test_unknown_opponent_raises_instead_of_silently_dropping():
@@ -130,7 +152,17 @@ def test_unknown_opponent_raises_instead_of_silently_dropping():
         rank_teams([a], random.Random(0))
 
 
+def test_average_for_rejects_a_smaller_maps_played_than_cached():
+    resolver = DurationResolver(random.Random(0), log_mean=7.65, log_sigma=0.25)
+    resolver.average_for("a", maps_played=5)
+    with pytest.raises(DurationUnavailableError, match="5"):
+        resolver.average_for("a", maps_played=2)
+
+
 def test_ranking_is_a_permutation_of_input():
     states = [make(f"t{i}", i % 3, 2 - i % 3, i, 5 - i % 5) for i in range(8)]
-    ranked = rank_teams(states, random.Random(3))
+    resolver = DurationResolver(random.Random(1), log_mean=7.65, log_sigma=0.25)
+    ranked = rank_teams(
+        states, random.Random(3), duration_fn=resolver.bind({s.team_id: s for s in states})
+    )
     assert sorted(ranked) == sorted(s.team_id for s in states)
