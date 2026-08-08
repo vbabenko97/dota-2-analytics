@@ -3,7 +3,6 @@ import csv
 import json
 from pathlib import Path
 
-from ti26.elimination import ChoicePolicy
 from ti26.montecarlo import category_marginals, monte_carlo_stderr
 from ti26.optimize import solve_card
 from ti26.rules import load_rules
@@ -50,7 +49,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rules", default="config/ti2026_rules.yaml")
     parser.add_argument("--n-sims", type=int, default=250_000)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--policy", default=ChoicePolicy.RATIONAL.value)
     parser.add_argument("--out", default="reports")
     args = parser.parse_args(argv)
 
@@ -65,7 +63,6 @@ def main(argv: list[str] | None = None) -> int:
         rules,
         n_sims=args.n_sims,
         seed=args.seed,
-        policy=ChoicePolicy(args.policy),
         team_ids=team_ids,
     )
     # `tie_magnitude` is the largest standard error ONE marginal can carry at
@@ -98,7 +95,9 @@ def main(argv: list[str] | None = None) -> int:
         "random_baseline": rules.random_baseline,
         "n_sims": args.n_sims,
         "seed": args.seed,
-        "policy": args.policy,
+        "elimination_maximizes_ranking_distance": (
+            rules.elimination_maximizes_ranking_distance
+        ),
         "tie_magnitude_heuristic": tie_magnitude,
         "note": (
             "optimizer_marginal_objective is the sum of the model's own "

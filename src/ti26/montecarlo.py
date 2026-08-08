@@ -3,7 +3,7 @@ import random
 from collections import Counter
 from collections.abc import Mapping
 
-from ti26.elimination import ChoicePolicy, run_elimination
+from ti26.elimination import run_elimination
 from ti26.identity import order_key
 from ti26.rules import Rules
 from ti26.swiss import run_swiss
@@ -49,7 +49,6 @@ def card_score_distribution(
     rules: Rules,
     n_sims: int,
     seed: int,
-    policy: ChoicePolicy = ChoicePolicy.RATIONAL,
     team_ids: Mapping[str, object] | None = None,
 ) -> Counter[int]:
     """Score one FIXED card against n_sims simulated outcomes; return score -> count.
@@ -71,7 +70,7 @@ def card_score_distribution(
     for i in range(n_sims):
         rng = random.Random(seed * 1_000_003 + i)
         run = run_swiss(internal, rules, rng)
-        outcome = run_elimination(run, internal, rules, rng, policy=policy)
+        outcome = run_elimination(run, internal, rules, rng)
         hits = sum(1 for label, c in outcome.categories.items() if target[label] == c)
         scores[hits] += 1
     return scores
@@ -82,7 +81,6 @@ def category_marginals(
     rules: Rules,
     n_sims: int,
     seed: int,
-    policy: ChoicePolicy = ChoicePolicy.RATIONAL,
     team_ids: Mapping[str, object] | None = None,
     pairing_preference: str | None = None,
 ) -> dict[str, dict[Category, float]]:
@@ -97,7 +95,7 @@ def category_marginals(
     for i in range(n_sims):
         rng = random.Random(seed * 1_000_003 + i)
         run = run_swiss(internal, rules, rng, pairing_preference=pairing_preference)
-        outcome = run_elimination(run, internal, rules, rng, policy=policy)
+        outcome = run_elimination(run, internal, rules, rng)
         for label, category in outcome.categories.items():
             tally[label][category] += 1
     return {

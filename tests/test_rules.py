@@ -111,15 +111,20 @@ def test_config_declares_no_capacity_values():
     assert raw["provenance"]["category_capacities"] == "logically_forced"
 
 
-def test_tiebreak_order_is_the_official_seven():
+def test_tiebreak_order_is_the_published_six():
+    """Was `..._the_official_seven`, and asserted an order with two defects.
+
+    The seventh entry, `avg_duration`, is in no published rules text, and
+    `opponent_series_wins` sat ahead of `game_win_pct`. Both are corrected
+    against docs/ti26/2026-08-08-published-format-rules.md.
+    """
     rules = load_rules(RULES_PATH)
     assert rules.tiebreak_order == [
         "series_wins",
         "series_losses",
-        "opponent_series_wins",
         "game_win_pct",
+        "opponent_series_wins",
         "opponent_game_win_pct",
-        "avg_duration",
         "coin_toss",
     ]
 
@@ -146,7 +151,9 @@ def test_round_constraints():
     rules = load_rules(RULES_PATH)
     assert rules.within_group_rounds == [2, 3]
     assert rules.cross_group_rounds == [4]
-    assert rules.max_distance_elimination_rounds == [5]
+    # Round 5 is deliberately absent: the published text gives it no special
+    # modifications. Distance maximisation belongs to the elimination round.
+    assert rules.elimination_maximizes_ranking_distance is True
 
 
 def test_every_rule_carries_a_provenance_tag_and_none_claims_official():

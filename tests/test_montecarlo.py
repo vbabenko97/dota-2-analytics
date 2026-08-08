@@ -1,6 +1,7 @@
+from dataclasses import replace
+
 import pytest
 
-from ti26.elimination import ChoicePolicy
 from ti26.montecarlo import (
     card_score_distribution,
     category_marginals,
@@ -51,16 +52,24 @@ def test_different_seeds_produce_different_marginals():
     assert a != b
 
 
-def test_policy_choice_is_plumbed_through():
-    """A rational chooser always picks its weakest available opponent; a
-    random chooser does not. With the same seed and differentiated
-    strengths, that mechanical difference must show up as a difference in
-    the resulting marginals -- a row-sums-to-one check alone cannot tell
-    the two policies apart."""
+def test_the_elimination_distance_rule_is_plumbed_through():
+    """Kills mutation: ignore the rule and hardcode one pairing direction.
+
+    Replaces a sweep over the removed opponent-choice policies. Maximising
+    ranking distance pairs the best 3-2 team against the worst 2-3 team;
+    minimising pairs best against best. With differentiated strengths and the
+    same seed, that mechanical difference has to reach the marginals, or the
+    rule is not actually being read.
+    """
     strengths = {t: (i - 7.5) * 0.3 for i, t in enumerate(TEAMS)}
-    rational = category_marginals(strengths, RULES, n_sims=300, seed=3, policy=ChoicePolicy.RATIONAL)
-    randomised = category_marginals(strengths, RULES, n_sims=300, seed=3, policy=ChoicePolicy.RANDOM)
-    assert rational != randomised
+    maximised = category_marginals(strengths, RULES, n_sims=300, seed=3)
+    minimised = category_marginals(
+        strengths,
+        replace(RULES, elimination_maximizes_ranking_distance=False),
+        n_sims=300,
+        seed=3,
+    )
+    assert maximised != minimised
 
 
 @pytest.mark.slow

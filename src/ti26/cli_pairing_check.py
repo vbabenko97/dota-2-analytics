@@ -143,17 +143,6 @@ def _states_before(
     return states
 
 
-def _mean_duration(rounds: Sequence[Sequence[dict]], upto: int) -> dict[str, float]:
-    total: dict[str, float] = defaultdict(float)
-    count: dict[str, int] = defaultdict(int)
-    for rnd in rounds[: upto - 1]:
-        for entry in rnd:
-            for team in (str(t) for t in entry["teams"]):
-                total[team] += sum(entry["durations"])
-                count[team] += len(entry["durations"])
-    return {t: total[t] / count[t] for t in total if count[t]}
-
-
 def check_round(
     rounds: Sequence[Sequence[dict]],
     round_no: int,
@@ -163,7 +152,6 @@ def check_round(
 ) -> dict:
     """Compare one real round against what the engine would have allowed."""
     states = _states_before(rounds, round_no, groups)
-    durations = _mean_duration(rounds, round_no)
     actual = [tuple(sorted(str(t) for t in e["teams"])) for e in rounds[round_no - 1]]
     playing = {t for pair in actual for t in pair}
 
@@ -185,16 +173,19 @@ def check_round(
         if len(members) % 2 or len(actual_pairs) * 2 != len(members):
             results.append({"bucket": str(key), "teams": len(members), "status": "not_self_contained"})
             continue
-        record = key[0]
-        loser_out = record[1] + 1 >= rules.eliminate_at_losses
-        maximize_distance = loser_out and round_no in rules.max_distance_elimination_rounds
+        # No Swiss round maximises ranking distance: the published text gives
+        # Round 5 no modifications. This check used to maximise at Round 5 for
+        # buckets where a loss eliminated, which is the defect corrected on
+        # 2026-08-08 -- so the earlier "4 of 11 buckets" figure was measured
+        # against a rule the event does not use.
+        maximize_distance = False
         agree = 0
         for seed in seeds:
             rng = random.Random(seed)
             # ALL states, not just this round's actives: `swiss.py` ranks the
             # full field, and the opponent-wins criterion needs every team a
             # ranked team has already played, including eliminated ones.
-            ranking = rank_teams(list(states.values()), rng, duration_fn=durations.get)
+            ranking = rank_teams(list(states.values()), rng)
             rank_index = {t: i for i, t in enumerate(ranking)}
             prior = {t: set(states[t].opponents) for t in members}
             allowed = _allowed_matchings(
@@ -213,7 +204,7 @@ def check_round(
         # engine's choice" says the rule is wrong; this says what it is wrong
         # about, and whether the real bracket prefers the opposite extreme.
         rng = random.Random(seeds[0])
-        ranking = rank_teams(list(states.values()), rng, duration_fn=durations.get)
+        ranking = rank_teams(list(states.values()), rng)
         rank_index = {t: i for i, t in enumerate(ranking)}
         every = list(perfect_matchings(members))
         if round_no in rules.cross_group_rounds:

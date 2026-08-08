@@ -9,19 +9,30 @@ format:
   advance_at_wins: 4
   eliminate_at_losses: 4
 
+# Corrected 2026-08-08 against the owner's transcript of the published rules
+# (docs/ti26/2026-08-08-published-format-rules.md). `game_win_pct` and
+# `opponent_series_wins` were in the wrong order, and an `avg_duration`
+# criterion sat between the last real criterion and the coin toss. The
+# published list has six entries and no duration among them.
 tiebreak_order:
   - series_wins
   - series_losses
-  - opponent_series_wins
   - game_win_pct
+  - opponent_series_wins
   - opponent_game_win_pct
-  - avg_duration
   - coin_toss
 
 rounds:
   within_group: [2, 3]
   cross_group: [4]
-  max_distance_when_loser_eliminated: [5]
+
+# The published text gives Round 5 "no special modifications" and puts distance
+# maximisation in the Elimination Round. This used to read
+# `max_distance_when_loser_eliminated: [5]` under `rounds`, which applied it to
+# every Round 5 bucket where a loss eliminated -- shaping who finished 1-4 --
+# and left the elimination round itself pairing by a different rule entirely.
+elimination_round:
+  maximize_ranking_distance: true
 
 duration_model:
   # Fitted in D2 from real map durations (reports/duration_fit.json).

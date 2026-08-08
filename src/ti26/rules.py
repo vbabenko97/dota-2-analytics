@@ -73,7 +73,10 @@ class Rules:
     tiebreak_order: list[str]
     within_group_rounds: list[int]
     cross_group_rounds: list[int]
-    max_distance_elimination_rounds: list[int]
+    # The elimination round pairs 3-2 against 2-3 at maximum ranking distance.
+    # No SWISS round maximises distance; this used to be a list of rounds and
+    # named Round 5, which the published text gives no modifications at all.
+    elimination_maximizes_ranking_distance: bool
     duration_log_mean: float
     duration_log_sigma: float
     provenance: dict[str, str]
@@ -115,7 +118,9 @@ def load_rules(path: str) -> Rules:
         tiebreak_order=configured_order,
         within_group_rounds=list(rounds["within_group"]),
         cross_group_rounds=list(rounds["cross_group"]),
-        max_distance_elimination_rounds=list(rounds["max_distance_when_loser_eliminated"]),
+        elimination_maximizes_ranking_distance=bool(
+            raw["elimination_round"]["maximize_ranking_distance"]
+        ),
         duration_log_mean=float(duration["log_mean"]),
         duration_log_sigma=float(duration["log_sigma"]),
         provenance=dict(raw["provenance"]),
