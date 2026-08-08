@@ -1,0 +1,265 @@
+{
+  "corpus": {
+    "first_start_time": 1739035177,
+    "last_start_time": 1785683372,
+    "patch_mix": [
+      {
+        "last_start_time": 1785683372,
+        "maps": 6958,
+        "patch": "7.41",
+        "share": 0.16912980068060282
+      },
+      {
+        "last_start_time": 1774491967,
+        "maps": 7943,
+        "patch": "7.40",
+        "share": 0.19307243558580456
+      },
+      {
+        "last_start_time": 1765844867,
+        "maps": 17867,
+        "patch": "7.39",
+        "share": 0.434297520661157
+      },
+      {
+        "last_start_time": 1747955567,
+        "maps": 7299,
+        "patch": "7.38",
+        "share": 0.17741857073407877
+      },
+      {
+        "last_start_time": 1740200813,
+        "maps": 1073,
+        "patch": "7.37",
+        "share": 0.02608167233835683
+      }
+    ],
+    "recency": [
+      {
+        "maps": 418,
+        "share": 0.010160427807486631,
+        "window_days": 30
+      },
+      {
+        "maps": 1340,
+        "share": 0.032571706368497814,
+        "window_days": 60
+      },
+      {
+        "maps": 3809,
+        "share": 0.09258629071463297,
+        "window_days": 90
+      },
+      {
+        "maps": 10963,
+        "share": 0.26648031113271753,
+        "window_days": 180
+      },
+      {
+        "maps": 26994,
+        "share": 0.6561497326203208,
+        "window_days": 365
+      }
+    ],
+    "rows": 41140,
+    "span_days": 539.9,
+    "target_tier_leagues": [
+      {
+        "first_start_time": 1756973096,
+        "last_start_time": 1757872818,
+        "league_id": 18324,
+        "maps": 144
+      }
+    ],
+    "tier_mix": [
+      {
+        "maps": 22198,
+        "share": 0.539572192513369,
+        "tier": "professional"
+      },
+      {
+        "maps": 18798,
+        "share": 0.4569275644141954,
+        "tier": "excluded"
+      },
+      {
+        "maps": 144,
+        "share": 0.003500243072435586,
+        "tier": "premium"
+      }
+    ],
+    "unrateable": {
+      "bad_roster": 0,
+      "null_team": 2127,
+      "share_bad_roster": 0.0,
+      "share_null_team": 0.051701507049100634
+    }
+  },
+  "field": {
+    "teams": [
+      {
+        "days_since_last_map": 18.1,
+        "raw_strength": 2.518994234800043,
+        "rd": 46.00057264931526,
+        "roster_maps": 144,
+        "roster_version_id": "2fcf7aa7c9bb9586",
+        "target_tier_maps": 0,
+        "team": "Aurora Gaming"
+      },
+      {
+        "days_since_last_map": 1.0,
+        "raw_strength": 2.5986508341655457,
+        "rd": 41.23268575030765,
+        "roster_maps": 316,
+        "roster_version_id": "b9946d6abb9d0f3e",
+        "target_tier_maps": 0,
+        "team": "BoomBoys"
+      },
+      {
+        "days_since_last_map": 0.1,
+        "raw_strength": 1.574428377113338,
+        "rd": 52.6324840807312,
+        "roster_maps": 82,
+        "roster_version_id": "8f07578dc483e1ae",
+        "target_tier_maps": 0,
+        "team": "GamerLegion"
+      },
+      {
+        "days_since_last_map": 1.0,
+        "raw_strength": 1.5490570821669634,
+        "rd": 47.3892005198304,
+        "roster_maps": 132,
+        "roster_version_id": "dbc6910c22be2655",
+        "target_tier_maps": 0,
+        "team": "HULIGANI"
+      },
+      {
+        "days_since_last_map": 0.0,
+        "raw_strength": 2.1919540913598885,
+        "rd": 43.602304945379146,
+        "roster_maps": 234,
+        "roster_version_id": "e0492e01c08d07f5",
+        "target_tier_maps": 0,
+        "team": "Iron Wing"
+      },
+      {
+        "days_since_last_map": 1.0,
+        "raw_strength": 2.1874947943721224,
+        "rd": 42.91564109105889,
+        "roster_maps": 164,
+        "roster_version_id": "16963a41ac6a1b2e",
+        "target_tier_maps": 0,
+        "team": "LGD Gaming"
+      },
+      {
+        "days_since_last_map": 0.2,
+        "raw_strength": 2.3001385270744183,
+        "rd": 73.92328060092252,
+        "roster_maps": 30,
+        "roster_version_id": "3ea16a8a0fbc3023",
+        "target_tier_maps": 0,
+        "team": "Nigma Galaxy"
+      },
+      {
+        "days_since_last_map": 0.2,
+        "raw_strength": 2.1393514201439996,
+        "rd": 67.77631884846635,
+        "roster_maps": 27,
+        "roster_version_id": "d8b9dd1522124292",
+        "target_tier_maps": 0,
+        "team": "OG"
+      },
+      {
+        "days_since_last_map": 0.0,
+        "raw_strength": 2.626920008150044,
+        "rd": 44.30812177243748,
+        "roster_maps": 376,
+        "roster_version_id": "f627d911a181e880",
+        "target_tier_maps": 29,
+        "team": "Team Falcons"
+      },
+      {
+        "days_since_last_map": 0.8,
+        "raw_strength": 2.3511249900135778,
+        "rd": 44.8024858225781,
+        "roster_maps": 255,
+        "roster_version_id": "817ae55de79e09ce",
+        "target_tier_maps": 0,
+        "team": "Team Liquid"
+      },
+      {
+        "days_since_last_map": 0.1,
+        "raw_strength": 1.4027562157447309,
+        "rd": 76.87094669929988,
+        "roster_maps": 38,
+        "roster_version_id": "eac6601adfecb821",
+        "target_tier_maps": 0,
+        "team": "Team Resilience"
+      },
+      {
+        "days_since_last_map": 17.1,
+        "raw_strength": 2.6356366139309677,
+        "rd": 57.69309860057402,
+        "roster_maps": 63,
+        "roster_version_id": "dd4556b5c31cbf9d",
+        "target_tier_maps": 0,
+        "team": "Team Spirit"
+      },
+      {
+        "days_since_last_map": 13.9,
+        "raw_strength": 3.1946032562808173,
+        "rd": 50.43167152573047,
+        "roster_maps": 80,
+        "roster_version_id": "c298aa3eb4837f25",
+        "target_tier_maps": 0,
+        "team": "Team Vision"
+      },
+      {
+        "days_since_last_map": 14.2,
+        "raw_strength": 3.0391780001453257,
+        "rd": 52.694815101055646,
+        "roster_maps": 71,
+        "roster_version_id": "204e241d6071c3a7",
+        "target_tier_maps": 0,
+        "team": "Team Yandex"
+      },
+      {
+        "days_since_last_map": 1.2,
+        "raw_strength": 1.8066178140662363,
+        "rd": 48.08086407056809,
+        "roster_maps": 99,
+        "roster_version_id": "ace26dc221e34269",
+        "target_tier_maps": 0,
+        "team": "Vici Gaming"
+      },
+      {
+        "days_since_last_map": 0.8,
+        "raw_strength": 1.9000598483844937,
+        "rd": 44.143620405591335,
+        "roster_maps": 233,
+        "roster_version_id": "fdf0257d5da92217",
+        "target_tier_maps": 0,
+        "team": "Xtreme Gaming"
+      }
+    ]
+  },
+  "headline": {
+    "newest_patch": "7.41",
+    "newest_patch_share": 0.16912980068060282,
+    "rd_max": 76.87094669929988,
+    "rd_min": 41.23268575030765,
+    "rd_ratio": 1.8643206305989009,
+    "roster_maps_max": 376,
+    "roster_maps_min": 27,
+    "roster_maps_ratio": 13.925925925925926,
+    "target_tier": "premium",
+    "target_tier_events": 1,
+    "target_tier_share": 0.003500243072435586,
+    "teams_below_thin_threshold": 3,
+    "teams_with_no_target_tier_maps": 15,
+    "thin_roster_threshold_maps": 50
+  },
+  "schema": "ti26.data-health.v1",
+  "status": "DIAGNOSTIC -- no threshold, gates nothing, cannot alter the card",
+  "store": "data/processed/release-20260802T165535Z.sqlite"
+}
