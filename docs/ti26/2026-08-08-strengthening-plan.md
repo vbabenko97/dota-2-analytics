@@ -84,30 +84,42 @@ reality far more often than "refuted" implies, and
 
 **Effort:** ~30 minutes.
 
-## A3. Resolve the elimination rule honestly
+## A3. Stop `cli_pairing_check` from misrepresenting its own result
 
-**Problem:** [weakness §3a](2026-08-08-known-weaknesses.md#3a-the-elimination-rule-does-not-reproduce-the-one-bracket-we-can-check).
-The configured maximise rule reproduces none of TI 2025's elimination bracket
-across 5 seeds. It governs 10 of 16 card slots.
+**Problem:** [weakness §3a](2026-08-08-known-weaknesses.md#3a-the-elimination-round-the-engine-is-right-and-its-raw-output-says-otherwise).
 
-**Do not** flip the rule to minimise on this evidence. The real bracket scored 8
-against a reachable maximum of 10; `cli_pairing_check` does not currently report
-the reachable *minimum*, so we do not know whether 8 is near the minimum, in the
-middle, or neither. Changing a rule to fit a single observation, four days
-before a lock, on a quantity we have not measured, is the exact move this
-project's discipline exists to prevent.
+**Do not change the elimination rule.** It is published TI 2025 text, it sits in
+the Elimination Round section below the Swiss pairing rules, and the engine
+reproduces the real bracket to within one swap — a swap fully explained by the
+unannounced two-series-per-day constraint of 6 September. This entry previously
+proposed measuring the reachable minimum before deciding; that was written from
+a misreading of the producer's output and is withdrawn. The question is settled
+and the answer is in
+[the format-rules document](2026-08-08-published-format-rules.md#ti-2025s-elimination-round-did-not-follow-the-published-rule).
 
-**Fix:** extend `cli_pairing_check` to report the reachable minimum alongside
-the maximum, then run `cli_schedule_sensitivity` with the elimination rule
-inverted. `[ASSUMPTION: the elimination rule will prove as immaterial as the
-Swiss pairing rule did — signal-to-noise 1.08 — in which case the correct
-action is to retag it as unresolved-and-immaterial and change nothing.]` If it
-*is* material, that is a finding worth having before the lock even if the
-response is only to document the uncertainty.
+**The actual defect is the report, not the rule.** `cli_pairing_check` emits
 
-**Done when:** the sensitivity number exists and the tag matches it.
+```
+engine_reproduces_the_real_bracket: false
+pairs_shared_with_engine: 3 of 5
+```
 
-**Effort:** ~2 hours.
+with no indication that the discrepancy is a known, documented, external
+constraint. Anyone reading the raw JSON — including the author of this document,
+who did — concludes the rule is refuted. That is a producer emitting a true
+number that reliably causes a false inference, which is the same class of
+problem as an unbound number and deserves the same treatment.
+
+**Fix:** carry the known deviation in the output. A `known_deviations` field
+naming the 6 September constraint, the pairs it moved (HEROIC/Yakult in place of
+HEROIC/Spirit and Falcons/Yakult), and its distance cost (10 → 8), so the
+verdict field is never read alone. Cite the format-rules document from the
+producer's docstring.
+
+**Done when:** the JSON explains its own `false`, and a reader who has never
+seen the format-rules document cannot draw the wrong conclusion from it.
+
+**Effort:** ~1 hour.
 
 ## A4. Run the near-lock runbook
 

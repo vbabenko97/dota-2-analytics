@@ -198,11 +198,16 @@ fix that on the day.
 
 ---
 
-## 3. The rules engine is contradicted where it matters most
+## 3. The rules engine is sound. The organiser is the risk.
 
 **[producer: `ti26.cli_pairing_check`, run against `release-deep.sqlite`]**
 
-### 3a. The elimination rule does not reproduce the one bracket we can check
+### 3a. The elimination round: the engine is right and its raw output says otherwise
+
+This entry was written backwards in the first draft of this document and is
+corrected here, because the way it misleads is worth preserving.
+
+The producer reports:
 
 ```
 engine_reproduces_the_real_bracket: false, false, false, false, false   (5 seeds)
@@ -211,14 +216,39 @@ best_reachable_distance:            10
 pairs_shared_with_engine:           3 of 5
 ```
 
-`config/ti2026_rules.yaml` asserts
-`elimination_round.maximize_ranking_distance: true`. TI 2025's real elimination
-bracket scored 8 when 10 was reachable, so it did not maximise. Our engine
-produces the maximising bracket and shares 3 of 5 pairs with what actually
-happened, on every seed.
+Read alone, that is damning: `config/ti2026_rules.yaml` asserts
+`elimination_round.maximize_ranking_distance: true`, and the real bracket scored
+8 where 10 was reachable, so it apparently did not maximise. **That reading is
+wrong**, and
+[the format-rules document](2026-08-08-published-format-rules.md#ti-2025s-elimination-round-did-not-follow-the-published-rule)
+already said so:
 
-This governs the `elim_win` and `elim_loss` categories — **10 of the 16 card
-slots**.
+- The maximise rule **is** published. It sits in the TI 2025 text's
+  **Elimination Round** section, below the Swiss Pairing Rules section that ends
+  at Round 5. A screenshot of the Swiss pairing rules alone does not contain it,
+  and does contain the *opposite* general rule (minimise), which is what makes
+  this so easy to get backwards.
+- The 8-versus-10 gap has a **documented cause outside the rules**. Teams were
+  notified on 6 September of a previously non-existent constraint — no more than
+  two series per day — that was never publicly announced. It forced HEROIC onto
+  Yakult; the rule-following pairing was HEROIC vs Spirit and Falcons vs Yakult.
+  That single swap is exactly the difference between 8 and 10 and accounts for
+  precisely the two pairs the engine does not share.
+
+**So the published rule reproduces the event to within one swap, and the swap is
+an unannounced mid-event rule change.** The engine is corroborated, not
+contradicted.
+
+The real weakness is the one underneath: **the organiser demonstrably changes
+the rules mid-event without announcing them, and did so at the only event we can
+check.** One unannounced constraint moved 2 of 5 elimination pairs. That is not
+forecastable, not a model defect, and not fixable — but it is a floor on how
+accurate the elimination categories can ever be, and those are 10 of the 16 card
+slots.
+
+The producer's own field name is a trap: `engine_reproduces_the_real_bracket:
+false` is literally true and reads as "the rule is wrong". It should carry the
+known deviation alongside it.
 
 ### 3b. Swiss pairing is much healthier, but not clean
 
@@ -244,10 +274,15 @@ in a config file rather than in an audit.
 
 `tiebreak_order`, `within_group`/`cross_group`, the elimination rule and soft
 repeat avoidance are all tagged `owner_transcript_2025_inherited`. TI 2026
-published no pairing rules as of 2026-08-08, and Valve changed a rule
-mid-event in 2025 without announcing it. The compendium screenshot fixed
+published no pairing rules as of 2026-08-08. The compendium screenshot fixed
 `n_teams`, `total_rounds`, `advance_at_wins` and `eliminate_at_losses`; it says
 nothing about pairing.
+
+These values are well corroborated — §3a and §3b show the engine reproducing TI
+2025 closely under them — but corroboration against last year's event is not the
+same as publication for this one. And per §3a the organiser has already
+demonstrated willingness to introduce an unpublished constraint mid-event, so
+even a published 2026 ruleset would not close this entirely.
 
 Groups are also still unannounced, so the card currently averages over draws
 rather than conditioning on the real one. The machinery to condition is in
