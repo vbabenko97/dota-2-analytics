@@ -161,16 +161,32 @@ def test_every_rule_carries_a_provenance_tag_and_none_claims_official():
 
     Nothing in this repository can check Valve's published rules. The design
     spec records that the page is JavaScript-rendered and that two fetch
-    attempts returned no body, no archived copy is committed, the D1 pass that
-    was to confirm the values has been withdrawn, and `explorer_query` is the
-    only network path here. `reported_official` is the strongest tag the
-    evidence supports. The second assertion is not redundant with the first:
-    it is what fails if someone restores `official` to the allowed set.
+    attempts returned no body, reproduced again on 2026-08-07, and
+    `explorer_query` is the only network path here.
+
+    The evidence improved twice on 2026-08-08 and `official` still is not the
+    right word. The owner transcribed TI 2025's published rules text, and
+    supplied a screenshot of the TI 2026 compendium card labelling its own six
+    categories. Both are relayed by a human; neither is a fetch this repository
+    can repeat, and neither can be re-verified by any test here. So the tags say
+    which relay they came from -- `compendium_ui_2026`,
+    `owner_transcript_2025_inherited` -- rather than borrowing the authority of
+    the source behind it.
+
+    The second assertion is not redundant with the first: it is what fails if
+    someone restores `official` to the allowed set.
     """
     rules = load_rules(RULES_PATH)
     # "empirical" added in D2: the duration model is now fitted from real
     # match durations (reports/duration_fit.json) rather than guessed.
     allowed = {
+        # Read off the TI 2026 compendium's own card UI, which labels its six
+        # categories in the product's own words. Not `official`: a screenshot
+        # relayed by the owner, not a fetch this repository can repeat.
+        "compendium_ui_2026",
+        # From the owner's transcript of TI 2025's published rules, assumed to
+        # carry to 2026 because 2026 has published no pairing section.
+        "owner_transcript_2025_inherited",
         "reported_official",
         "logically_forced",
         "inferred",
