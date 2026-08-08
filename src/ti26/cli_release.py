@@ -19,6 +19,7 @@ hashes the finished file.
 import argparse
 import json
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -76,6 +77,16 @@ def _prefix_markdown(path: Path, prefix: str) -> None:
     """
     body = path.read_text(encoding="utf-8")
     path.write_text(f"{prefix}\n{body}", encoding="utf-8")
+
+
+def _bundle_is_complete(bundle: Path) -> bool:
+    """A bundle counts as complete once it carries the manifest binding it.
+
+    Anything else under that path is wreckage from an interrupted run: the
+    manifest is written last, so its absence means the producers did not all
+    finish and nothing there is evidence of anything.
+    """
+    return (bundle / "manifest.json").exists()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -162,8 +173,22 @@ def main(argv: list[str] | None = None) -> int:
     prefix = render_report_prefix(descriptor)
     run_id = prefix.split()[2]
     bundle = Path(args.runs) / run_id
-    if bundle.exists():
+    # A run id identifies its inputs exactly, so a COMPLETE bundle must never be
+    # silently overwritten. An INCOMPLETE one is different: a run killed partway
+    # leaves a directory that then blocks every retry, with nothing to clear it.
+    # That happened during the 2026-08-08 regeneration and had to be undone by
+    # hand, which is exactly the wrong thing to be doing under a deadline. A
+    # bundle counts as complete when it has the manifest that binds its outputs;
+    # anything else is wreckage from an interrupted run and is replaced.
+    if _bundle_is_complete(bundle):
         raise SystemExit(f"{bundle} already exists; a run id identifies its inputs exactly")
+    if bundle.exists():
+        print(
+            f"replacing an incomplete bundle at {bundle} "
+            "(no manifest.json, so a previous run did not finish)",
+            flush=True,
+        )
+        shutil.rmtree(bundle)
     bundle.mkdir(parents=True)
     print(f"run id: {run_id}", flush=True)
 

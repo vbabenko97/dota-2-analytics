@@ -125,6 +125,13 @@ commit that actually contains the producers. The bundle is then a second commit.
 A gate that fails exits non-zero. That is expected evidence and the driver records
 it. Do not rerun a gate with different arguments to change its verdict.
 
+**If this run is interrupted, just run it again.** A bundle counts as finished
+only once `manifest.json` is written, which happens last; an unfinished directory
+is replaced with a printed notice, and a finished one is still refused outright.
+Before 2026-08-08 an interrupted run left a directory that blocked every retry
+with nothing to clear it, which cost a manual recovery mid-regeneration. Expect
+the whole command to take tens of minutes.
+
 **The D4 in this bundle is the confounded configuration, and stays that way.** It
 trains on maps before 2025-09-04, and an 18-month snapshot taken now reaches back
 only to early 2025, so the held-out event gets roughly seven months of history

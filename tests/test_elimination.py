@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from ti26.elimination import run_elimination
+from ti26.elimination import pair_elimination, run_elimination
 from ti26.rules import load_rules
 from ti26.swiss import run_swiss
 from ti26.types import Category, SwissRun, TeamState
@@ -149,3 +149,56 @@ def test_three_undecided_record_groups_raise():
     strengths = dict.fromkeys(states, 0.0)
     with pytest.raises(ValueError):
         run_elimination(run, strengths, RULES, random.Random(0))
+
+
+def test_the_fast_path_returns_what_an_exhaustive_filter_would():
+    """Kills mutation: let the fast path change tie-breaking, not just speed.
+
+    `pair_elimination` short-circuits at the first distance group holding a
+    rematch-free permutation instead of scoring all n!. That is only sound if
+    the candidate list handed to `rng.choice` is the one an exhaustive
+    lexicographic filter would have built -- same members, SAME ORDER. A
+    different order picks a different element from the same rng state, which
+    silently moves the card.
+
+    This reimplements the exhaustive version and demands identical output over
+    many random repeat patterns and seeds, including patterns dense enough to
+    force the slow path.
+    """
+    from itertools import permutations as _perms
+
+    def exhaustive(higher, lower, prior, rng, maximize):
+        def repeats(perm):
+            return sum(1 for i, j in enumerate(perm) if lower[j] in prior.get(higher[i], ()))
+
+        def distance(perm):
+            return sum(abs(i - j) for i, j in enumerate(perm))
+
+        cands = list(_perms(range(len(higher))))
+        fewest = min(repeats(p) for p in cands)
+        cands = [p for p in cands if repeats(p) == fewest]
+        best = (max if maximize else min)(distance(p) for p in cands)
+        cands = [p for p in cands if distance(p) == best]
+        chosen = rng.choice(cands)
+        return [(higher[i], lower[j]) for i, j in enumerate(chosen)]
+
+    n = 5
+    high = [f"h{i}" for i in range(n)]
+    low = [f"l{i}" for i in range(n)]
+    forced_slow_path = 0
+    gen = random.Random(99)
+    for trial in range(120):
+        # Density climbs across trials so late ones make every permutation a
+        # rematch, which is the only way the slow path is reached at all.
+        density = trial / 120
+        prior = {h: {ll for ll in low if gen.random() < density} for h in high}
+        if all(any(low[j] in prior[high[i]] for j in range(n)) for i in range(n)):
+            forced_slow_path += 1
+        for maximize in (True, False):
+            got = pair_elimination(high, low, prior, random.Random(trial), maximize)
+            want = exhaustive(high, low, prior, random.Random(trial), maximize)
+            assert got == want, f"trial {trial}, maximize={maximize}"
+    assert forced_slow_path, (
+        "precondition: some trial must make every permutation a rematch, or the "
+        "slow path is never exercised and this proves only the fast path"
+    )
