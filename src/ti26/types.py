@@ -2,10 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ti26.tiebreak import DurationResolver
 
 
 class Category(str, Enum):
@@ -61,16 +57,21 @@ class SwissRun:
     states: dict[str, TeamState]
     groups: dict[str, str]
     rounds: list[RoundLog]
-    resolver: DurationResolver
 
 
 @dataclass(frozen=True)
 class EliminationMatch:
-    chooser: str
-    opponent: str
-    available_when_choosing: list[str]
-    wins_chooser: int
-    wins_opponent: int
+    """One elimination-round series, named by record rather than by agency.
+
+    `higher` is the 3-2 team, `lower` the 2-3 team it was paired against by
+    maximum ranking distance. These used to be `chooser`/`opponent`, from a
+    model in which the 3-2 team picked; the published rules give it no choice.
+    """
+
+    higher: str
+    lower: str
+    wins_higher: int
+    wins_lower: int
 
 
 @dataclass(frozen=True)

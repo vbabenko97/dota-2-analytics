@@ -1,63 +1,35 @@
 import random
-from collections.abc import Callable
 
 from ti26.types import TeamState
 
-# The order `_primary_key` plus the duration/coin-toss fallback below actually
-# implement. `rules.load_rules` checks the config's tiebreak_order against
-# this so a divergent YAML raises instead of silently doing nothing.
+# The order `_primary_key` plus the coin-toss fallback below actually implement.
+# `rules.load_rules` checks the config's tiebreak_order against this so a
+# divergent YAML raises instead of silently doing nothing.
+#
+# Corrected 2026-08-08 against the published rules the owner transcribed (see
+# docs/ti26/2026-08-08-published-format-rules.md), which read:
+#
+#     Number of Matches Won
+#     Number of Matches Lost
+#     Percentage of Games Won
+#     Total Number of Matches Won by Opponents Played
+#     Average Percentage of Games Won by Opponents Played
+#     Coin Toss
+#
+# Two defects. `opponent_series_wins` and `game_win_pct` were TRANSPOSED -- the
+# published third criterion is a team's own game-win percentage, not its
+# opponents' match wins. And an `avg_duration` criterion sat sixth, ahead of the
+# coin toss, which appears nowhere in the published list; `rank_teams` used to
+# RAISE if a tie reached it without a duration source. The design spec asserted
+# average duration was official and cited nothing.
 TIEBREAK_ORDER = [
     "series_wins",
     "series_losses",
-    "opponent_series_wins",
     "game_win_pct",
+    "opponent_series_wins",
     "opponent_game_win_pct",
-    "avg_duration",
     "coin_toss",
 ]
-
-
-class DurationUnavailableError(RuntimeError):
-    """Raised when criterion 6 is required but no duration source exists."""
-
-
-class DurationResolver:
-    """Lazily samples per-map durations, memoised and extended per team.
-
-    Durations are drawn only when a tie survives the first five criteria, so
-    the common path never pays for them. Samples persist across rounds and are
-    extended as maps accumulate, keeping a team's average monotone in its own
-    history rather than resampled each time it is consulted.
-    """
-
-    def __init__(self, rng: random.Random, log_mean: float, log_sigma: float) -> None:
-        self._rng = rng
-        self._log_mean = log_mean
-        self._log_sigma = log_sigma
-        self._samples: dict[str, list[float]] = {}
-        self.consultations = 0
-
-    def average_for(self, team_id: str, maps_played: int) -> float:
-        self.consultations += 1
-        if maps_played <= 0:
-            raise DurationUnavailableError(
-                f"team {team_id!r} has no maps; cannot compute average duration"
-            )
-        samples = self._samples.setdefault(team_id, [])
-        if maps_played < len(samples):
-            raise DurationUnavailableError(
-                f"team {team_id!r} has {len(samples)} cached duration samples but was "
-                f"asked for maps_played={maps_played}; map counts must not decrease"
-            )
-        while len(samples) < maps_played:
-            samples.append(self._rng.lognormvariate(self._log_mean, self._log_sigma))
-        return sum(samples) / len(samples)
-
-    def bind(self, states: dict[str, TeamState]) -> Callable[[str], float]:
-        def resolve(team_id: str) -> float:
-            return self.average_for(team_id, states[team_id].maps_played)
-
-        return resolve
 
 
 def game_win_pct(team: TeamState) -> float:
@@ -79,22 +51,20 @@ def _primary_key(team: TeamState, by_id: dict[str, TeamState]) -> tuple:
     return (
         -team.series_wins,
         team.series_losses,
-        -opp_series_wins,
         -game_win_pct(team),
+        -opp_series_wins,
         -opp_gwp,
     )
 
 
-def rank_teams(
-    states: list[TeamState],
-    rng: random.Random,
-    duration_fn: Callable[[str], float] | None = None,
-) -> list[str]:
-    """Order team ids best to worst by the official tiebreak sequence.
+def rank_teams(states: list[TeamState], rng: random.Random) -> list[str]:
+    """Order team ids best to worst by the published tiebreak sequence.
 
-    Criteria 1-5 are computed eagerly. Average duration is consulted only
-    inside blocks still tied after those five. A surviving tie with no
-    duration source is an error, not a licence to skip to the coin toss.
+    Criteria 1-5 are computed eagerly; anything still tied after them goes to
+    the coin toss, which is what the published rules specify and all they
+    specify. There is no sixth criterion: the average-duration step this
+    function used to take, and used to RAISE for when no duration source was
+    supplied, was not in the rules.
     """
     by_id = {s.team_id: s for s in states}
     keys = {s.team_id: _primary_key(s, by_id) for s in states}
@@ -108,13 +78,7 @@ def rank_teams(
             j += 1
         block = ordered[i : j + 1]
         if len(block) > 1:
-            if duration_fn is None:
-                tied = [s.team_id for s in block]
-                raise DurationUnavailableError(
-                    f"teams {tied} tied through five criteria; duration resolver required"
-                )
-            durations = {s.team_id: duration_fn(s.team_id) for s in block}
-            block = sorted(block, key=lambda s: (durations[s.team_id], rng.random()))
+            block = sorted(block, key=lambda s: rng.random())
         out.extend(block)
         i = j + 1
     return [s.team_id for s in out]

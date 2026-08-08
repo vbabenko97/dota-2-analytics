@@ -126,100 +126,91 @@ def spread(matching, rank_index):
     return sum(abs(rank_index[a] - rank_index[b]) for a, b in matching)
 
 
-def test_round_five_maximises_distance_when_the_loser_is_eliminated():
-    """The 1-3 group's Round 5 loser goes to 1-4 and is out, so pair furthest.
+def _round_five_buckets(seed):
+    """Every Round 5 record bucket that had a real choice, for one seed.
 
-    Seed 12 is used because this bucket happens to have zero repeat
-    opponents entering round 5, so distance-maximisation is the only
-    preference in play; that precondition is asserted explicitly (rather
-    than silently relied on) so a future seed change or repeat-minimisation
-    conflict here would fail loudly instead of passing by coincidence.
+    Yields (record, chosen_matching, all_matchings, repeat_count, rank_index).
+    Round 5 has no group constraint and no cross-group constraint, so a bucket
+    is just a record class -- which is why the defect lived here and why this
+    is the round worth checking exhaustively.
     """
-    run = run_swiss(flat(), RULES, random.Random(12))
+    run = run_swiss(flat(), RULES, random.Random(seed))
     round_five = run.rounds[4]
     before = records_before_round(run, 5)
     prior = opponents_before_round(run, 5)
     rank_index = {t: i for i, t in enumerate(round_five.ranking)}
 
-    group = sorted(t for t, rec in before.items() if rec == (1, 3))
-    assert len(group) == 4
-    chosen = [p for p in round_five.pairings if set(p) <= set(group)]
-    assert len(chosen) == 2
-    assert sum(1 for a, b in chosen if b in prior[a]) == 0, (
-        "precondition: seed 12's (1,3) bucket has no repeat opponents to "
-        "conflict with distance maximisation"
-    )
+    for record in sorted({rec for rec in before.values()}):
+        group = sorted(t for t, rec in before.items() if rec == record)
+        if len(group) < 4 or len(group) % 2:
+            continue
+        chosen = [p for p in round_five.pairings if set(p) <= set(group)]
+        if len(chosen) * 2 != len(group):
+            continue
 
-    best = max(spread(m, rank_index) for m in perfect_matchings(group))
-    assert spread(chosen, rank_index) == best
+        def repeat_count(matching, _prior=prior):
+            return sum(1 for a, b in matching if b in _prior[a])
+
+        yield record, chosen, list(perfect_matchings(group)), repeat_count, rank_index
 
 
-def test_round_five_minimises_distance_when_the_loser_survives():
-    """The 3-1 group's Round 5 loser drops to 3-2 and plays on, so pair closest.
+def test_no_swiss_round_maximises_ranking_distance():
+    """Kills mutation: restore max-distance at Round 5 where a loss eliminates.
 
-    Seed 12 is used because this bucket happens to have zero repeat
-    opponents entering round 5, so distance-minimisation is the only
-    preference in play; that precondition is asserted explicitly (rather
-    than silently relied on) so a future seed change or repeat-minimisation
-    conflict here would fail loudly instead of passing by coincidence.
+    The published rules give Round 5 "no special modifications" and put
+    distance maximisation in the Elimination Round. Until 2026-08-08 `swiss.py`
+    maximised distance in every Round 5 bucket whose loser was eliminated --
+    the 1-3 bucket -- which is precisely who ends up 1-4 rather than 2-3.
+
+    Asserted across a seed sweep rather than one hand-picked seed, and the
+    sweep is required to actually reach an eliminating bucket, so this cannot
+    pass vacuously the way a single-seed version did while asserting the
+    opposite rule.
     """
-    run = run_swiss(flat(), RULES, random.Random(12))
-    round_five = run.rounds[4]
-    before = records_before_round(run, 5)
-    prior = opponents_before_round(run, 5)
-    rank_index = {t: i for i, t in enumerate(round_five.ranking)}
-
-    group = sorted(t for t, rec in before.items() if rec == (3, 1))
-    assert len(group) == 4
-    chosen = [p for p in round_five.pairings if set(p) <= set(group)]
-    assert len(chosen) == 2
-    assert sum(1 for a, b in chosen if b in prior[a]) == 0, (
-        "precondition: seed 12's (3,1) bucket has no repeat opponents to "
-        "conflict with distance minimisation"
+    saw_eliminating_bucket = False
+    for seed in range(40):
+        for record, chosen, matchings, repeats, ranks in _round_five_buckets(seed):
+            if record[1] + 1 >= RULES.eliminate_at_losses:
+                saw_eliminating_bucket = True
+            fewest = min(repeats(m) for m in matchings)
+            tied = [m for m in matchings if repeats(m) == fewest]
+            assert spread(chosen, ranks) == min(spread(m, ranks) for m in tied), (
+                f"seed {seed}, record {record}: Round 5 must minimise ranking "
+                "distance among repeat-minimal matchings, in every bucket"
+            )
+    assert saw_eliminating_bucket, (
+        "precondition: the sweep must reach at least one Round 5 bucket whose "
+        "loser is eliminated, or it never tests the case that was wrong"
     )
-
-    smallest = min(spread(m, rank_index) for m in perfect_matchings(group))
-    assert spread(chosen, rank_index) == smallest
 
 
 def test_round_five_repeat_minimisation_wins_over_distance_when_they_conflict():
-    """Seed 12 (used above) happens to give repeat_count == 0 in every Round 5
-    bucket, so repeat-minimisation and distance preference never conflict
-    there. Seed 250 was found by a 500-seed sweep (seeds 0-499; 28 of them had
-    at least one Round 5 bucket with a genuine non-zero minimum repeat count)
-    and gives a genuine conflict in BOTH buckets: the minimum achievable
-    repeat count is 1, not 0. This proves choose_pairing applies repeat
-    minimisation FIRST and only then breaks ties by distance -- not the
-    other way around, which seed 12 alone could never show.
+    """Repeat minimisation is applied FIRST, distance only among the survivors.
+
+    Most seeds give repeat_count == 0 in every Round 5 bucket, where the two
+    preferences cannot conflict. This sweeps for a bucket whose minimum
+    achievable repeat count is non-zero and asserts on that, so a
+    `choose_pairing` that preferred distance over repeats would be caught.
+    The sweep asserts it found such a bucket rather than passing vacuously.
     """
-    run = run_swiss(flat(), RULES, random.Random(250))
-    round_five = run.rounds[4]
-    before = records_before_round(run, 5)
-    prior = opponents_before_round(run, 5)
-    rank_index = {t: i for i, t in enumerate(round_five.ranking)}
-
-    for record, sign in [((1, 3), -1), ((3, 1), 1)]:
-        group = sorted(t for t, rec in before.items() if rec == record)
-        assert len(group) == 4
-        chosen = [p for p in round_five.pairings if set(p) <= set(group)]
-        assert len(chosen) == 2
-
-        def repeat_count(matching):
-            return sum(1 for a, b in matching if b in prior[a])
-
-        matchings = list(perfect_matchings(group))
-        fewest = min(repeat_count(m) for m in matchings)
-        assert fewest > 0, (
-            f"precondition: seed 250's {record} bucket must have a genuine "
-            "repeat conflict, not a vacuous zero-repeat case like seed 12"
-        )
-        assert repeat_count(chosen) == fewest, "repeats must be minimised first"
-
-        tied_on_repeat = [m for m in matchings if repeat_count(m) == fewest]
-        best = (max if sign == -1 else min)(spread(m, rank_index) for m in tied_on_repeat)
-        assert spread(chosen, rank_index) == best, (
-            "distance preference must apply only among matchings tied on repeats"
-        )
+    conflicts = 0
+    for seed in range(200):
+        for record, chosen, matchings, repeats, ranks in _round_five_buckets(seed):
+            fewest = min(repeats(m) for m in matchings)
+            if fewest == 0:
+                continue
+            conflicts += 1
+            assert repeats(chosen) == fewest, (
+                f"seed {seed}, record {record}: repeats must be minimised first"
+            )
+            tied = [m for m in matchings if repeats(m) == fewest]
+            assert spread(chosen, ranks) == min(spread(m, ranks) for m in tied), (
+                "distance preference must apply only among matchings tied on repeats"
+            )
+    assert conflicts, (
+        "precondition: the sweep must find at least one genuine repeat "
+        "conflict, or it proves nothing about the ordering"
+    )
 
 
 def test_stronger_teams_finish_higher_on_average():

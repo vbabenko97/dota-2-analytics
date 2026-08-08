@@ -4,7 +4,7 @@ from collections import defaultdict
 from ti26.pairing import choose_pairing
 from ti26.rules import Rules
 from ti26.series import simulate_series
-from ti26.tiebreak import DurationResolver, rank_teams
+from ti26.tiebreak import rank_teams
 from ti26.types import RoundLog, SeriesResult, SwissRun, TeamState
 
 
@@ -79,7 +79,6 @@ def run_swiss(
         round_one = random_round_one_schedule(groups, rng)
 
     states = {t: TeamState(team_id=t, initial_group=groups[t]) for t in team_ids}
-    resolver = DurationResolver(rng, rules.duration_log_mean, rules.duration_log_sigma)
     logs: list[RoundLog] = []
 
     results = [_play(states, pair, strengths, rng, 1) for pair in round_one]
@@ -98,9 +97,7 @@ def run_swiss(
         active = [s for s in states.values() if rules.is_active(s)]
         if not active:
             break
-        ranking = rank_teams(
-            list(states.values()), rng, duration_fn=resolver.bind(states)
-        )
+        ranking = rank_teams(list(states.values()), rng)
         rank_index = {tid: i for i, tid in enumerate(ranking)}
         prior = {s.team_id: set(s.opponents) for s in states.values()}
 
@@ -117,8 +114,11 @@ def run_swiss(
         results = []
         repeat_count = min_possible = 0
         for key in sorted(buckets, key=str):
-            record = key[0]
-            loser_out = record[1] + 1 >= rules.eliminate_at_losses
+            # No Swiss round maximises ranking distance. The published rules
+            # give Round 5 "no special modifications" and put distance
+            # maximisation in the Elimination Round, which `elimination.py`
+            # runs. Until 2026-08-08 this applied it at Round 5 to every bucket
+            # where a loss eliminated, which shaped who finished 1-4.
             choice = choose_pairing(
                 sorted(buckets[key]),
                 rank_index,
@@ -126,9 +126,6 @@ def run_swiss(
                 rng,
                 group_of=groups,
                 cross_group=round_no in rules.cross_group_rounds,
-                maximize_distance=(
-                    loser_out and round_no in rules.max_distance_elimination_rounds
-                ),
                 preference=pairing_preference,
             )
             repeat_count += choice.repeat_count
@@ -149,4 +146,4 @@ def run_swiss(
             )
         )
 
-    return SwissRun(states=states, groups=groups, rounds=logs, resolver=resolver)
+    return SwissRun(states=states, groups=groups, rounds=logs)

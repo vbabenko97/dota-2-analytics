@@ -1,39 +1,60 @@
-import math
 import random
-from enum import Enum
+from functools import lru_cache
+from itertools import permutations
 
 from ti26.rules import Rules, category_for_terminal_record
-from ti26.series import map_win_prob, series_win_prob, simulate_series
+from ti26.series import simulate_series
 from ti26.tiebreak import rank_teams
 from ti26.types import Category, EliminationMatch, EliminationRun, SwissRun
 
 
-class ChoicePolicy(str, Enum):
-    RATIONAL = "rational"
-    NOISY = "noisy"
-    RANDOM = "random"
+@lru_cache(maxsize=8)
+def _permutations_of(n: int) -> tuple[tuple[int, ...], ...]:
+    return tuple(permutations(range(n)))
 
 
-def _select_opponent(
-    chooser: str,
-    available: list[str],
-    strengths: dict[str, float],
+def pair_elimination(
+    higher: list[str],
+    lower: list[str],
+    prior: dict[str, set[str]],
     rng: random.Random,
-    policy: ChoicePolicy,
-    softmax_temp: float,
-) -> str:
-    if policy is ChoicePolicy.RANDOM:
-        return rng.choice(available)
+    maximize: bool = True,
+) -> list[tuple[str, str]]:
+    """Pair 3-2 against 2-3 by the published rule, as it is actually scored.
 
-    win_probs = [
-        series_win_prob(map_win_prob(strengths[chooser], strengths[opp]))
-        for opp in available
-    ]
-    if policy is ChoicePolicy.RATIONAL:
-        return available[win_probs.index(max(win_probs))]
+    "Distance in ranking" is measured on SEED WITHIN EACH RECORD CLASS, not on
+    overall ranking position, and the objective is the SUM over the matching.
+    On TI 2025 the real bracket's pairs were seeds (1,5), (2,1), (3,3), (4,4)
+    and (5,2), summing to 8; the rematch-free optimum was 10.
 
-    weights = [math.exp(p / softmax_temp) for p in win_probs]
-    return rng.choices(available, weights=weights, k=1)[0]
+    Overall ranking position cannot be the metric: every 3-2 team outranks
+    every 2-3 team, so each contributes its rank exactly once whatever the
+    matching and the total is constant. This function used to read the rule
+    per-pair for that reason, which was the wrong conclusion from a correct
+    observation.
+
+    Repeat avoidance comes FIRST, matching the general Swiss rule and the
+    Swiss-round engine: the unconstrained optimum on TI 2025 scored 12 and was
+    unreachable because it required rematches. Ties are broken uniformly at
+    random, as everywhere else here.
+    """
+    if len(higher) != len(lower):
+        raise ValueError(f"cannot pair {len(higher)} against {len(lower)}")
+
+    def repeats(perm: tuple[int, ...]) -> int:
+        return sum(1 for i, j in enumerate(perm) if lower[j] in prior.get(higher[i], ()))
+
+    def distance(perm: tuple[int, ...]) -> int:
+        return sum(abs(i - j) for i, j in enumerate(perm))
+
+    candidates = _permutations_of(len(higher))
+    fewest = min(repeats(p) for p in candidates)
+    candidates = [p for p in candidates if repeats(p) == fewest]
+    pick = max if maximize else min
+    best = pick(distance(p) for p in candidates)
+    candidates = [p for p in candidates if distance(p) == best]
+    chosen = rng.choice(candidates)
+    return [(higher[i], lower[j]) for i, j in enumerate(chosen)]
 
 
 def run_elimination(
@@ -41,13 +62,19 @@ def run_elimination(
     strengths: dict[str, float],
     rules: Rules,
     rng: random.Random,
-    policy: ChoicePolicy = ChoicePolicy.RATIONAL,
-    softmax_temp: float = 1.0,
 ) -> EliminationRun:
-    """Resolve the elimination matches and assign every team a category."""
-    if softmax_temp <= 0:
-        raise ValueError(f"softmax_temp must be positive, got {softmax_temp}")
+    """Resolve the elimination matches and assign every team a category.
 
+    The published rule is two sentences: teams with a 3-2 record are paired
+    against teams with a 2-3 record, and distance in ranking between them is
+    maximised where possible. It is deterministic given the ranking, so nothing
+    here chooses anything -- `pair_elimination` scores it.
+
+    Until 2026-08-08 this function had each 3-2 team SELECT the opponent it was
+    most likely to beat, under a configurable policy. That model came from the
+    design spec, which cited nothing for it, and it decided the category of ten
+    of the sixteen teams.
+    """
     categories: dict[str, Category] = {}
     undecided: list[str] = []
     for tid, state in run.states.items():
@@ -66,51 +93,49 @@ def run_elimination(
             for record in undecided_records
         }
         raise ValueError(
-            "expected exactly two undecided record groups (choosers and pool), "
+            "expected exactly two undecided record groups (higher and lower), "
             f"found {len(undecided_records)}: {counts}"
         )
 
-    ranking = rank_teams(
-        list(run.states.values()), rng, duration_fn=run.resolver.bind(run.states)
-    )
+    ranking = rank_teams(list(run.states.values()), rng)
     order = {tid: i for i, tid in enumerate(ranking)}
 
     top_record = max(run.states[t].record for t in undecided)
-    choosers = sorted(
+    higher = sorted(
         (t for t in undecided if run.states[t].record == top_record),
         key=lambda t: order[t],
     )
-    available = sorted(
+    lower = sorted(
         (t for t in undecided if run.states[t].record != top_record),
         key=lambda t: order[t],
     )
-    if len(choosers) != len(available):
+    if len(higher) != len(lower):
         raise ValueError(
-            f"chooser count {len(choosers)} for record {top_record} != "
-            f"pool count {len(available)} for the other undecided record"
+            f"higher-record count {len(higher)} for {top_record} != "
+            f"lower-record count {len(lower)} for the other undecided record"
         )
 
+    prior = {t: set(run.states[t].opponents) for t in higher}
+    pairs = pair_elimination(
+        higher, lower, prior, rng,
+        maximize=rules.elimination_maximizes_ranking_distance,
+    )
+
     matches: list[EliminationMatch] = []
-    for chooser in choosers:
-        snapshot = list(available)
-        opponent = _select_opponent(
-            chooser, available, strengths, rng, policy, softmax_temp
-        )
-        available.remove(opponent)
-        wins_c, wins_o = simulate_series(strengths[chooser], strengths[opponent], rng)
-        if wins_c > wins_o:
-            categories[chooser] = Category.ELIM_WIN
+    for team, opponent in pairs:
+        wins_h, wins_l = simulate_series(strengths[team], strengths[opponent], rng)
+        if wins_h > wins_l:
+            categories[team] = Category.ELIM_WIN
             categories[opponent] = Category.ELIM_LOSS
         else:
-            categories[chooser] = Category.ELIM_LOSS
+            categories[team] = Category.ELIM_LOSS
             categories[opponent] = Category.ELIM_WIN
         matches.append(
             EliminationMatch(
-                chooser=chooser,
-                opponent=opponent,
-                available_when_choosing=snapshot,
-                wins_chooser=wins_c,
-                wins_opponent=wins_o,
+                higher=team,
+                lower=opponent,
+                wins_higher=wins_h,
+                wins_lower=wins_l,
             )
         )
 

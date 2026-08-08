@@ -4,8 +4,18 @@ import random
 
 import pytest
 
-from ti26.cli_pairing_check import _allowed_matchings, _is_fold, infer_groups, split_rounds
+from ti26.cli_pairing_check import (
+    _allowed_matchings,
+    _is_fold,
+    _states_before,
+    check_elimination_pairing,
+    infer_groups,
+    split_rounds,
+)
+from ti26.elimination import pair_elimination
 from ti26.pairing import choose_pairing
+from ti26.rules import load_rules
+from ti26.tiebreak import rank_teams
 
 
 def _series(start, teams):
@@ -103,3 +113,113 @@ def test_fold_needs_an_even_bucket(size):
     members = [str(i) for i in range(size)]
     rank_index = {t: i for i, t in enumerate(members)}
     assert not _is_fold(members, rank_index, [])
+
+
+def _swiss_five_rounds():
+    """Six teams over five Swiss rounds, ending 3-2 for a/b/c and 2-3 for x/y/z.
+
+    Constructed so that the final ranking is forced by game-win percentage
+    within each record class: a > b > c and x > y > z.
+    """
+    rounds = []
+    # Each round pits one of a/b/c against one of x/y/z, so the record classes
+    # separate cleanly. Map scores set the game-win percentages.
+    schedule = [
+        [("a", "x", 2, 0), ("b", "y", 2, 1), ("c", "z", 2, 1)],
+        [("a", "y", 2, 0), ("b", "z", 2, 1), ("c", "x", 2, 1)],
+        [("a", "z", 2, 1), ("b", "x", 2, 1), ("c", "y", 2, 1)],
+        [("x", "a", 2, 1), ("y", "b", 2, 1), ("z", "c", 2, 1)],
+        [("x", "b", 2, 1), ("y", "c", 2, 1), ("z", "a", 2, 1)],
+    ]
+    start = 0
+    for rnd in schedule:
+        entries = []
+        for winner, loser, wins, losses in rnd:
+            start += 1000
+            entries.append(
+                {
+                    "start": start,
+                    "teams": {winner, loser},
+                    "map_wins": {winner: wins, loser: losses},
+                    "durations": [],
+                }
+            )
+        rounds.append(entries)
+    return rounds
+
+
+def test_elimination_check_scores_a_rule_following_bracket_as_reproduced():
+    """Kills mutation: score the real bracket on overall rank, not class seed.
+
+    Overall ranking position is invariant across matchings here -- every 3-2
+    team outranks every 2-3 team -- so a check that used it would report the
+    same distance for a rule-following bracket and a rule-breaking one, and
+    `real_bracket_distance` would equal `best_reachable_distance` no matter
+    what was fed in. This builds the bracket the engine itself would pair and
+    asserts the check calls it reproduced; the companion test below feeds a
+    deliberately worse bracket and asserts it does not.
+    """
+    rules = load_rules("config/ti2026_rules.yaml")
+    groups = dict.fromkeys("abcxyz", "A")
+    rounds = _swiss_five_rounds()
+
+    # Derive the ranking rather than assume it: the fixture's game-win
+    # percentages are not in alphabetical order.
+    states = _states_before(rounds, rules.total_rounds + 1, groups)
+    order = {t: i for i, t in enumerate(rank_teams(list(states.values()), random.Random(1)))}
+    high = sorted((t for t in states if states[t].record == (3, 2)), key=order.get)
+    low = sorted((t for t in states if states[t].record == (2, 3)), key=order.get)
+    assert len(high) == len(low) == 3
+
+    engine = pair_elimination(
+        high, low, {t: set(states[t].opponents) for t in high}, random.Random(1)
+    )
+    bracket = [
+        {"start": 90000 + i, "teams": set(pair), "map_wins": {}, "durations": []}
+        for i, pair in enumerate(engine)
+    ]
+    result = check_elimination_pairing(rounds + [bracket], groups, rules, seeds=[1, 2, 3])
+    assert result["status"] == "checked"
+    assert result["higher_record"] == "3-2"
+    assert result["lower_record"] == "2-3"
+    assert result["engine_reproduces_the_real_bracket"] == [True, True, True]
+    assert result["real_bracket_distance"] == result["best_reachable_distance"]
+
+
+def test_elimination_check_notices_a_bracket_that_breaks_the_rule():
+    """The companion to the test above: a worse bracket must score worse."""
+    rules = load_rules("config/ti2026_rules.yaml")
+    groups = dict.fromkeys("abcxyz", "A")
+    rounds = _swiss_five_rounds()
+    states = _states_before(rounds, rules.total_rounds + 1, groups)
+    order = {t: i for i, t in enumerate(rank_teams(list(states.values()), random.Random(1)))}
+    high = sorted((t for t in states if states[t].record == (3, 2)), key=order.get)
+    low = sorted((t for t in states if states[t].record == (2, 3)), key=order.get)
+
+    minimised = [
+        {"start": 90000 + i, "teams": {h, low[i]}, "map_wins": {}, "durations": []}
+        for i, h in enumerate(high)
+    ]
+    result = check_elimination_pairing(rounds + [minimised], groups, rules, seeds=[1])
+    assert result["engine_reproduces_the_real_bracket"] == [False]
+    assert result["real_bracket_distance"][0] < result["best_reachable_distance"][0]
+
+
+def test_elimination_pairing_avoids_rematches_before_maximising_distance():
+    """Kills mutation: maximise distance without the repeat filter.
+
+    On TI 2025 the unconstrained optimum scored 12 and was unreachable because
+    it required a rematch; the rule-following bracket scored 10. Here the
+    furthest pairing is blocked the same way, so a repeat-blind implementation
+    picks the higher score and is caught.
+    """
+    high, low = ["h0", "h1"], ["l0", "l1"]
+    prior = {"h0": {"l1"}, "h1": set()}
+    pairs = pair_elimination(high, low, prior, random.Random(0), maximize=True)
+    assert set(map(frozenset, pairs)) == {frozenset(("h0", "l0")), frozenset(("h1", "l1"))}
+
+    unblocked = pair_elimination(high, low, {}, random.Random(0), maximize=True)
+    assert set(map(frozenset, unblocked)) == {
+        frozenset(("h0", "l1")),
+        frozenset(("h1", "l0")),
+    }

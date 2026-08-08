@@ -2,11 +2,12 @@
 
 import random
 from collections import Counter
+from dataclasses import replace
 
 import pytest
 from swiss_replay import assert_rounds_hit_independent_repeat_minimum
 
-from ti26.elimination import ChoicePolicy, run_elimination
+from ti26.elimination import run_elimination
 from ti26.montecarlo import category_marginals, monte_carlo_stderr
 from ti26.rules import load_rules
 from ti26.swiss import random_initial_groups, random_round_one_schedule, run_swiss
@@ -85,14 +86,19 @@ def test_group_constraints_hold(seed):
             assert groups[state.opponents[3]] != groups[state.team_id], "R4 cross-group"
 
 
-@pytest.mark.parametrize("policy", list(ChoicePolicy))
-def test_invariants_hold_under_every_choice_policy(policy):
+@pytest.mark.parametrize("maximize", [True, False])
+def test_invariants_hold_under_either_elimination_distance_rule(maximize):
+    """Replaces a sweep over the removed opponent-choice policies.
+
+    The published rule leaves the elimination round no choice, so there is no
+    policy to sweep. What remains configurable is whether ranking distance is
+    maximised or minimised, and the capacities must hold under both.
+    """
+    rules = replace(RULES, elimination_maximizes_ranking_distance=maximize)
     strengths = {t: (i - 7.5) * 0.3 for i, t in enumerate(TEAMS)}
     for seed in range(10):
-        run = run_swiss(strengths, RULES, random.Random(seed))
-        outcome = run_elimination(
-            run, strengths, RULES, random.Random(seed), policy=policy
-        )
+        run = run_swiss(strengths, rules, random.Random(seed))
+        outcome = run_elimination(run, strengths, rules, random.Random(seed))
         assert Counter(outcome.categories.values()) == CAPS
 
 

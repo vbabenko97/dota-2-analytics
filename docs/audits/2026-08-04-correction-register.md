@@ -184,6 +184,46 @@ the deliverable is much shorter than the pipeline that produces it.
 
 `cli_card` now reports this itself, so it cannot go unnoticed again.
 
+## The rules the whole simulation implements were never read
+
+Added 2026-08-08. The project owner supplied a transcript of the published format
+rules — the archived copy this repository had never had — and it disagreed with
+the implementation in four places: two ranking criteria transposed, one ranking
+criterion invented outright, distance maximisation applied in the wrong round,
+and the elimination round modelled as a choice teams do not get. Details are in
+[the closing report](2026-08-04-reproducibility-closing-report.md) and
+[the rules document](../ti26/2026-08-08-published-format-rules.md).
+
+The register's usual material is claims outrunning evidence. This is a different
+failure and worth separating. Nothing here was overclaimed: the values were
+tagged `reported_official` precisely because nobody could open the source, and
+that tag was accurate. The problem is that the tag was treated as a disclosure
+and then filed away. For a week the project audited the *rating* model to four
+decimal places while the rules it fed were wrong in four places, because ratings
+were checkable offline and rules were not.
+
+Two lessons the earlier entries do not cover.
+
+**An honest "unverified" tag is not a substitute for verifying.** `explorer_query`
+could not reach the rules, so the question was recorded as an owner task and left
+there. It took one paste to settle. The cost of asking was one message; the cost
+of not asking was every marginal the project produced.
+
+**Tests can encode the defect and still be good tests.** Every ranking test
+passed under both the correct and the transposed criterion order, because each
+varied one criterion and left the other tied — so the suite pinned the
+implementation without ever discriminating it from the published rule. The new
+test puts the two criteria in direct conflict and is the only one that fails
+under the transposition. Coverage of a behaviour is not evidence the behaviour is
+right.
+
+A third thing, which is mine rather than the project's: on implementing the
+elimination rule I measured its distance metric on overall ranking position,
+noticed correctly that it is invariant there, and concluded the rule must be
+per-pair rather than concluding the metric was wrong. I reported a finding on
+that basis and withdrew it the same day. Noticing that a measurement makes a rule
+vacuous is a reason to doubt the measurement first.
+
 ## What is still unverified
 
 - The pre-registration timing of D3b as a one-condition test rests on commit

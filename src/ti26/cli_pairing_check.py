@@ -36,6 +36,7 @@ from pathlib import Path
 
 from ti26.data.schema import MapRow
 from ti26.data.store import load_rows, open_store
+from ti26.elimination import pair_elimination
 from ti26.observed import load_backtest_truth
 from ti26.pairing import perfect_matchings
 from ti26.rules import Rules, load_rules
@@ -143,15 +144,86 @@ def _states_before(
     return states
 
 
-def _mean_duration(rounds: Sequence[Sequence[dict]], upto: int) -> dict[str, float]:
-    total: dict[str, float] = defaultdict(float)
-    count: dict[str, int] = defaultdict(int)
-    for rnd in rounds[: upto - 1]:
-        for entry in rnd:
-            for team in (str(t) for t in entry["teams"]):
-                total[team] += sum(entry["durations"])
-                count[team] += len(entry["durations"])
-    return {t: total[t] / count[t] for t in total if count[t]}
+def check_elimination_pairing(
+    rounds: Sequence[Sequence[dict]],
+    groups: dict[str, str],
+    rules: Rules,
+    seeds: Sequence[int],
+) -> dict:
+    """Does the real elimination round pair at MAXIMUM ranking distance?
+
+    Added 2026-08-08. The published rule -- 3-2 against 2-3, distance in
+    ranking maximised -- was implemented on that date, replacing a model in
+    which the 3-2 team chose its opponent. That model was never checked against
+    the one event that has run this format, and neither was its replacement.
+    This checks it.
+
+    Distance is measured on SEED WITHIN EACH RECORD CLASS and summed over the
+    matching, which is how the tournament's own bracket analysis scored it.
+    Overall ranking position cannot be the metric: every 3-2 team outranks
+    every 2-3 team, so the total is invariant and the rule would say nothing.
+
+    Reports the real bracket's score against the best reachable score, where
+    reachable means "without a rematch" -- on TI 2025 the unconstrained optimum
+    required teams to meet twice and was not available.
+    """
+    elimination = [r for r in rounds[rules.total_rounds :] if r]
+    if len(elimination) != 1:
+        return {"status": "not_a_single_elimination_round", "rounds": len(elimination)}
+
+    states = _states_before(rounds, rules.total_rounds + 1, groups)
+    actual = [tuple(sorted(str(t) for t in e["teams"])) for e in elimination[0]]
+
+    top = max(states[t].record for pair in actual for t in pair)
+    bottom = min(states[t].record for pair in actual for t in pair)
+    if top == bottom:
+        return {"status": "elimination_round_is_not_two_record_classes"}
+
+    out: dict = {
+        "status": "checked",
+        "higher_record": f"{top[0]}-{top[1]}",
+        "lower_record": f"{bottom[0]}-{bottom[1]}",
+        "series": len(actual),
+        "seeds": list(seeds),
+    }
+    real_scores: list[int] = []
+    reachable: list[int] = []
+    unconstrained: list[int] = []
+    engine_agrees: list[bool] = []
+    shared_pairs: list[int] = []
+    for seed in seeds:
+        ranking = rank_teams(list(states.values()), random.Random(seed))
+        order = {t: i for i, t in enumerate(ranking)}
+        higher = sorted((t for t in states if states[t].record == top), key=order.get)
+        lower = sorted((t for t in states if states[t].record == bottom), key=order.get)
+        seat = {t: i for i, t in enumerate(higher)} | {t: i for i, t in enumerate(lower)}
+        prior = {t: set(states[t].opponents) for t in higher}
+
+        real_scores.append(sum(abs(seat[a] - seat[b]) for a, b in actual))
+        engine = pair_elimination(higher, lower, prior, random.Random(seed), maximize=True)
+        reachable.append(sum(abs(seat[a] - seat[b]) for a, b in engine))
+        unconstrained.append(
+            sum(
+                abs(seat[a] - seat[b])
+                for a, b in pair_elimination(higher, lower, {}, random.Random(seed))
+            )
+        )
+        shared = {frozenset(p) for p in engine} & {frozenset(p) for p in actual}
+        engine_agrees.append(len(shared) == len(actual))
+        shared_pairs.append(len(shared))
+
+    out["real_bracket_distance"] = real_scores
+    out["best_reachable_distance"] = reachable
+    out["best_unconstrained_distance"] = unconstrained
+    out["engine_reproduces_the_real_bracket"] = engine_agrees
+    out["pairs_shared_with_engine"] = shared_pairs
+    out["note"] = (
+        "Distance is the sum of |seed| differences within each record class. "
+        "`best_reachable_distance` forbids rematches; `best_unconstrained_"
+        "distance` does not, and is generally unreachable. A real bracket "
+        "following the rule scores its reachable optimum."
+    )
+    return out
 
 
 def check_round(
@@ -163,7 +235,6 @@ def check_round(
 ) -> dict:
     """Compare one real round against what the engine would have allowed."""
     states = _states_before(rounds, round_no, groups)
-    durations = _mean_duration(rounds, round_no)
     actual = [tuple(sorted(str(t) for t in e["teams"])) for e in rounds[round_no - 1]]
     playing = {t for pair in actual for t in pair}
 
@@ -185,16 +256,19 @@ def check_round(
         if len(members) % 2 or len(actual_pairs) * 2 != len(members):
             results.append({"bucket": str(key), "teams": len(members), "status": "not_self_contained"})
             continue
-        record = key[0]
-        loser_out = record[1] + 1 >= rules.eliminate_at_losses
-        maximize_distance = loser_out and round_no in rules.max_distance_elimination_rounds
+        # No Swiss round maximises ranking distance: the published text gives
+        # Round 5 no modifications. This check used to maximise at Round 5 for
+        # buckets where a loss eliminated, which is the defect corrected on
+        # 2026-08-08 -- so the earlier "4 of 11 buckets" figure was measured
+        # against a rule the event does not use.
+        maximize_distance = False
         agree = 0
         for seed in seeds:
             rng = random.Random(seed)
             # ALL states, not just this round's actives: `swiss.py` ranks the
             # full field, and the opponent-wins criterion needs every team a
             # ranked team has already played, including eliminated ones.
-            ranking = rank_teams(list(states.values()), rng, duration_fn=durations.get)
+            ranking = rank_teams(list(states.values()), rng)
             rank_index = {t: i for i, t in enumerate(ranking)}
             prior = {t: set(states[t].opponents) for t in members}
             allowed = _allowed_matchings(
@@ -213,7 +287,7 @@ def check_round(
         # engine's choice" says the rule is wrong; this says what it is wrong
         # about, and whether the real bracket prefers the opposite extreme.
         rng = random.Random(seeds[0])
-        ranking = rank_teams(list(states.values()), rng, duration_fn=durations.get)
+        ranking = rank_teams(list(states.values()), rng)
         rank_index = {t: i for i, t in enumerate(ranking)}
         every = list(perfect_matchings(members))
         if round_no in rules.cross_group_rounds:
@@ -343,6 +417,7 @@ def run(store: str, truth_path: str, rules_path: str, seeds: Sequence[int]) -> d
         check_round(rounds, n, groups, rules, seeds) for n in range(2, len(swiss) + 1)
     ]
     elimination = rounds[rules.total_rounds :]
+    elimination_rule = check_elimination_pairing(rounds, groups, rules, seeds)
     # Self-check: reconstruct every team's FINAL Swiss record and compare with
     # the frozen truth file. If this disagrees, the standings feeding the
     # rankings above are wrong and nothing else in this report means anything.
@@ -359,6 +434,7 @@ def run(store: str, truth_path: str, rules_path: str, seeds: Sequence[int]) -> d
         "swiss_rounds_modelled": rules.total_rounds,
         "elimination_rounds_observed": len(elimination),
         "elimination_series": [len(r) for r in elimination],
+        "elimination_pairing_rule": elimination_rule,
         "group_sizes": {
             g: sum(1 for v in groups.values() if v == g) for g in sorted(set(groups.values()))
         },
