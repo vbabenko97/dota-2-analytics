@@ -143,6 +143,68 @@ def _states_before(
     return states
 
 
+def check_elimination_pairing(
+    rounds: Sequence[Sequence[dict]],
+    groups: dict[str, str],
+    rules: Rules,
+    seeds: Sequence[int],
+) -> dict:
+    """Does the real elimination round pair at MAXIMUM ranking distance?
+
+    Added 2026-08-08. The published rule -- 3-2 against 2-3, distance in
+    ranking maximised -- was implemented on that date, replacing a model in
+    which the 3-2 team chose its opponent. That model was never checked against
+    the one event that has run this format, and neither was its replacement.
+    This checks it.
+
+    Every 3-2 team outranks every 2-3 team, so total distance is invariant
+    across matchings and cannot discriminate. The comparison is therefore
+    positional: rank both sides, and ask how many of the real pairings match
+    best-against-worst, against best-against-best.
+    """
+    elimination = [r for r in rounds[rules.total_rounds :] if r]
+    if len(elimination) != 1:
+        return {"status": "not_a_single_elimination_round", "rounds": len(elimination)}
+
+    states = _states_before(rounds, rules.total_rounds + 1, groups)
+    actual = [tuple(sorted(str(t) for t in e["teams"])) for e in elimination[0]]
+
+    top = max(states[t].record for pair in actual for t in pair)
+    bottom = min(states[t].record for pair in actual for t in pair)
+    if top == bottom:
+        return {"status": "elimination_round_is_not_two_record_classes"}
+
+    out: dict = {
+        "status": "checked",
+        "higher_record": f"{top[0]}-{top[1]}",
+        "lower_record": f"{bottom[0]}-{bottom[1]}",
+        "series": len(actual),
+        "seeds": list(seeds),
+    }
+    max_hits: list[int] = []
+    min_hits: list[int] = []
+    for seed in seeds:
+        ranking = rank_teams(list(states.values()), random.Random(seed))
+        order = {t: i for i, t in enumerate(ranking)}
+        higher = sorted((t for t in states if states[t].record == top), key=order.get)
+        lower = sorted((t for t in states if states[t].record == bottom), key=order.get)
+        maximised = {
+            frozenset((h, lower[len(lower) - 1 - i])) for i, h in enumerate(higher)
+        }
+        minimised = {frozenset((h, lower[i])) for i, h in enumerate(higher)}
+        real = {frozenset(p) for p in actual}
+        max_hits.append(len(real & maximised))
+        min_hits.append(len(real & minimised))
+    out["pairs_matching_maximum_distance"] = max_hits
+    out["pairs_matching_minimum_distance"] = min_hits
+    out["note"] = (
+        "Counts are per seed because the ranking's coin-toss criterion is "
+        "seed-dependent. A rule that reproduced the event would score "
+        f"{len(actual)} at every seed."
+    )
+    return out
+
+
 def check_round(
     rounds: Sequence[Sequence[dict]],
     round_no: int,
@@ -334,6 +396,7 @@ def run(store: str, truth_path: str, rules_path: str, seeds: Sequence[int]) -> d
         check_round(rounds, n, groups, rules, seeds) for n in range(2, len(swiss) + 1)
     ]
     elimination = rounds[rules.total_rounds :]
+    elimination_rule = check_elimination_pairing(rounds, groups, rules, seeds)
     # Self-check: reconstruct every team's FINAL Swiss record and compare with
     # the frozen truth file. If this disagrees, the standings feeding the
     # rankings above are wrong and nothing else in this report means anything.
@@ -350,6 +413,7 @@ def run(store: str, truth_path: str, rules_path: str, seeds: Sequence[int]) -> d
         "swiss_rounds_modelled": rules.total_rounds,
         "elimination_rounds_observed": len(elimination),
         "elimination_series": [len(r) for r in elimination],
+        "elimination_pairing_rule": elimination_rule,
         "group_sizes": {
             g: sum(1 for v in groups.values() if v == g) for g in sorted(set(groups.values()))
         },

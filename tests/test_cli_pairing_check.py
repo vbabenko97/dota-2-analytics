@@ -4,8 +4,17 @@ import random
 
 import pytest
 
-from ti26.cli_pairing_check import _allowed_matchings, _is_fold, infer_groups, split_rounds
+from ti26.cli_pairing_check import (
+    _allowed_matchings,
+    _is_fold,
+    _states_before,
+    check_elimination_pairing,
+    infer_groups,
+    split_rounds,
+)
 from ti26.pairing import choose_pairing
+from ti26.rules import load_rules
+from ti26.tiebreak import rank_teams
 
 
 def _series(start, teams):
@@ -103,3 +112,73 @@ def test_fold_needs_an_even_bucket(size):
     members = [str(i) for i in range(size)]
     rank_index = {t: i for i, t in enumerate(members)}
     assert not _is_fold(members, rank_index, [])
+
+
+def _swiss_five_rounds():
+    """Six teams over five Swiss rounds, ending 3-2 for a/b/c and 2-3 for x/y/z.
+
+    Constructed so that the final ranking is forced by game-win percentage
+    within each record class: a > b > c and x > y > z.
+    """
+    rounds = []
+    # Each round pits one of a/b/c against one of x/y/z, so the record classes
+    # separate cleanly. Map scores set the game-win percentages.
+    schedule = [
+        [("a", "x", 2, 0), ("b", "y", 2, 1), ("c", "z", 2, 1)],
+        [("a", "y", 2, 0), ("b", "z", 2, 1), ("c", "x", 2, 1)],
+        [("a", "z", 2, 1), ("b", "x", 2, 1), ("c", "y", 2, 1)],
+        [("x", "a", 2, 1), ("y", "b", 2, 1), ("z", "c", 2, 1)],
+        [("x", "b", 2, 1), ("y", "c", 2, 1), ("z", "a", 2, 1)],
+    ]
+    start = 0
+    for rnd in schedule:
+        entries = []
+        for winner, loser, wins, losses in rnd:
+            start += 1000
+            entries.append(
+                {
+                    "start": start,
+                    "teams": {winner, loser},
+                    "map_wins": {winner: wins, loser: losses},
+                    "durations": [],
+                }
+            )
+        rounds.append(entries)
+    return rounds
+
+
+def test_elimination_pairing_check_scores_a_maximum_distance_bracket_as_perfect():
+    """Kills mutation: score the elimination round against minimum distance.
+
+    Builds a synthetic elimination round paired best-against-worst, which is
+    the published rule. The check must report every pair matching maximum
+    distance. If it compared against minimum distance instead, a
+    best-against-worst bracket would score 1 of 3 -- only the middle pair,
+    which both rules share.
+    """
+    rules = load_rules("config/ti2026_rules.yaml")
+    groups = dict.fromkeys("abcxyz", "A")
+    rounds = _swiss_five_rounds()
+
+    # Derive the ranking rather than assume it: the fixture's game-win
+    # percentages are not in alphabetical order, and hardcoding the wrong order
+    # would build a MINIMUM-distance bracket and assert the opposite.
+    states = _states_before(rounds, rules.total_rounds + 1, groups)
+    order = {t: i for i, t in enumerate(rank_teams(list(states.values()), random.Random(1)))}
+    high = sorted((t for t in states if states[t].record == (3, 2)), key=order.get)
+    low = sorted((t for t in states if states[t].record == (2, 3)), key=order.get)
+    assert len(high) == len(low) == 3
+
+    maximised = [
+        {"start": 90000 + i, "teams": {h, low[len(low) - 1 - i]},
+         "map_wins": {}, "durations": []}
+        for i, h in enumerate(high)
+    ]
+    result = check_elimination_pairing(
+        rounds + [maximised], groups, rules, seeds=[1, 2, 3]
+    )
+    assert result["status"] == "checked"
+    assert result["higher_record"] == "3-2"
+    assert result["lower_record"] == "2-3"
+    assert result["pairs_matching_maximum_distance"] == [3, 3, 3]
+    assert result["pairs_matching_minimum_distance"] == [1, 1, 1]
