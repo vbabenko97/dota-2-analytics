@@ -98,6 +98,48 @@ store, so inheriting is the best available option. It is still an assumption,
 and if Valve publishes a 2026 pairing section before the lock it supersedes
 every value tagged `owner_transcript_2025_inherited`.
 
+## TI 2025's elimination round did not follow the published rule
+
+Supplied by the owner alongside the transcript: the final Swiss standings table,
+and [Noxville's contemporaneous bracket
+analysis](https://x.com/Noxville/status/1964403594217869671).
+
+**How "distance in ranking" is actually scored.** Not on overall ranking
+position — every 3-2 team outranks every 2-3 team, so the total is invariant
+across matchings and the rule would say nothing. It is the seed WITHIN each
+record class, summed over the matching. The real pairs were seeds (1,5), (2,1),
+(3,3), (4,4), (5,2), summing to 8.
+
+`ti26.cli_pairing_check` now reproduces that analysis from the committed store:
+
+| quantity | value |
+|---|---|
+| real bracket | 8 |
+| best reachable without a rematch | 10 |
+| best ignoring rematches | 12 |
+| pairs the engine shares with the real bracket | 3 of 5 |
+
+The 12 was unreachable because it required teams to meet twice, which is why
+repeat avoidance has to be applied before distance rather than after.
+
+**The one-swap deviation has a documented cause outside the rules.** Teams were
+notified on 6 September of a previously non-existent constraint — no more than
+two series per day — which was never publicly announced. It forced HEROIC onto
+Yakult; the rule-following pairing was HEROIC vs Spirit and Falcons vs Yakult.
+That is exactly the difference between 8 and 10, and it accounts for the two
+pairs the engine does not share.
+
+So the published rule reproduces the event to within one swap, and the swap is
+explained by an unpublished mid-tournament change. **This is not a defect the
+model can fix, and not one it should.** An organiser constraint that is not in
+the rules, not announced, and applied mid-event is not forecastable; the engine
+follows the published rule and the deviation is recorded here.
+
+It also settles a question the previous day's work could not: the elimination
+round is paired algorithmically, not chosen by the teams. The analysis treats it
+as an optimisation throughout, which is evidence against the chooser model the
+design spec assumed — independent of the transcript.
+
 ## The three things it corrected
 
 1. **Ranking criteria 3 and 4 were transposed.** The published order is

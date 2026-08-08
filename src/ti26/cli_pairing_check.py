@@ -36,6 +36,7 @@ from pathlib import Path
 
 from ti26.data.schema import MapRow
 from ti26.data.store import load_rows, open_store
+from ti26.elimination import pair_elimination
 from ti26.observed import load_backtest_truth
 from ti26.pairing import perfect_matchings
 from ti26.rules import Rules, load_rules
@@ -157,10 +158,14 @@ def check_elimination_pairing(
     the one event that has run this format, and neither was its replacement.
     This checks it.
 
-    Every 3-2 team outranks every 2-3 team, so total distance is invariant
-    across matchings and cannot discriminate. The comparison is therefore
-    positional: rank both sides, and ask how many of the real pairings match
-    best-against-worst, against best-against-best.
+    Distance is measured on SEED WITHIN EACH RECORD CLASS and summed over the
+    matching, which is how the tournament's own bracket analysis scored it.
+    Overall ranking position cannot be the metric: every 3-2 team outranks
+    every 2-3 team, so the total is invariant and the rule would say nothing.
+
+    Reports the real bracket's score against the best reachable score, where
+    reachable means "without a rematch" -- on TI 2025 the unconstrained optimum
+    required teams to meet twice and was not available.
     """
     elimination = [r for r in rounds[rules.total_rounds :] if r]
     if len(elimination) != 1:
@@ -181,26 +186,42 @@ def check_elimination_pairing(
         "series": len(actual),
         "seeds": list(seeds),
     }
-    max_hits: list[int] = []
-    min_hits: list[int] = []
+    real_scores: list[int] = []
+    reachable: list[int] = []
+    unconstrained: list[int] = []
+    engine_agrees: list[bool] = []
+    shared_pairs: list[int] = []
     for seed in seeds:
         ranking = rank_teams(list(states.values()), random.Random(seed))
         order = {t: i for i, t in enumerate(ranking)}
         higher = sorted((t for t in states if states[t].record == top), key=order.get)
         lower = sorted((t for t in states if states[t].record == bottom), key=order.get)
-        maximised = {
-            frozenset((h, lower[len(lower) - 1 - i])) for i, h in enumerate(higher)
-        }
-        minimised = {frozenset((h, lower[i])) for i, h in enumerate(higher)}
-        real = {frozenset(p) for p in actual}
-        max_hits.append(len(real & maximised))
-        min_hits.append(len(real & minimised))
-    out["pairs_matching_maximum_distance"] = max_hits
-    out["pairs_matching_minimum_distance"] = min_hits
+        seat = {t: i for i, t in enumerate(higher)} | {t: i for i, t in enumerate(lower)}
+        prior = {t: set(states[t].opponents) for t in higher}
+
+        real_scores.append(sum(abs(seat[a] - seat[b]) for a, b in actual))
+        engine = pair_elimination(higher, lower, prior, random.Random(seed), maximize=True)
+        reachable.append(sum(abs(seat[a] - seat[b]) for a, b in engine))
+        unconstrained.append(
+            sum(
+                abs(seat[a] - seat[b])
+                for a, b in pair_elimination(higher, lower, {}, random.Random(seed))
+            )
+        )
+        shared = {frozenset(p) for p in engine} & {frozenset(p) for p in actual}
+        engine_agrees.append(len(shared) == len(actual))
+        shared_pairs.append(len(shared))
+
+    out["real_bracket_distance"] = real_scores
+    out["best_reachable_distance"] = reachable
+    out["best_unconstrained_distance"] = unconstrained
+    out["engine_reproduces_the_real_bracket"] = engine_agrees
+    out["pairs_shared_with_engine"] = shared_pairs
     out["note"] = (
-        "Counts are per seed because the ranking's coin-toss criterion is "
-        "seed-dependent. A rule that reproduced the event would score "
-        f"{len(actual)} at every seed."
+        "Distance is the sum of |seed| differences within each record class. "
+        "`best_reachable_distance` forbids rematches; `best_unconstrained_"
+        "distance` does not, and is generally unreachable. A real bracket "
+        "following the rule scores its reachable optimum."
     )
     return out
 
