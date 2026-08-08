@@ -458,6 +458,57 @@ ordering is decisive -- that is the point, not a caveat against it.
 The card report now states this itself, so a reader does not have to run a
 separate tool to learn that the simulation changed nothing.
 
+## The first out-of-sample signal, and it is one series wide
+
+Registered at
+[the series-scoring spec](../ti26/2026-08-08-ti2025-series-scoring-spec.md)
+before the producer existed. `reports/series_score/`. Diagnostic, gates nothing.
+
+Every other out-of-sample result here is card-level, and a card score collapses
+the entire model output into one integer between 0 and 16 — one observation. The
+same event carries **58 series with known winners**, all starting on or after
+D4's own training cutoff, so a model trained strictly before it has never seen
+any of them. Nothing had ever scored them.
+
+| population | n | correct | accuracy | one-sided p | Brier | vs 0.5 | calib. slope (95% CI) |
+|---|---|---|---|---|---|---|---|
+| all TI 2025 | 58 | 36 | 62.1% | **0.0435** | 0.2147 | 0.2500 | 2.12 (0.70, 3.53) |
+| Swiss stage | 44 | 26 | 59.1% | 0.1456 | 0.2114 | 0.2500 | 2.13 (0.55, 3.71) |
+| playoffs | 14 | 10 | 71.4% | 0.0898 | 0.2249 | 0.2500 | 2.24 (−1.33, 5.82) |
+
+Training window 44,097 maps over 539.9 days, matched to production. Zero
+exclusions. The calibration slope is refit pre-cutoff at 0.4352, so nothing
+after the cutoff reaches the predictions.
+
+**This is the first genuinely positive out-of-sample result this project has
+produced, and it is far weaker than it looks.**
+
+It clears its pre-registered threshold **by one series.** The spec fixed 36 of 58
+as the critical value in advance; the model got exactly 36. At 35 the p-value is
+0.073 and there is no result. A single series going the other way erases it.
+
+**Neither subgroup is significant on its own.** The Swiss stage is 59.1% at
+p=0.15 and the playoffs 71.4% at p=0.09. Only the aggregate clears, which is
+what pooling is for, but it means no part of the event independently shows the
+effect.
+
+**The playoff row is the most attractive number in the table and the least
+usable.** 10 of 14 was pre-registered as a subgroup precisely so it could not be
+selected afterwards, and the spec computed before any code that n=14 gives 22%
+power at a true 65% accuracy. It should not be quoted alone.
+
+**No calibration claim survives.** The slope's point estimate near 2.1 would mean
+the model is *under*-confident — the opposite of the over-dispersion the design
+spec predicted — but the interval includes 1.0 in all three populations. The
+standard error is not in the registered metric list; it was added before any
+number was written up, and it widened the claim rather than narrowing it.
+
+What it does not touch: this is one event, so all 58 series share a patch, a
+venue, a meta and a field and are not 58 independent draws — the effective sample
+is smaller than 58 by an amount nothing here estimates. Design-time leakage is
+unchanged. And series-level skill is not card-level skill: the same ratings that
+go 36 of 58 here still produce a card scoring 4 of 16 against a 3.75 baseline.
+
 ## What may be claimed for this card
 
 It is a deterministic, manifest-bound output of the calibrated-Glicko pipeline on
@@ -487,3 +538,17 @@ naive strength ladder that runs no simulation at all. One event is one sample, s
 none of this establishes the pipeline is worse than chance; it removes the reason
 to believe it is better. Making a misspecified optimum reproducible does
 not make it right, and nothing in this work was intended to.
+
+**One thing now points the other way, and it is narrow.** Scored at the SERIES
+level rather than the card level, the same calibrated strengths went 36 of 58 on
+TI 2025 — every series genuinely held out — beating a coin flip at a
+pre-registered one-sided p=0.0435, and beating a constant 0.5 predictor on Brier
+in all three populations. That is the first positive out-of-sample result here.
+
+It changes the claim boundary by less than it appears to. It clears its threshold
+by exactly one series; neither the Swiss stage nor the playoffs is significant
+alone; the effective sample is smaller than 58 because one event shares one
+patch, one meta and one field; and it is a different quantity from the one being
+submitted. The ratings appear to carry some signal about who wins a series. The
+card built on top of them still scores 4 of 16 against a 3.75 baseline and still
+ties a strength sort. Both of those can be true at once, and here they are.

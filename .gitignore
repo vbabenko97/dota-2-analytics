@@ -54,3 +54,9 @@ gpt-pro-output.md
 # are published side by side in the closing report.
 !reports/d4_matched_window_corrected/
 !reports/d4_matched_window_corrected/**
+
+# Series-level scoring on TI 2025, registered in
+# docs/ti26/2026-08-08-ti2025-series-scoring-spec.md. Tracked for the same
+# reason as the matched-window backtest: the closing report quotes it.
+!reports/series_score/
+!reports/series_score/**
