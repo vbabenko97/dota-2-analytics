@@ -49,3 +49,8 @@ gpt-pro-output.md
 
 # macOS
 .DS_Store
+# The corrected-engine re-run of the matched-window backtest. Same
+# argument list as reports/d4_matched_window/, different rules engine; both
+# are published side by side in the closing report.
+!reports/d4_matched_window_corrected/
+!reports/d4_matched_window_corrected/**

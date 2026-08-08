@@ -1,0 +1,30 @@
+[
+  {
+    "log_sigma": 0.2805980274352356,
+    "max_abs_delta": 0.0,
+    "is_baseline": true,
+    "noise_floor": 0.010840000000000016,
+    "resolvable": false
+  },
+  {
+    "log_sigma": 0.1402990137176178,
+    "max_abs_delta": 0.0,
+    "is_baseline": false,
+    "noise_floor": 0.010840000000000016,
+    "resolvable": false
+  },
+  {
+    "log_sigma": 0.4208970411528534,
+    "max_abs_delta": 0.0,
+    "is_baseline": false,
+    "noise_floor": 0.010840000000000016,
+    "resolvable": false
+  },
+  {
+    "log_sigma": 0.25,
+    "max_abs_delta": 0.0,
+    "is_baseline": false,
+    "noise_floor": 0.010840000000000016,
+    "resolvable": false
+  }
+]
