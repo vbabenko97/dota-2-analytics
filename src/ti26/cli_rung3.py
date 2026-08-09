@@ -40,7 +40,7 @@ from ti26.ratings.elo import EloModel
 from ti26.roster import load_aliases
 from ti26.rules import load_rules
 from ti26.series import map_win_prob
-from ti26.teams import load_teams, resolve_rosters, team_strengths
+from ti26.teams import UnresolvedTeamError, load_teams, resolve_rosters, team_strengths
 
 
 def _rank_correlation(a: dict[str, float], b: dict[str, float]) -> float:
@@ -169,7 +169,26 @@ def main(argv: list[str] | None = None, transport=http_transport) -> int:
 
     # --- 3(b). Elo-ordering sanity anchor (spec V rung 6) ---------------------
     aliases = load_aliases(args.aliases)
-    elo_strengths = _elo_anchor_strengths(args.store, teams, aliases, elo_k)
+    try:
+        elo_strengths = _elo_anchor_strengths(args.store, teams, aliases, elo_k)
+    except UnresolvedTeamError as exc:
+        # An unusable store is one of the registered triggers for reaching rung 3
+        # at all, so hitting it here is not an edge case -- it is the scenario.
+        # The public ratings are already fetched and written by this point, so
+        # the card is still reachable; without this message that fact is buried
+        # under a traceback from two modules away, at the worst possible moment.
+        raise SystemExit(
+            f"the Elo-ordering anchor cannot be fitted from {args.store}: {exc}\n\n"
+            f"The public ratings WERE fetched and written to {strengths_path}, so a "
+            "card can still be produced without this store:\n\n"
+            f"  .venv/bin/python -m ti26.cli --strengths {strengths_path} \\\n"
+            f"    --rules {args.rules} --n-sims {args.card_sims} "
+            f"--seed {args.card_seed} --out {out}\n\n"
+            "That card ships WITHOUT the Elo-ordering anchor and WITHOUT the "
+            "observed-form diagnostic. Those are the only two independent checks "
+            "on a rating conversion whose divisor this project has never been able "
+            "to document, so say plainly wherever it is published that neither ran."
+        ) from exc
     rank_corr = _rank_correlation(strengths, elo_strengths)
     top4_public = _top_n(strengths, 4)
     top4_elo = _top_n(elo_strengths, 4)

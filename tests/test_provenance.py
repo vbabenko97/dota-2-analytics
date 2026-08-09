@@ -6,6 +6,7 @@ from dataclasses import replace
 import pytest
 
 from ti26 import provenance
+from ti26.cli_provenance import card_diff
 from ti26.cli_provenance import main as provenance_main
 from ti26.data.queries import MAP_QUERY
 from ti26.data.schema import MapRow
@@ -496,6 +497,95 @@ def test_snapshot_manifest_command_refuses_to_replace_without_the_explicit_flag(
         provenance_main(["snapshot-manifest", "--raw", str(raw), "--snapshot", sid])
 
     assert (raw / sid / "manifest.json").read_bytes() == before
+
+
+def _card(assignments, team_ids, objective=4.0):
+    return {
+        "assignments": assignments,
+        "team_ids": team_ids,
+        "optimizer_marginal_objective": objective,
+    }
+
+
+def test_card_diff_keys_on_team_id_so_a_rebrand_is_not_reported_as_a_move():
+    """Kills mutation: diff the cards on display name instead of team id.
+
+    Four of the sixteen TI 2026 entrants rebranded between the qualifier and the
+    field confirmation. A name-keyed diff reports a renamed team as gone from
+    one card and new in the other -- two spurious differences per rebrand -- at
+    the moment the operator is deciding whether a fallback card is materially
+    different from the one they meant to ship.
+    """
+    before = _card({"PARIVISION": "4-0", "BetBoom": "0-4"}, {"PARIVISION": "1", "BetBoom": "2"})
+    after = _card({"Team Vision": "4-0", "BoomBoys": "0-4"}, {"Team Vision": "1", "BoomBoys": "2"})
+
+    result = card_diff(before, after)
+
+    assert result["teams_compared"] == 2
+    assert result["assignments_moved"] == 0
+    assert result["only_in_a"] == [] and result["only_in_b"] == []
+    assert result["renamed_without_moving"] == 2
+
+
+def test_card_diff_reports_a_real_move_with_both_slots_and_the_team_id():
+    """Kills mutation: count the moves but drop which slots they moved between.
+
+    A bare count cannot be acted on. The operator has to see that a team went
+    from `4-1` to `elim_win` to judge whether the fallback card is a different
+    forecast or a rounding difference, and the team id is what lets them check
+    it against the configured field rather than against a display name.
+    """
+    ids = {"A": "1", "B": "2"}
+    result = card_diff(
+        _card({"A": "4-0", "B": "0-4"}, ids), _card({"A": "elim_win", "B": "0-4"}, ids)
+    )
+
+    assert result["assignments_moved"] == 1
+    assert result["moved"] == [
+        {
+            "team_id": "1",
+            "name_a": "A",
+            "name_b": "A",
+            "renamed": False,
+            "slot_a": "4-0",
+            "slot_b": "elim_win",
+        }
+    ]
+
+
+def test_card_diff_refuses_to_present_the_two_objectives_as_comparable():
+    """Kills mutation: drop the note, or emit a delta between the objectives.
+
+    Each objective is the optimiser's expected score under its OWN marginals, so
+    a more extreme strength vector scores higher whether or not it is more
+    accurate -- a confidently wrong card beats a cautious one. Emitting
+    `objective_b - objective_a` would manufacture exactly the comparison this
+    number cannot support, and the rung-3 fallback scores the higher of the two.
+    """
+    ids = {"A": "1"}
+    result = card_diff(_card({"A": "4-0"}, ids, 4.59), _card({"A": "4-0"}, ids, 6.62))
+
+    assert result["objective_a"] == 4.59
+    assert result["objective_b"] == 6.62
+    assert "NOT comparable" in result["objective_note"]
+    assert not any("delta" in key or "improvement" in key for key in result)
+
+
+def test_card_diff_reports_a_team_present_in_only_one_card():
+    """Kills mutation: intersect silently and report only the shared teams.
+
+    A substitution in the field changes which sixteen team ids exist. Comparing
+    only the intersection would show a small, reassuring difference while hiding
+    that the two cards are not about the same tournament.
+    """
+    result = card_diff(
+        _card({"A": "4-0", "B": "0-4"}, {"A": "1", "B": "2"}),
+        _card({"A": "4-0", "C": "0-4"}, {"A": "1", "C": "3"}),
+    )
+
+    assert result["teams_compared"] == 1
+    assert result["only_in_a"] == ["2"]
+    assert result["only_in_b"] == ["3"]
 
 
 def test_snapshot_manifest_command_rejects_a_row_count_the_chunks_contradict(tmp_path):

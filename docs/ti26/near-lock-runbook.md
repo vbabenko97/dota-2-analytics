@@ -217,8 +217,24 @@ names a different run.
 
 ## 8. Diff the card against the prior bundle
 
-Compare `card/recommended_card.json` with the previous bundle's, keyed on
-`team_ids`, not on display name.
+```
+.venv/bin/python -m ti26.cli_provenance card-diff \
+  --a reports/runs/<previous-run-id>/card/recommended_card.json \
+  --b reports/runs/<run-id>/card/recommended_card.json
+```
+
+This step said "compare, keyed on team_ids, not on display name" and gave no way
+to do it; it was a hand comparison until 2026-08-09. The command keys on team id
+itself, so a rebrand — four teams rebranded before this field was confirmed —
+shows up as `renamed_without_moving` rather than as two spurious differences.
+
+`only_in_a` and `only_in_b` are the ones to read first. A non-empty pair means
+the two cards are not about the same sixteen teams, which is a field change, not
+a forecast change.
+
+**Ignore `objective_a` versus `objective_b`.** Each is computed under its own
+marginals, so the number rises with confidence rather than with accuracy. The
+output says so in `objective_note` for the same reason it is repeated here.
 
 A changed assignment has exactly two permitted causes: fresh snapshot input, or a
 separately documented corrected computation. **It is never caused by D4.** D4 is a
@@ -246,6 +262,114 @@ a `-m` filter and went unnoticed for a whole fix round.
 
 Commit the bundle and the closing report only after all three of pytest, ruff and
 `verify-run` succeed.
+
+## 9b. If the card cannot ship: the rung-3 fallback
+
+**Rehearsed end to end on 2026-08-09.** Until then this path existed, was
+covered by tests, and had never been executed against the real world. It works,
+but not in the way the one-line description in the strengthening plan implied,
+and the differences all matter under a deadline.
+
+Reach for this only when the normal path cannot produce a card at all: a
+producer that cannot run, a store that will not rebuild, a roster that will not
+resolve. **A failing GATE is not a trigger.** D2 and D3 already fail; that is
+recorded evidence, not a build failure, and the card ships from calibrated
+Glicko anyway.
+
+```
+.venv/bin/python -m ti26.cli_rung3 \
+  --store data/processed/release-<snapshot-id>.sqlite \
+  --out reports/rung3_<snapshot-id>
+```
+
+Roughly three minutes at production sim counts. It writes
+`strengths_public.csv`, `rung3_scale_sensitivity.json`, `rung3_provenance.md`
+and the card.
+
+**It needs the network, through the same seam as step 1.** If the network is
+why you are here, rung 3 is not available and you go to 9c.
+
+**It needs the store too**, for the Elo-ordering anchor and the observed-form
+diagnostic. If the store is the problem, the run stops after writing
+`strengths_public.csv` and tells you the exact command to finish the card
+without it. Take that offer only knowing what it costs: the anchor and the
+observed-form check are the only two independent checks on a rating conversion
+whose divisor this project has never been able to document. A card produced that
+way must say, wherever it is published, that neither ran.
+
+**Rung-3 rehearsal figures are one-off past observations, not reproducible
+evidence, and are labelled that way wherever they appear below.** Rung 3 reads a
+live table through the network, so its output cannot be replayed offline and is
+not committed — the correction register withdrew rung-3 figures from project
+prose for exactly that reason, and `cli_rung3`'s own boundary-proximity note
+already uses this labelling for the same constraint. Everything below tells you
+what to look at and gives the command that computes it for your run; a rehearsal
+figure appears only as a statement about 2026-08-09, never as a prediction about
+lock day.
+
+**Read these three before publishing anything from it:**
+
+- **Thin and stale counts** in `rung3_provenance.md`, and the run's own last
+  stdout lines, which print them. The public table's per-team evidence is not
+  uniform and it does not announce that unless you look. On the rehearsal a
+  substantial minority of the field was flagged.
+- **The scale-sensitivity sweep**, `rung3_scale_sensitivity.json`. The `/400`
+  divisor is inferred by convention, not documented by OpenDota. If any
+  non-baseline row has `"resolvable": true`, that undocumented constant moves
+  the card by more than resampling noise does — rung 3's central assumption is
+  then load-bearing rather than incidental. **It was `true` on the rehearsal.**
+- **The Elo rank correlation and top-4 overlap.** Sanity anchors, not
+  agreements; neither was perfect on the rehearsal.
+
+**The rung-3 card is a different card, not a degraded copy of the same one.**
+Diff it against the card you would otherwise have shipped, keyed on team id:
+
+```
+.venv/bin/python -m ti26.cli_provenance card-diff \
+  --a reports/runs/<run-id>/card/recommended_card.json \
+  --b reports/rung3_<snapshot-id>/recommended_card.json
+```
+
+On 2026-08-09, at identical sim count and seed, half the assignments moved. That
+is one observation against one snapshot, not a rate — but it is enough to expect
+a different forecast rather than a rounding difference.
+
+**STOP — owner decision required** before submitting a rung-3 card. It is a
+different forecast from a source with no backtest, not a fallback rendering of
+the one that was verified.
+
+**Do not compare the two cards' `optimizer_marginal_objective`.** The rehearsal's
+rung-3 card scored higher than the shipping card, and that is not evidence it is
+better. The objective is the optimiser's expected score under *its own*
+marginals, so more extreme strengths buy a higher number whether or not they are
+more accurate. A flat strength vector would score near the 3.75 random baseline
+and a confidently wrong one would score well. It measures confidence, not skill.
+
+**There is no manifest.** Rung 3 is not a run bundle: no source revision, no
+store digest, no config digests, and `verify-run` does not apply to it. Record
+the fetch timestamp from `rung3_provenance.md` — the `team_rating` table is live
+and continuously updated, so that timestamp is the only thing identifying which
+version of the source the card came from.
+
+## 9c. If there is no network either
+
+The last resort is the card generator fed a `team,strength` CSV directly. It
+touches nothing external.
+
+```
+.venv/bin/python -m ti26.cli \
+  --strengths <team,strength CSV> --rules config/ti2026_rules.yaml \
+  --n-sims 250000 --seed 1 --out reports/manual_<date>
+```
+
+**Verified on 2026-08-09:** fed the shipping card's own
+`strengths_calibrated.csv` at the same sim count and seed, this path reproduced
+the shipping card exactly — all 16 assignments and the objective to four
+decimals. So the generator is sound and the only question is where the strengths
+come from.
+
+Sim count is not a detail here. The same strengths at 2,000 sims instead of
+250,000 moved 4 of 16 slots. If you cut it to save time, say so on the card.
 
 ## 10. What the closing report must say
 

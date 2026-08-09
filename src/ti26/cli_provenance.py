@@ -24,6 +24,63 @@ def _print_json(value: object) -> None:
     print(canonical_json_bytes(value).decode("utf-8"))
 
 
+def card_diff(a: dict, b: dict) -> dict:
+    """Compare two cards on TEAM ID, never on display name.
+
+    The runbook has told the operator to do this by hand since it was written,
+    at two separate steps, and a hand comparison under a deadline is where the
+    name-versus-id distinction gets lost. An organisation rebrands between
+    snapshots -- four did before TI 2026 -- so two cards can name the same
+    sixteen entrants differently while assigning them identically, and a
+    name-keyed diff would report churn that is not there.
+
+    Both cards carry `team_ids`, so the id is available on each side and the
+    display name is only ever reported alongside it.
+    """
+    ids_a, ids_b = a["team_ids"], b["team_ids"]
+    slots_a = {ids_a[name]: slot for name, slot in a["assignments"].items()}
+    slots_b = {ids_b[name]: slot for name, slot in b["assignments"].items()}
+    names_a = {team_id: name for name, team_id in ids_a.items()}
+    names_b = {team_id: name for name, team_id in ids_b.items()}
+
+    shared = sorted(set(slots_a) & set(slots_b))
+    moved = [
+        {
+            "team_id": team_id,
+            "name_a": names_a[team_id],
+            "name_b": names_b[team_id],
+            "renamed": names_a[team_id] != names_b[team_id],
+            "slot_a": slots_a[team_id],
+            "slot_b": slots_b[team_id],
+        }
+        for team_id in shared
+        if slots_a[team_id] != slots_b[team_id]
+    ]
+    return {
+        "teams_compared": len(shared),
+        "assignments_moved": len(moved),
+        "only_in_a": sorted(set(slots_a) - set(slots_b)),
+        "only_in_b": sorted(set(slots_b) - set(slots_a)),
+        "renamed_without_moving": sum(
+            1
+            for team_id in shared
+            if names_a[team_id] != names_b[team_id] and slots_a[team_id] == slots_b[team_id]
+        ),
+        "moved": moved,
+        # Not a quality comparison, and the field name alone invites reading it
+        # as one. The objective is the optimiser's expected score under its OWN
+        # marginals, so a more extreme strength vector buys a higher number
+        # whether or not it is more accurate.
+        "objective_a": a.get("optimizer_marginal_objective"),
+        "objective_b": b.get("optimizer_marginal_objective"),
+        "objective_note": (
+            "objective_a and objective_b are each computed under their own "
+            "marginals and are NOT comparable as accuracy; a confidently wrong "
+            "strength vector scores higher than a cautious one"
+        ),
+    }
+
+
 def _retrieved_at_from_snapshot_id(sid: str) -> str:
     """Derive the retrieval instant from the snapshot identifier, not the clock.
 
@@ -124,6 +181,9 @@ def main(argv: list[str] | None = None) -> int:
     manifest.add_argument("--raw", required=True)
     manifest.add_argument("--snapshot", required=True)
     manifest.add_argument("--replace-existing-manifest", action="store_true")
+    diff = commands.add_parser("card-diff")
+    diff.add_argument("--a", required=True, help="baseline recommended_card.json")
+    diff.add_argument("--b", required=True, help="card to compare against it")
     args = parser.parse_args(argv)
 
     if args.command == "store-digest":
@@ -133,6 +193,13 @@ def main(argv: list[str] | None = None) -> int:
             _print_json(logical_store_digest(connection))
         finally:
             connection.close()
+    elif args.command == "card-diff":
+        _print_json(
+            card_diff(
+                json.loads(Path(args.a).read_text(encoding="utf-8")),
+                json.loads(Path(args.b).read_text(encoding="utf-8")),
+            )
+        )
     elif args.command == "snapshot-manifest":
         written = snapshot_manifest(
             Path(args.raw), args.snapshot, replace_existing=args.replace_existing_manifest

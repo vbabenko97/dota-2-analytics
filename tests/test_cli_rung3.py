@@ -475,6 +475,43 @@ def test_boundary_proximity_section_states_past_observation_not_forward_claim(tm
     )
 
 
+def test_an_unusable_store_stops_with_the_command_that_finishes_the_card(tmp_path):
+    """Kills mutation: let `UnresolvedTeamError` escape as a bare traceback.
+
+    An unusable store is one of the registered triggers for reaching rung 3 at
+    all, so this is the scenario rather than an edge case. By the time the Elo
+    anchor is fitted the public ratings are already fetched and written, so the
+    card is still reachable -- but the raw traceback comes from two modules away
+    and says nothing about that, which is the wrong thing to be reading under a
+    deadline.
+
+    Asserts the message names the strengths file AND the command, because a
+    message that only says "failed" leaves the operator exactly where the
+    traceback did.
+    """
+    teams = write_team_config(tmp_path / "teams.yaml")
+    out = tmp_path / "reports"
+    empty_store = tmp_path / "empty.sqlite"
+    open_store(empty_store).close()
+
+    with pytest.raises(SystemExit) as excinfo:
+        rung3_main(
+            [
+                "--teams", str(teams), "--store", str(empty_store),
+                "--out", str(out), "--card-sims", "500", "--sweep-sims", "500",
+            ],
+            transport=fake_transport(full_rating_rows()),
+        )
+
+    message = str(excinfo.value)
+    assert "strengths_public.csv" in message
+    assert "ti26.cli --strengths" in message
+    # The strengths it points at have to exist, or the recovery is a dead end.
+    assert (out / "strengths_public.csv").is_file()
+    # And it must say what the resulting card is missing, not just how to get one.
+    assert "WITHOUT the Elo-ordering anchor" in message
+
+
 def test_team_count_mismatch_fails_loudly(tmp_path):
     """Catches a runner that silently proceeds (or crashes obscurely) when
     the teams file does not have as many entries as the rules require,
