@@ -5,9 +5,9 @@
 **Review state:**
 
 ```yaml
-owner_review: changes_requested
+owner_review: approved
 architecture_direction: approved
-implementation_plan_handoff: blocked
+implementation_plan_handoff: approved
 ```
 
 **Scope:** Batch release provenance, longitudinal evaluation, and model-promotion authority
