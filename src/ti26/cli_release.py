@@ -59,6 +59,29 @@ CONFIG_INPUTS = (
 )
 
 
+def declared_inputs(snapshot_manifest_path: str, groups: str | None) -> list[str]:
+    """Every file whose BYTES the manifest binds this run to.
+
+    The group draw belongs here in exactly the sense the snapshot does: it is an
+    external fact the forecast is conditioned on, not a setting we chose. The
+    producer list already records that `--groups <path>` was passed, but a path
+    is not its contents -- without this, two bundles conditioned on different
+    draws are indistinguishable, and `verify-run` cannot fail closed when the
+    draw changes under a finished bundle.
+
+    Hashed wherever it lives rather than required to sit in `config/`, because
+    `CONFIG_INPUTS` is asserted to equal `config/*.yaml` exactly. Dropping a
+    draw file there on lock day would turn the suite red at step 9, in the
+    middle of the regeneration, for a file that is data rather than
+    configuration.
+    """
+    return [
+        snapshot_manifest_path,
+        *CONFIG_INPUTS,
+        *([groups] if groups else []),
+    ]
+
+
 def build_producers(args, store_path: Path) -> list[list[str]]:
     """Every command the bundle runs, in order, as `python -m` argument lists.
 
@@ -237,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
         "store": store_digest,
         "inputs": [
             {"path": path, "sha256": sha256_file(Path(path))}
-            for path in (snapshot_manifest.as_posix(), *CONFIG_INPUTS)
+            for path in declared_inputs(snapshot_manifest.as_posix(), args.groups)
         ],
         "runtime": _runtime(),
     }

@@ -1,9 +1,13 @@
 """The organiser's own group draw, when it exists.
 
-TI 2026's groups were not announced as of 2026-08-08. Until they are, every
+TI 2026's groups were still unannounced as of 2026-08-09. Until they are, every
 simulation invents its own split, which averages over a fact that will be known
 before the compendium locks. Rounds 2 and 3 pair inside the initial group and
 round 4 pairs across it, so the split is not cosmetic.
+
+Round one is a SEPARATE publication, not a consequence of the groups: the 2026
+rules make it organiser-set. So `round_one` is optional here, and the groups can
+arrive without it. The near-lock runbook checks for both.
 
 This loads the draw when a file is supplied and validates it hard. A group
 assignment that is wrong -- unequal halves, a missing team, a name that does not

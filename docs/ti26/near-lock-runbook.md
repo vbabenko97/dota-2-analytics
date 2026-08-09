@@ -166,6 +166,63 @@ what the owner submits, so they still have to be right.
 mapping disagree about which organisation a `team_id` is. A display name is safe to
 change only after the underlying account set has passed step 4.
 
+## 5b. Check for a published group draw and for Round 1 pairings
+
+**These are two separate publications and they may not arrive together.** The
+2026 rules make Round 1 organiser-set rather than derived from group membership,
+so the groups can be announced first and the opening matchups later. Check for
+both; take whichever exists.
+
+This step exists because step 6's invocation is unconditional. Until 2026-08-09
+the only thing standing between a published draw and a card that ignored it was
+remembering to add a flag — and the premise of this document is that memory
+under deadline pressure is not a reliable subsystem.
+
+Look for: the two groups of eight, and the eight Round 1 matchups. Sources are
+outside `explorer_query` and outside this repository, same class as step 3.
+
+**If neither has been published:** run step 6 unchanged, then confirm the card
+averaged over draws rather than silently taking one:
+
+```
+.venv/bin/python -c "import json,sys; c=json.load(open(sys.argv[1])); \
+  print(c['group_draw'], c['groups'], c['round_one_supplied'])" \
+  reports/runs/<run-id>/card/recommended_card.json
+```
+
+`None None False` is the correct unconditioned state. Anything else means a draw
+reached the card and this step missed it.
+
+**If either has been published**, write it to `data/ti2026_groups.yaml` —
+`groups:` always, `round_one:` only if the matchups are out — archive the source
+page alongside the rules archive, commit the file, and pass it in step 6:
+
+```
+.venv/bin/python -m ti26.cli_release \
+  --snapshot <snapshot-id> --source-revision $(git rev-parse HEAD) \
+  --groups data/ti2026_groups.yaml
+```
+
+`data/`, not `config/`: the draw is an external fact like the snapshot, not a
+setting, and `CONFIG_INPUTS` is asserted to equal `config/*.yaml` exactly, so a
+file dropped there turns the suite red at step 9 in the middle of the run.
+
+`cli_release` hashes the draw into the manifest as a declared input, so
+`verify-run` fails closed if it is edited afterwards. It reaches the CARD only —
+never D4, whose event had its own groups.
+
+**STOP — owner decision required** if any of these is true:
+
+- the published draw cannot be represented exactly by the accepted input:
+  unequal groups, not exactly two, an odd group, a Round 1 pairing across
+  groups, or a name that is not in the configured field. `load_group_draw`
+  refuses all of these rather than forecasting a bracket that does not exist —
+  do not reshape the draw to fit;
+- the groups contradict the sixteen confirmed in step 3;
+- Round 1 is published but conditioning on it changes the card materially. Diff
+  with and without using `card-diff` from step 8 and let the owner choose; a
+  known fact should be used, but not discovered as a surprise after submission.
+
 ## 6. Regenerate everything into one bundle
 
 ```
@@ -183,6 +240,8 @@ The last two joined the bundle on 2026-08-09, so **this run id will not match
 the shape of any earlier bundle's** — the id derives from the producer list. A
 non-zero exit from either stops the run, unlike a gate's, whose non-zero exit is
 its verdict.
+
+Add `--groups data/ti2026_groups.yaml` if step 5b found a published draw.
 
 Run it AFTER committing the code and the snapshot, so `--source-revision` names a
 commit that actually contains the producers. The bundle is then a second commit.

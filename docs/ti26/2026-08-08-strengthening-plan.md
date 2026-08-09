@@ -176,13 +176,40 @@ snapshot and stops on any non-zero `dropped_maps`.
 longest backfill this comparison can observe. The producer emits that as
 `observation_horizon_days` rather than leaving it implicit.
 
-## A6. Condition on the group draw the moment it is published
+## A6. DONE as far as it can be — the draw is now a runbook step, not a memory
 
-Already built (`--groups`). Add the flag to the release invocation, nothing
-else. If groups are never published, the card ships averaging over draws, which
-is correct and is recorded as `group_draw: null` in the payload.
+**Still unpublished.** Owner-supplied check on 2026-08-09: BLAST's TI 2026
+series page lists all eight opening matches as `TBD`
+(<https://blast.tv/dota/tournaments/the-international-2026/series>). That is an
+external source, outside `explorer_query` and outside this repository, and is
+recorded here as such rather than as something this project verified.
 
-**Effort:** minutes.
+The machinery was already built (`--groups`, `load_group_draw`, validated hard).
+What was missing is that **nothing would have made anyone use it.** Runbook step
+6 gave an unconditional invocation, and the plan's own instruction was "add the
+flag" — that is a note to remember something, which is exactly what this
+document says elsewhere not to rely on.
+
+**Now runbook step 5b**: an explicit check before the release run, with the
+unconditioned state verified (`group_draw`, `groups`, `round_one_supplied` are
+all recorded in the card payload, so "we did not condition on a draw" is an
+assertion a reader can check, not a claim), and stop conditions for a draw that
+cannot be represented exactly.
+
+**Two things this entry had wrong:**
+
+- **"The group draw" is too narrow.** The 2026 rules make Round 1 organiser-set
+  rather than derived from group membership, so the groups and the opening
+  matchups are two separate publications and may not arrive together. Step 5b
+  takes whichever exists.
+- **A draw file would not have been hashed.** `cli_release` declared only the
+  snapshot manifest and `config/*.yaml` as inputs, so a `--groups` file left the
+  producer list naming a path with nothing binding its contents: two bundles
+  conditioned on different draws would have been indistinguishable, and
+  `verify-run` could not fail closed if the draw were edited afterwards. It is a
+  declared input now. It lives in `data/`, not `config/`, because
+  `CONFIG_INPUTS` is asserted to equal `config/*.yaml` exactly and a file
+  dropped there turns the suite red at step 9, mid-regeneration.
 
 ## A7. DONE — emit the standalone diagnostics into the release bundle
 

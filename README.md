@@ -89,7 +89,7 @@ the digest of every config file consulted.
 
 ```bash
 uv sync                                    # create .venv from uv.lock
-.venv/bin/python -m pytest -q              # 911 tests, no network
+.venv/bin/python -m pytest -q              # 913 tests, no network
 .venv/bin/python -m ruff check .
 ```
 
@@ -151,7 +151,7 @@ config/        rules, teams, aliases, gate registration — every value tagged w
 data/raw/      pinned, hashed snapshots (committed)
 docs/          specs, audits, runbooks, weaknesses, plan
 reports/runs/  content-addressed run bundles
-tests/         911 tests; each names the mutation it kills
+tests/         913 tests; each names the mutation it kills
 ```
 
 ## Documentation
