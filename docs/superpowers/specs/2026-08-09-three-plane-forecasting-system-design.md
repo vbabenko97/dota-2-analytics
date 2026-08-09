@@ -2,7 +2,13 @@
 
 **Date:** 2026-08-09
 
-**Status:** Architecture approved; written specification awaiting owner review
+**Review state:**
+
+```yaml
+owner_review: changes_requested
+architecture_direction: approved
+implementation_plan_handoff: blocked
+```
 
 **Scope:** Batch release provenance, longitudinal evaluation, and model-promotion authority
 
@@ -59,6 +65,12 @@ their own runs.
   and never presented as an empirical result or repeated as numeric prose.
 - Register future evaluation and promotion criteria before running the producer
   that measures them.
+- Bind every post-migration candidate, fold forecast, evaluation, promotion,
+  and shipping forecast to the content-addressed implementation actually
+  executed. A clean checkout alone is not implementation identity.
+- Treat an event outcome as development evidence for every candidate cycle
+  designed after that outcome was exposed. Preregistration does not make an
+  already viewed result unseen again.
 - Never overwrite a complete evidence bundle, fixture, forecast, evaluation, or
   promotion record.
 
@@ -167,6 +179,7 @@ data/
     rosters/{evidence_id}/...
     draws/{evidence_id}/...
     patches/{calendar_id}/...
+    source-availability/{evidence_id}/...
   events/{event_id}/
     knowledge/{cutoff_id}/
       event.yaml
@@ -188,13 +201,17 @@ reports/
   evaluations/{evaluation_id}/...
 
 registry/
+  implementations/{record_id}.json
   protocols/{record_id}.json
   candidates/{record_id}.json
   evaluations/{record_id}.json
+  exposures/{record_id}.json
+  proposals/{record_id}.json
   decisions/{record_id}.json
   promotions/{record_id}.json
   forecasts/{record_id}.json
   scores/{record_id}.json
+  corrections/{record_id}.json
 
 config/
   active_model.yaml
@@ -216,10 +233,12 @@ these required fields:
 | `evidence_id` | Stable identifier unique within the evidence kind |
 | `kind` | Registered evidence kind |
 | `event_id` | Event to which the evidence applies, when event-specific |
+| `subject_key` | Canonical identity of the externally observable fact slot: evidence kind, event scope, source namespace, and stable subject locator; it never includes the observed value |
 | `source` | URL key, capture method, established availability time, optional claimed publication time, and retrieval time |
+| `observation` | Exact-schema assertion of `present` or `absent`, observation time, supported-through time, and digest-bound source captures; an inadequate observation may be retained but proves neither assertion |
 | `construction` | `contemporaneous`, `reconstructed_verified`, or `reconstructed_unknown` |
 | `payloads` | Safe relative path and SHA-256 for every payload |
-| `supersedes` | Digests of older evidence records, possibly empty |
+| `supersedes` | Digests of predecessor evidence records for the same `kind` and `subject_key`, possibly empty |
 | `producer_revision` | Actual clean Git revision that produced the record |
 
 `available_at_utc`, `published_at_utc`, and `retrieved_at_utc` are distinct.
@@ -233,7 +252,34 @@ exists; `retrieved_at_utc` records when the owner obtained the bound bytes.
 Evidence construction quality is ordered from strongest to weakest as
 `contemporaneous`, `reconstructed_verified`, then `reconstructed_unknown`.
 When a knowledge bundle combines evidence classes, its `construction` equals
-the weakest class it depends on.
+the weakest class it depends on, including the training-corpus availability
+class defined below.
+
+### Current-at-cutoff selection
+
+Supersession is an acyclic graph within one `(kind, subject_key)`. A record
+cannot supersede another subject. An import that would leave multiple current
+tips must explicitly reconcile and supersede every current tip; a fork is not
+resolved by choosing whichever record is convenient.
+
+For a cutoff, a record is applicable only when its evidence-backed
+`available_at_utc` is at or before the cutoff. Among applicable records,
+knowledge construction selects the unique maximal record in the supersession
+graph. A known descendant available by the cutoff makes its ancestor stale and
+inadmissible. No applicable tip, multiple incomparable tips, a cycle, a missing
+predecessor, a cross-subject edge, or contradictory concurrent records fails
+closed. Reconciliation output identifies the selected tip and every rejected
+record with its reason. A record first available after the cutoff never changes
+which record was current at that cutoff.
+
+A positive assertion requires captured bytes that show the subject was
+published. A negative assertion requires captured bytes from every registered
+authoritative source checked, plus `observed_at_utc` and
+`supported_through_utc`; omission of a field from an unrelated payload is not
+negative evidence. By default a point observation supports absence only at its
+observation time. Extending that support requires a freshness policy registered
+before the knowledge bundle is built. A negative observation is inadmissible
+when the cutoff is later than its supported-through time.
 
 ### Rules evidence
 
@@ -286,11 +332,11 @@ Its manifest has these required fields:
 | `event_id` | Stable event identifier |
 | `cutoff_utc` | Latest admissible information time |
 | `event_start_utc` | Declared first event time and strictly after cutoff |
-| `construction` | Derived from the weakest bound evidence record |
+| `construction` | Derived from the weakest bound external-evidence class and the mapped training-corpus availability class |
 | `payloads` | Digest-bound event, participant, roster, rules, draw-state, filtered training-row, and input files |
 | `evidence` | Path and digest of every referenced evidence manifest |
 | `source_snapshot` | Path and digest of the raw snapshot manifest from which training rows were derived |
-| `training_corpus` | Path, digest, row-schema version, row count, and cutoff of the filtered training artifact |
+| `training_corpus` | Path, digest, row-schema version, row count, cutoff, source-availability basis, availability-witness digest, and latest admissible row-availability time of the filtered training artifact |
 | `producer_revision` | Actual clean Git revision that built the bundle |
 
 The manifest schema does not permit an outcome path, outcome digest, observed
@@ -299,13 +345,21 @@ result, score, evaluation identifier, or promotion decision.
 `draw.yaml` is always a local, digest-bound state payload. It represents groups
 and Round 1 independently with one of these states:
 
-- `published`: external draw fields and a `draw_evidence` reference are
-  required;
-- `unpublished`: external draw fields and `draw_evidence` are forbidden;
-- `unknown`: external draw fields and `draw_evidence` are forbidden, and the
-  uncertainty is disclosed.
+- `published`: external draw fields and the current positive evidence-tip
+  reference are required and must reconcile exactly;
+- `unpublished`: external draw fields are forbidden, while the current negative
+  evidence-tip reference is required and must support absence through the
+  bundle cutoff;
+- `unknown`: external draw fields are forbidden because no adequate current
+  observation exists; attempted observations may be referenced, but this state
+  makes no claim that the draw was unpublished.
 
 `null` is not a valid publication state.
+
+Rules, participant, and roster facts required by an event fixture cannot use
+`unknown`. A final shipping bundle also rejects an `unknown` draw state. A
+retrospective diagnostic may retain it only when the registered protocol
+permits that construction class and the uncertainty is explicit.
 
 The knowledge bundle does not bind the code revision later used to forecast.
 That revision belongs to the forecast manifest so the same factual bundle can
@@ -325,6 +379,28 @@ fitting APIs accept that type and do not accept a raw snapshot path, raw store,
 or unfiltered row sequence. The source snapshot may physically contain later
 maps, especially for reconstructed history; those rows never enter the
 forecast-side artifact or API.
+
+Every training corpus has one source-availability basis:
+
+- `contemporaneous_snapshot`: the exact normalized row bytes occur in a
+  snapshot retrieved at or before the forecast cutoff;
+- `first_seen_verified`: an immutable history of snapshot manifests proves the
+  first appearance of every exact normalized row at or before the cutoff;
+- `completion_time_only`: map completion is known, but source availability at
+  the historical cutoff is not.
+
+The training-corpus manifest binds the source snapshot retrieval time, the
+first-seen index digest when used, a deterministic row-to-availability-witness
+mapping, and `latest_admissible_row_available_at_utc`. A later correction to a
+row is a different byte sequence and cannot inherit the earlier row's
+availability witness.
+
+`contemporaneous_snapshot` maps to `contemporaneous` construction and
+`first_seen_verified` maps to `reconstructed_verified` unless weaker external
+evidence determines the bundle class. `completion_time_only` maps to
+`reconstructed_unknown`; it is diagnostic-only and ineligible for promotion
+evidence unless a protocol registered before evaluation explicitly permits and
+justifies it. The bundle's overall construction class includes this mapping.
 
 ## Outcome bundles
 
@@ -356,10 +432,13 @@ identifier and a correction record explaining the supersession.
 
 All timestamps use RFC 3339 UTC form. The following comparisons are normative:
 
-- A source fact is admissible when its evidence-backed `available_at_utc` is at
-  or before `cutoff_utc`.
-- A training map is admissible only when it exists in the bound training
-  snapshot and `start_time + duration` is at or before `cutoff_utc`.
+- A source fact is admissible only when it belongs to the unique current
+  evidence tip for its subject and its evidence-backed `available_at_utc` is at
+  or before `cutoff_utc`. A negative fact must additionally support absence
+  through the cutoff.
+- A training map is admissible only when it belongs to the materialized bound
+  training corpus, `start_time + duration` is at or before `cutoff_utc`, and its
+  source availability satisfies that corpus's registered basis.
 - `cutoff_utc` is strictly before `event_start_utc`.
 - An outcome is admissible to scoring only when `available_at_utc` is strictly
   after the forecast's cutoff.
@@ -368,11 +447,15 @@ All timestamps use RFC 3339 UTC form. The following comparisons are normative:
 The new longitudinal evaluator uses match completion time. Existing frozen
 gates and their historical cutoff semantics are not modified.
 
-A retrospectively retrieved source may support a reconstructed fixture only
-when its availability basis is recorded. If pre-cutoff publication cannot be
-established, its construction is `reconstructed_unknown`. Such a fixture may
-support diagnostics but is ineligible for promotion evidence unless a future
-registered protocol explicitly permits and justifies that evidence class.
+A retrospectively retrieved external source may support a reconstructed
+fixture only when its fact availability is established by evidence. A later
+training snapshot may support historical rows only through
+`first_seen_verified`; filtering that snapshot by match completion alone is
+`completion_time_only`, not point-in-time reconstruction. If pre-cutoff fact or
+row availability cannot be established, construction is
+`reconstructed_unknown`. Such a fixture may support diagnostics but is
+ineligible for promotion evidence unless a future registered protocol
+explicitly permits and justifies that evidence class.
 
 Promotion eligibility is derived by validators from manifests and the
 registered evaluation protocol. It is not an author-controlled fixture flag.
@@ -382,12 +465,14 @@ registered evaluation protocol. It is not an author-controlled fixture flag.
 Manifests form a directed lineage:
 
 ```text
-forecast -> knowledge
+candidate -> implementation + evaluation protocol
+forecast -> knowledge + implementation
 score -> forecast + outcome
-evaluation -> fold forecasts + fold scores + candidate + evaluation protocol
-decision -> proposal + candidate + evaluation + incumbent
-promotion -> committed decision + approval revision
-active model -> promoted promotion record
+evaluation -> fold forecasts + fold scores + candidate + implementation
+              + evaluation protocol + exposure records
+decision -> proposal + candidate + implementation + evaluation + incumbent
+promotion -> committed decision + implementation + approval revision
+active model -> promoted promotion record + implementation
 ```
 
 Knowledge never references outcomes. Outcomes never reference knowledge.
@@ -407,6 +492,8 @@ A shipping forecast manifest binds:
 - the knowledge-manifest path and digest;
 - actual `HEAD` at generation time;
 - a clean tracked and untracked worktree precondition;
+- the implementation record executed and a successful implementation
+  preflight certificate;
 - the active-model pointer and promotion digest, or the frozen TI 2026 gate
   artifact during the migration period;
 - every configuration and raw-snapshot input;
@@ -418,10 +505,11 @@ affect output must instead be an explicitly hashed input.
 ### Research fold forecast
 
 A research fold forecast binds the same factual inputs but references a
-registered candidate rather than the active-model pointer. It lives under an
-evaluation bundle and cannot be appended to the published-forecast registry.
-Its manifest declares `forecast_kind: research_fold`; a published forecast
-declares `forecast_kind: published`.
+registered candidate and its implementation rather than the active-model
+pointer. It lives under an evaluation bundle and cannot be appended to the
+published-forecast registry. Its manifest declares
+`forecast_kind: research_fold`; a published forecast declares
+`forecast_kind: published`.
 
 ### Score artifact
 
@@ -433,7 +521,13 @@ forecast.
 Two thin command boundaries call the same pure scorer. `cli_score_forecast`
 accepts only `forecast_kind: published` and appends a published score registry
 entry. `cli_score_fold` accepts only `forecast_kind: research_fold` and writes
-inside its evaluation bundle. Each rejects the other forecast kind.
+inside its evaluation bundle. Before the fold scorer can load any outcome
+payload, it requires an `opened` exposure record that binds the fold, candidate,
+implementation, protocol, event, and exact outcome-manifest digest. It has no
+authority to create that opening. The exposure guard may read and hash the
+outcome manifest to create or validate the opening, but it does not return any
+outcome payload until the record is durably published. Each scorer rejects the
+other forecast kind.
 
 ### Rolling-origin evaluation
 
@@ -444,7 +538,8 @@ Fixtures are ordered by event start. For target event `t`, the runner:
 3. fits all candidate parameters and calibration on the training side;
 4. emits and persists the target fold forecast;
 5. closes the forecast phase;
-6. loads the target outcome through the scoring boundary;
+6. records the exposure transition before loading the target outcome through
+   the scoring boundary;
 7. emits the fold score;
 8. moves to the next event.
 
@@ -456,6 +551,64 @@ arbitrary scale.
 Cross-event conclusions report every event delta and an event-level aggregate.
 Map or series rows within one event are not represented as independent events.
 
+## Evaluation exposure and promotion evidence
+
+Point-in-time folds prevent target leakage inside one evaluation. They do not
+make an outcome reusable as fresh promotion evidence after its results have
+influenced later candidate design. An append-only exposure ledger therefore
+classifies each event for each registered candidate cycle:
+
+- `development`: the result was already visible to the candidate author or was
+  previously used for model, feature, search-space, protocol, or diagnostic
+  design; it remains reportable but cannot satisfy that cycle's promotion
+  criteria;
+- `promotion_lockbox`: the outcome is held behind an access boundary until a
+  protocol and either one candidate or a finite candidate family have been
+  registered for a one-time opening;
+- `prospective`: candidate, implementation, protocol, knowledge cutoff, and
+  forecast were registered before the outcome became available.
+
+Exposure roles only weaken. A record cannot upgrade `development` to a
+promotion-eligible role. A prospective result may support the exact frozen
+candidate and protocol for which it was reserved; after opening, it is
+development evidence for every candidate cycle authored later. Existing event
+results already visible in repository history migrate as `development`.
+Development outcomes may remain on the training side of later folds and in
+diagnostic reports; the restriction is that their target-event scores cannot
+serve as fresh promotion evidence for an adaptively designed candidate.
+
+Exposure records form a predecessor chain with the states `reserved`, `opened`,
+`consumed`, and `invalidated`. A reservation binds the event, candidate or
+finite candidate family, implementation IDs, protocol, intended evidence role,
+knowledge digest, and registered query or comparison budget. Immediately before
+any outcome loader can return content, the evaluator exclusive-creates the
+`opened` record binding the actual outcome digest. A crash after that write
+conservatively counts as exposure. Completion appends `consumed`; a provenance
+or access violation appends `invalidated`. Missing predecessors, parallel tips,
+budget overruns, opening before reservation, and opening an already consumed
+lockbox fail closed.
+
+An exact retry may resume the already opened evaluation for the same fixed
+candidate family, implementation set, protocol, and output identities without
+spending another query. It may not change a metric, candidate, output path, or
+query after opening. The opened event is already consumed for every later
+candidate cycle whether that retry succeeds or fails.
+
+The default promotion path is prospective evidence. Optional alternatives must
+be fixed in the evaluation protocol before any outcome is opened:
+
+- a previously sealed lockbox behind an access boundary separate from the
+  research checkout;
+- a finite candidate family registered before one atomic lockbox opening, with
+  its multiplicity treatment;
+- a registered reusable-holdout or sequential-testing method with its explicit
+  query budget and validity calculation.
+
+Running another command against the same outcome is not a reusable-holdout
+method. `cli_promote` derives eligibility from the exposure chain and refuses a
+proposal whose required evidence is development-only, consumed outside its
+registered family, over budget, or missing a valid reservation and opening.
+
 ## Evaluation domains and readiness
 
 The system exposes three evaluation domains and four metric sets.
@@ -465,7 +618,7 @@ The system exposes three evaluation domains and four metric sets.
 | Predictive model | Map probabilities | Valid knowledge, outcome, and cutoff reconciliation |
 | Predictive model | Series probabilities | Map readiness plus strict series integrity |
 | Tournament distribution | Records, categories, advancement, elimination | Series readiness plus simulation convergence |
-| Card decision | Card hits, ladder comparison, assignment stability, realized regret | Tournament readiness plus valid fixed-capacity assignment |
+| Card decision | Card hits, ladder comparison, and assignment stability | Tournament readiness plus valid fixed-capacity assignment |
 
 Reports have explicit readiness state. A completed diagnostic states
 `shipping_effect: none`. A blocked report contains stable blocker codes and no
@@ -489,8 +642,11 @@ report distributional coverage and simulation readiness. No simulated expected
 card objective is presented as observed evaluation.
 
 Card-decision reports emit realized hits, the paired difference from the naive
-strength ladder, realized regret among admissible fixed-capacity cards,
-assignment stability, and whether simulation changed any ladder assignment.
+strength ladder, assignment stability, and whether simulation changed any
+ladder assignment. They do not emit realized regret under ordinary hit-count
+loss because, with fixed category capacities, that value is only a restatement
+of realized hits. A future nonredundant regret field requires a different loss
+or comparator registered before evaluation.
 
 Registered comparisons include:
 
@@ -535,15 +691,20 @@ exclusion. It never turns a missing identifier into a silent one-map series.
 ## Simulation convergence contract
 
 Candidate comparisons use common random numbers for draw, pairing, map, and
-choice-policy streams. Stream identifiers and the simulation plan are
-manifest-bound.
+choice-policy streams whenever both mechanisms admit the same candidate-neutral
+coupling. The coupling specification and stream identifiers are manifest-bound;
+candidate-specific thresholds or stopping choices are not inputs to its random
+keys.
 
 Simulation runs in independent batches. A registered plan fixes:
 
 - estimands for category marginals, card objectives, objective gaps, and
   boundary-team differences;
-- independent-batch construction and the batch-mean uncertainty estimator;
-- confidence method and confidence level;
+- independent-batch construction and the estimator for each estimand or paired
+  candidate difference;
+- one stopping-valid sequential uncertainty method and its assumptions;
+- the simultaneous-coverage family across estimands, teams, cards, candidates,
+  and checkpoint looks, plus its registered error budget;
 - batch size, checkpoint schedule, consecutive-stability requirement, and
   maximum work;
 - every threshold with its unit and inclusive or exclusive comparison;
@@ -552,17 +713,40 @@ Simulation runs in independent batches. A registered plan fixes:
   choice-policy randomness;
 - tie behavior and near-optimal-card tolerance.
 
-The simulator stops only when the plan's deterministic Boolean condition holds
-or the maximum work is reached. Reaching the maximum without satisfying that
-condition emits `converged: false`; tournament and card evaluation remain
-blocked. A fixed simulation count is not itself evidence of convergence.
+Every uncertainty statement used by the stopping condition must retain its
+registered coverage under the checkpoint schedule and the stopping rule. The
+plan permits exactly these method classes:
 
-Paired candidate comparison requires identical simulation-plan digest and
-random-stream specification digest. A mismatch is invalid rather than an
-unpaired fallback.
+- a time-uniform confidence sequence valid at arbitrary registered stopping
+  times;
+- alpha spending or another familywise-valid correction over a finite,
+  preregistered checkpoint schedule;
+- an independent two-stage design in which a pilot chooses the final fixed
+  simulation count and a fresh final run supplies the authoritative estimate.
+
+Ordinary fixed-sample confidence intervals recomputed at repeated checkpoints
+are invalid for adaptive stopping. A convergence artifact records the method,
+formula or algorithm version, assumptions, checkpoint history, simultaneous
+coverage scope, spent error budget where applicable, exact decision trace, and
+final bounds so a verifier can reproduce the Boolean result.
+
+For a paired comparison, batch summaries include paired differences produced by
+the same coupling digest and streams. The candidate plans may differ elsewhere;
+requiring their entire plan digests to match would incorrectly forbid the
+comparison. If mechanisms cannot share the registered coupling, the protocol
+must preregister a valid unpaired comparison rather than silently falling back.
+
+The simulator stops only when the registered stopping-valid condition holds or
+maximum work is reached. Reaching maximum work first emits the valid state
+`not_converged_max_work`; dependent tournament and card reports are blocked
+with stable reason codes and no numeric results. Invalid uncertainty schemas,
+stream mismatches, or runtime faults are operational failures and do not emit a
+partial convergence result. A fixed simulation count is not itself evidence of
+convergence.
 
 Evaluation artifacts retain batch summaries, assignment stability, boundary
-teams, and every card inside the registered near-optimal tolerance.
+teams, every card inside the registered near-optimal tolerance, and the complete
+convergence certificate.
 
 ## Candidate and promotion registry
 
@@ -587,13 +771,96 @@ kind-specific exact schema, and then validates predecessor or artifact
 references. Records may point to predecessor record IDs to form an auditable
 chain; no mutable registry database is introduced.
 
+### Implementation registration
+
+An implementation record identifies the executable behavior separately from
+the candidate's authored statistical specification. Its registry record ID is
+the `implementation_id` and its exact-schema payload binds:
+
+- the clean source revision at registration;
+- an executable entry point such as a candidate factory module and callable;
+- a canonical source closure containing every tracked file under `src/ti26`,
+  plus `pyproject.toml` and `uv.lock`, represented by sorted path, file mode,
+  byte digest, and one digest of the complete list;
+- the exact dependency-lock path and byte digest;
+- a canonical runtime closure containing the exact Python executable, standard
+  library, installed distribution files, extension modules, and native
+  libraries available to the process, represented by sorted logical path, file
+  mode, byte digest, and one digest of the complete list; an immutable archive
+  or image digest may additionally bind how that closure is materialized, but
+  package names and versions alone are never authoritative;
+- the Python implementation, version, ABI, normalized installed distribution
+  set, and exact host platform constraints used by the authoritative run;
+- a scrubbed process-environment contract covering executable path, import
+  path, locale, timezone, hash seed, numerical-library thread settings, and
+  every environment value permitted to affect output;
+- a digest-bound deterministic conformance fixture and the expected output
+  digest produced through the registered entry point.
+
+Repository-local executable code outside the sealed source closure and runtime
+bytes outside the sealed runtime closure are forbidden. Non-code files may
+affect output only as explicit digest-bound forecast inputs. The process must
+execute the registered Python bytes and starts from the registered scrubbed
+environment. It rejects an undeclared repository-local import, dynamic code
+load, executable child, runtime library, input-file access, or output-affecting
+environment read. This enforcement lets a documentation-only commit change
+`HEAD` without changing implementation identity while preventing an unsealed
+helper module, package, interpreter, or native library from changing behavior.
+
+The source closure is the executable artifact because this repository currently
+runs the editable source tree with `.venv/bin/python`. Building a wheel and then
+executing different source bytes would certify the wrong artifact. If shipping
+later executes an installed wheel, a new implementation schema must bind that
+exact wheel and shipping must execute it; the record never substitutes an
+unused build artifact for the code actually run.
+
+`cli_implementation_register` requires a clean checkout, computes the source
+and runtime-closure fingerprints, captures the environment contract, runs the
+conformance fixture, and exclusive-creates the implementation record.
+Conformance is a drift detector, not a substitute for source, lock, and runtime
+identity.
+
+Each authoritative evaluation record contains exactly one candidate and one
+implementation ID, and every fold forecast and fold score repeats that binding.
+An incumbent comparison is a reference to a separate immutable evaluation
+record. When a lockbox or prospective cohort compares a finite candidate
+family, all candidate fold forecasts are persisted before the cohort outcome is
+opened; scoring then creates one evaluation record per implementation. The
+proposal pairs those records rather than allowing one evaluation identity to
+hide multiple executable versions.
+
+Research and shipping implementation preflight recompute the source closure,
+lock digest, runtime closure, host constraints, scrubbed-environment
+fingerprints, import and file-access boundary, and conformance output before the
+registered entry point is invoked or any final bundle is written. The current
+clean `HEAD` is recorded and may differ from the implementation's registration
+revision only when the sealed executable closure is byte-identical. Any source,
+dependency, interpreter, installed-file, native-library, host, environment,
+entry-point, access-boundary, or conformance mismatch fails closed. Candidate
+registration applies the same identity check. A later shared-code or runtime
+change therefore cannot change evaluated or shipping behavior without a newly
+registered and evaluated implementation, decision, promotion, and active
+pointer.
+
 ### Evaluation protocol registration
 
 One protocol record is authoritative for required folds and fixture evidence
 classes; metrics and aggregation; promotion thresholds; the catastrophic-
-regression rule; and the series-integrity and simulation-convergence plans. It
-is registered before candidate evaluation. Candidates reference its record ID
-and cannot repeat or override protocol-owned criteria.
+regression rule; exposure roles, allowed reuse method, comparison or query
+budget, and multiplicity treatment; and the series-integrity and
+simulation-convergence plans. It is registered before candidate evaluation.
+Candidates reference its record ID and cannot repeat or override protocol-owned
+criteria.
+
+A reusable-holdout or sequential-testing method is not a free-text claim. Its
+protocol field references a supported, versioned method schema and validator
+that fixes assumptions, permitted queries, budget accounting, multiplicity or
+sequential correction, and the eligibility calculation. Protocol registration
+rejects an unsupported method or an unverifiable validity condition; evaluation
+emits a machine-checkable budget certificate, and promotion independently
+recomputes it. Until such a method is implemented and registered, adaptive
+reuse is development-only and the only promotion-eligible paths are prospective
+evidence or a finite family fixed before a one-time valid lockbox opening.
 
 Protocol, candidate, and decision registration commands read an authored file
 tracked at a clean `HEAD`. The resulting record binds that authoring path,
@@ -608,6 +875,7 @@ numeric prose.
 
 A candidate record fixes before evaluation:
 
+- implementation record ID;
 - model components and feature set;
 - training and temporal protocol;
 - calibration procedure;
@@ -621,9 +889,10 @@ duplicate protocol-owned criteria.
 
 ### Promotion proposal
 
-Research emits a proposal that binds the candidate, incumbent, evaluation,
-event fixtures, and measured reports. It has no shipping authority and cannot
-update `active_model.yaml`.
+Research emits a proposal that binds the candidate, implementation, incumbent,
+single-implementation evaluation records, exposure records, event fixtures,
+and measured reports. It has no shipping authority and cannot update
+`active_model.yaml`.
 
 ### Promotion transaction
 
@@ -637,10 +906,17 @@ approval revision and verifies:
 
 - current `HEAD` equals the approval revision;
 - an explicitly `promoted` committed decision;
+- candidate, proposal, decision, and evaluation records binding the same
+  implementation ID;
+- source closure, dependency lock, runtime, scrubbed environment, access
+  boundary, entry point, and conformance output matching that implementation
+  record;
 - candidate registration before evaluation;
 - exact evaluation-protocol identity and digest;
 - complete eligible fold set;
 - ready prerequisite reports;
+- promotion-eligible exposure chains and an unexceeded registered query or
+  comparison budget;
 - criteria from the bound evaluation protocol;
 - absence of diagnostic or blocked evidence;
 - an effective event after every evaluated event.
@@ -672,10 +948,16 @@ activation commit. Shipping accepts them only when both exact files are tracked
 at the current clean `HEAD`. Until that commit exists, the dirty tree is
 non-shippable. The command never rewrites an existing promotion record.
 
-`active_model.yaml` binds the candidate record ID, promotion record ID, and
-first effective event. Record IDs are already content digests; no parallel
-mutable alias or duplicate digest field exists. Shipping rejects a pointer whose
-promotion is missing, malformed, or not yet effective.
+`active_model.yaml` binds the candidate record ID, implementation record ID,
+promotion record ID, and first effective event. Record IDs are already content
+digests; no parallel mutable alias or duplicate digest field exists. Shipping
+rejects a pointer whose promotion is missing, malformed, not yet effective, or
+does not bind the same implementation through candidate, evaluation, decision,
+and promotion.
+
+The existing frozen TI 2026 gate lineage remains the explicit migration
+exception. It is not retrospectively relabelled as an implementation record,
+and no future candidate may use that exception.
 
 Current D2, D3, D3b, D4, optimiser objectives, blocked diagnostics, and
 unregistered reports cannot independently satisfy this future promotion
@@ -686,18 +968,20 @@ protocol.
 | Command | Reads | Writes | Forbidden capability |
 |---|---|---|---|
 | `cli_evidence_import` | Owner-supplied local capture and metadata | New evidence record | Network access |
-| `cli_fixture_knowledge` | Evidence and source snapshot manifest | New knowledge bundle | Reading outcomes or exposing unfiltered rows |
+| `cli_fixture_knowledge` | Current-at-cutoff evidence tips, source snapshot manifest, and availability witnesses | New knowledge bundle | Reading outcomes or exposing unfiltered or availability-unknown rows as promotion-eligible |
 | `cli_fixture_outcome` | Post-event result snapshot plus availability and event-identity evidence | New outcome bundle | Mutating knowledge |
-| `cli_release` | Knowledge, active model or frozen TI 2026 lineage | Run bundle and published forecast entry | Accepting arbitrary candidates or outcomes |
+| `cli_implementation_register` | Clean executable source closure, lock, scrubbed runtime environment, access policy, and conformance fixture | New implementation record | Reading candidate measurements or outcomes |
+| `cli_release` | Knowledge, active model and implementation, or frozen TI 2026 lineage | Run bundle and published forecast entry | Accepting arbitrary candidates or outcomes |
 | `cli_score_forecast` | Published forecast and outcome | New score entry | Rewriting forecast |
-| `cli_score_fold` | Research fold forecast and outcome | Fold score inside evaluation | Publishing forecast or score |
+| `cli_score_fold` | Research fold forecast, opened exposure record, and bound outcome | Fold score inside evaluation | Publishing forecast or score; creating an opening or loading outcome payload before one exists |
 | `cli_protocol_register` | Authored protocol | New protocol record | Reading candidate measurements |
-| `cli_candidate_register` | Authored registered specification | New candidate record | Reading measured candidate results |
-| `cli_evaluate` | Candidate, protocol, chronological fixtures | Evaluation bundle and proposal | Writing promotion or active pointer |
+| `cli_candidate_register` | Authored registered specification and implementation record | New candidate record | Reading measured candidate results |
+| `cli_exposure_register` | Authored event role, candidate family, protocol, and budget | New exposure reservation | Reading outcome content or digest |
+| `cli_evaluate` | Candidate, implementation, protocol, exposure reservation, and chronological fixtures | Exposure transitions, evaluation bundle, and proposal | Writing promotion or active pointer; loading an outcome before recording its opening |
 | `cli_series_integrity` | Event result maps | Integrity report | Inferring unregistered series identities |
 | `cli_simulation_convergence` | Registered simulation plan | Convergence report | Changing shipping card |
 | `cli_decision_register` | Owner-authored decision, proposal, and evaluation | New decision record | Updating active model |
-| `cli_promote` | Committed decision and registered evaluation evidence | Promotion record and active pointer | Fitting, scoring, choosing metrics, or choosing the decision |
+| `cli_promote` | Committed decision, implementation, exposure chain, and registered evaluation evidence | Promotion record and active pointer | Fitting, scoring, choosing metrics, or choosing the decision |
 
 The implementation enforces authority through narrow function signatures,
 separate loaders for knowledge and outcomes, and import-boundary tests. It does
@@ -767,7 +1051,9 @@ job may provide earlier warning but does not replace release verification.
 Implementation order is:
 
 ```text
-register future evaluation and promotion protocol
+implementation, protocol, and exposure schemas
+                         |
+        register future evaluation and promotion protocol
                          |
                  fixture schemas
                   /            \
@@ -801,11 +1087,14 @@ uncertainty, and assignment boundary where the data supports that grouping.
 Small cells are shown rather than interpreted as stable effects.
 
 An error-analysis finding cannot change an existing candidate. It becomes an
-authored hypothesis in a new candidate registration that references an
-already registered evaluation protocol. A changed temporal protocol or
-promotion criterion requires a new protocol record before the candidate is
-evaluated. Forecast, outcome, score, and decision records remain unchanged.
-This is the only path from an observed failure to a model change.
+authored hypothesis in a new candidate registration. Every event whose outcome
+informed that hypothesis is `development` for the new cycle, even when the new
+candidate references an unchanged protocol. Those events remain in diagnostic
+reports but cannot satisfy the new candidate's promotion threshold. A changed
+temporal protocol or promotion criterion requires a new protocol record before
+the candidate is evaluated. Forecast, outcome, score, exposure, and decision
+records remain unchanged. This is the only path from an observed failure to a
+model change; fresh promotion evidence follows the exposure policy above.
 
 ## Statistical corrections carried into the roadmap
 
@@ -881,6 +1170,40 @@ inspected. Outcome creation and scoring append new artifacts. A bad derivation
 or source correction creates a new bundle and correction record; it never edits
 the prior result.
 
+### Multi-artifact transaction contract
+
+Every command that publishes both a durable artifact and a registry or lineage
+record implements one deterministic, idempotent transaction. From immutable
+inputs it derives the final artifact identifier, final path, canonical manifest
+bytes, link-record identifier and bytes, and fixed temporary path before
+publishing either durable object. Its verifier recognizes only these states:
+
+- `fresh`: neither final object nor temporary object exists;
+- `prepared`: only the exact expected temporary artifact exists;
+- `artifact_published`: the complete artifact and final manifest match expected
+  bytes, while the link record is absent;
+- `complete`: artifact and link record both match expected bytes and no
+  temporary object remains.
+
+The command validates all temporary and final bytes before transition,
+publishes the complete artifact first, and exclusive-creates the link record
+last. Retry resumes `prepared` or `artifact_published` and treats `complete` as
+idempotent success. A link without its artifact, unexpected path, extra partial
+file, duplicate registry tip, or any byte mismatch is a conflict requiring
+owner recovery; the command neither overwrites nor guesses which object wins.
+An artifact directory becomes published only when its manifest is written last
+or it is atomically renamed from the fixed temporary path.
+
+This contract applies at least to:
+
+- release run bundle plus published-forecast registry entry;
+- published score artifact plus score registry entry;
+- single-implementation evaluation bundle plus proposal record;
+- replacement outcome bundle plus its correction or supersession record.
+
+The promotion transaction retains its stricter Git-visible state machine. The
+generic contract does not make an uncommitted active-pointer change shippable.
+
 Git and committed raw/evidence payloads are the backup and recovery boundary.
 An incomplete generated run can be regenerated from its manifest-owned inputs.
 Loss of an uncommitted external capture cannot be reconstructed honestly and
@@ -896,11 +1219,14 @@ diagnostic reports, not a new notification service.
 | Risk | Mitigation |
 |---|---|
 | Rules or draw source changes near lock | Fresh rendered capture, supersession chain, exact reconciliation, and stop-before-write release behavior |
-| Retrospective fixture silently uses later knowledge | Separate publication and retrieval times, construction classes, target-outcome isolation, and promotion eligibility derived from protocol |
+| Retrospective fixture silently uses later or stale knowledge | Unique current-at-cutoff evidence tips, evidence-backed negative observations, row source-availability classes, target-outcome isolation, and promotion eligibility derived from protocol |
 | Few premium events create false certainty | Event-level deltas, event-level aggregation, explicit evidence class, and no automatic promotion |
+| Repeated candidate cycles overfit visible events | Append-only exposure ledger; visible outcomes become development evidence; prospective evidence is the default promotion path |
 | Bad source series identifiers contaminate series claims | Strict integrity report before scoring; inferred identifiers remain separate and opt-in |
-| Monte Carlo noise changes assignments | Registered batch convergence, common random numbers, stability checks, and blocked downstream reports |
-| Research result changes shipping state | Dedicated promotion command, import boundary, exclusive records, and active-pointer byte-invariance tests |
+| Adaptive Monte Carlo stopping understates uncertainty | Stopping-valid sequential uncertainty, registered simultaneous-coverage family, common random numbers, and blocked downstream reports |
+| Shared-code change bypasses promotion | Content-addressed source closure, dependency and runtime identity, conformance output, and end-to-end implementation binding |
+| Research result changes shipping state | Dedicated promotion command, exposure and import boundaries, exclusive records, and active-pointer byte-invariance tests |
+| Crash leaves an artifact without its registry link | Deterministic multi-artifact states and idempotent artifact-first repair |
 | Local Git history is rewritten | State the limitation; do not claim externally anchored immutability |
 | Deadline pressure invites a model change | Pre-TI slice forbids predictive changes and preserves frozen gate lineage |
 
@@ -916,20 +1242,44 @@ Required fail-closed coverage includes:
 
 - dirty checkout and supplied-revision mismatch before ingest or bundle writes;
 - rules, field, roster, or draw mismatch before persistent writes;
+- stale, forked, cyclic, cross-subject, or contradictory supersession graphs;
+- `unpublished` draw claims without negative evidence valid through cutoff;
 - knowledge schemas rejecting outcome paths and outcome-shaped fields;
 - forecasting with the outcomes tree physically absent;
 - training rows completing after cutoff;
+- training rows lacking the witness required by their source-availability basis,
+  and corrected bytes attempting to inherit an earlier witness;
 - target-outcome access during forecast construction;
 - fold-local candidate fitting and calibration;
+- implementation changes to source closure, dependency lock, entry point,
+  interpreter bytes, installed files, native libraries, host constraints,
+  scrubbed environment, access boundary, or conformance output without a new
+  implementation record;
+- an undeclared repository-local import, dynamic code load, executable child,
+  file input, or output-affecting environment read;
+- fold, evaluation, proposal, decision, promotion, and active-pointer
+  implementation-ID disagreement;
+- outcome loading before an exposure opening is persisted;
+- a viewed event being upgraded from development evidence or reused outside its
+  candidate family or registered query budget;
+- an unsupported or unverifiable reusable-holdout method being treated as
+  promotion-eligible;
+- interruption after exposure opening remaining conservatively exposed;
 - outcome availability and event-identity mismatch;
 - malformed, reused, null, tied, or overlong series;
-- common-random-number stream mismatch;
-- convergence failure blocking tournament and card results;
+- common-random-number coupling or stream mismatch;
+- an ordinary repeatedly inspected fixed-sample interval being rejected as an
+  adaptive stopping method;
+- a malformed sequential certificate or convergence failure blocking
+  tournament and card results;
 - blocked reports containing no numeric results;
 - diagnostic evidence being rejected by promotion;
 - research evaluation leaving the active pointer byte-identical;
 - scoring leaving the published forecast byte-identical;
 - registry overwrite attempts;
+- retry and conflict behavior for every registered multi-artifact transaction
+  state, including artifact-without-link repair and link-without-artifact
+  rejection;
 - interrupted promotion resuming only from each exact registered state;
 - promotion recovery rejecting staged, unrelated, or byte-mismatched changes;
 - active pointers to missing, malformed, or future promotions, or to a
@@ -953,12 +1303,15 @@ provenance. It may not claim stronger prediction quality.
 
 After the evaluation-spine slice, it may claim that candidates are compared by
 a manifest-bound rolling-origin procedure, qualified by each fixture's evidence
-class and the number of independent events. It may not claim a candidate is
-better merely because a pooled average is favorable.
+and source-availability classes, exposure role, and the number of independent
+events. It may not claim a candidate is better merely because a pooled average
+is favorable or because a repeatedly reused development event crosses a
+threshold.
 
 After an explicit promotion, it may claim that the shipping incumbent changed
-through the registered, auditable transaction. Research output alone never
-changes that claim.
+through the registered, auditable transaction and executes the same sealed
+implementation that earned promotion. Research output alone never changes that
+claim.
 
 The naive strength ladder remains the card-decision incumbent until registered
 held-out evidence shows a promoted simulation pipeline improves that decision
@@ -968,11 +1321,17 @@ without receiving decision-value credit.
 ## Glossary
 
 - **Evidence record:** manifest-bound capture of externally sourced facts.
+- **Current evidence tip:** unique maximal applicable record for one subject at
+  a cutoff after validating the full supersession graph.
 - **Knowledge bundle:** complete input facts admissible at one forecast cutoff.
 - **Outcome bundle:** post-event results and producer-derived truth with its own
   manifest.
 - **Candidate:** preregistered complete predictive pipeline, including
   calibration and temporal fitting.
+- **Implementation record:** content-addressed identity of executable source,
+  dependency lock, runtime, entry point, and conformance output.
+- **Exposure record:** append-only reservation, opening, consumption, or
+  invalidation of an event outcome for a registered candidate cycle.
 - **Incumbent:** model version currently authorized for future shipping runs.
 - **Promotion proposal:** research output with no shipping authority.
 - **Decision record:** explicit owner decision binding a proposal and its
@@ -983,6 +1342,25 @@ without receiving decision-value credit.
 - **Diagnostic:** valid measurement with `shipping_effect: none`.
 - **Blocked report:** valid declaration that a registered prerequisite was not
   satisfied; it contains no numeric results.
+- **Convergence certificate:** reproducible evidence that a stopping-valid
+  sequential uncertainty method satisfied or failed its registered rule.
+
+## Design references
+
+These references motivate the boundary contracts; they do not introduce their
+platforms as repository dependencies.
+
+- [SLSA build provenance](https://slsa.dev/spec/v1.2/build-provenance) for
+  binding source identity, resolved dependencies, and the produced artifact.
+- [uv project lockfile](https://docs.astral.sh/uv/concepts/projects/layout/)
+  for the repository's existing exact, cross-platform dependency resolution.
+- [The reusable holdout](https://doi.org/10.1126/science.aaa9375) for the risk of
+  adaptive reuse of measured holdout outcomes.
+- [Feast point-in-time joins](https://docs.feast.dev/getting-started/concepts/point-in-time-joins)
+  for distinguishing event time from source availability in historical data.
+- [Time-uniform confidence sequences](https://doi.org/10.1214/20-AOS1991) for
+  uncertainty guarantees that remain valid under repeated inspection and
+  stopping.
 
 ## Related repository documents
 
