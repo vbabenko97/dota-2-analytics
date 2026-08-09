@@ -89,7 +89,7 @@ the digest of every config file consulted.
 
 ```bash
 uv sync                                    # create .venv from uv.lock
-.venv/bin/python -m pytest -q              # 906 tests, no network
+.venv/bin/python -m pytest -q              # 911 tests, no network
 .venv/bin/python -m ruff check .
 ```
 
@@ -129,7 +129,7 @@ bundle, never retried with different arguments.
 | `cli_ladder_check` | What does the simulation add over sorting by strength? |
 | `cli_schedule_sensitivity` | How much does the pairing rule move the card? |
 | `cli_release` | Run every producer into one manifest-bound bundle |
-| `cli_provenance` | Verify a bundle; generate snapshot manifests |
+| `cli_provenance` | Verify a bundle; diff two cards; generate snapshot manifests |
 | `cli_rung3` | Fallback strength source (public ratings) |
 
 Diagnostics cannot promote, demote or alter the shipping card. Only registered
@@ -151,7 +151,7 @@ config/        rules, teams, aliases, gate registration — every value tagged w
 data/raw/      pinned, hashed snapshots (committed)
 docs/          specs, audits, runbooks, weaknesses, plan
 reports/runs/  content-addressed run bundles
-tests/         906 tests; each names the mutation it kills
+tests/         911 tests; each names the mutation it kills
 ```
 
 ## Documentation

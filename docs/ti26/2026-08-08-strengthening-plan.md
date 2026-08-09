@@ -474,15 +474,43 @@ registration discipline carries the weight that an experiment would carry
 elsewhere, and why B7's append-only post-event record is the closest available
 substitute.
 
-**Fallback strategy: exists and is documented.** If the fitted model cannot ship
-— gate failure, roster resolution failure, unusable snapshot — the registered
-fallback is rung 3: OpenDota's public `team_rating` table piped into the same
-simulator via `cli_rung3`, with a `team,strength` CSV and
-`python -m ti26.cli --strengths <file>`. `cli_d2` already refuses to
-silently substitute a different model on a failed gate. The gap is that this
-path is exercised by tests but has never been run end-to-end under time
-pressure; **rehearsing it once, before the lock, is worth an hour** and is not
-in Part A only because it competes with A1-A5 for the same days.
+**Fallback strategy: exists, documented, and now REHEARSED.** If the fitted
+model cannot ship — roster resolution failure, unusable snapshot, a producer
+that cannot run — the registered fallback is rung 3: OpenDota's public
+`team_rating` table piped into the same simulator via `cli_rung3`, with a
+`team,strength` CSV and `python -m ti26.cli --strengths <file>`.
+
+Rehearsed end to end on 2026-08-09, which changed four things:
+
+- **A failing gate is not a trigger, and the old wording implied it was.** D2 and
+  D3 already fail; that is recorded evidence and the card ships from calibrated
+  Glicko regardless. `cli_d2` refuses to silently substitute a different model,
+  which is a different guarantee from "a failed gate sends you to rung 3".
+- **Rung 3 needs the network, through the same seam as the ingest, and the store
+  too** — for the Elo anchor and the observed-form diagnostic. Both of the
+  conditions that would send you here can therefore also disable it. It now
+  fails with the command that finishes the card from the ratings it already
+  fetched, instead of a traceback from two modules away.
+- **The rung-3 card is a different forecast, not a degraded rendering of the
+  same one.** At identical sim count and seed it moved half the assignments.
+- **Its objective is higher, and that is not evidence it is better** — the
+  objective is computed under its own marginals, so confidence raises it whether
+  or not accuracy does. `cli_provenance card-diff` now carries that warning in
+  its own output, because the comparison is one step and the trap is obvious
+  only after it is pointed out.
+
+The procedure is steps 9b and 9c of the [runbook](near-lock-runbook.md). The
+rehearsal's outputs are not committed and its figures are labelled as one-off
+observations rather than reproducible evidence: rung 3 reads a live table, so it
+cannot be replayed offline, which is why the correction register withdrew
+rung-3 numbers from project prose in the first place.
+
+**One thing the rehearsal verified rather than broke.** The network-free last
+resort — the card generator fed a `team,strength` CSV — reproduced the shipping
+card exactly from the same strengths at the same sim count and seed, assignments
+and objective alike. The generator is sound; the only open question in that path
+is where the strengths come from. It also showed sim count is not a free
+parameter: the same strengths at 2,000 sims instead of 250,000 moved four slots.
 
 **Data privacy.** The store holds player `account_id`s, which are public
 OpenDota identifiers but are still person-linked. No names, no contact
