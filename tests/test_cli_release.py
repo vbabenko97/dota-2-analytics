@@ -9,6 +9,7 @@ from ti26.cli_release import (
     _prefix_markdown,
     build_producers,
     card_producer,
+    declared_inputs,
     non_gate_failures,
 )
 
@@ -71,6 +72,41 @@ def test_declared_inputs_all_exist():
     """
     missing = [path for path in CONFIG_INPUTS if not Path(path).is_file()]
     assert not missing, f"declared manifest inputs do not exist: {missing}"
+
+
+def test_the_group_draw_is_hashed_into_the_manifest_when_one_is_supplied():
+    """Kills mutation: declare only the snapshot and configs, as this did until 2026-08-09.
+
+    The producer list records that `--groups <path>` was passed, but a path is
+    not its contents. Without the file among the declared inputs, two bundles
+    conditioned on DIFFERENT draws hash identically on their inputs, and
+    `verify-run` cannot fail closed when the draw is edited under a finished
+    bundle -- which is the one guarantee the manifest exists to give.
+
+    The draw is expected to arrive during the near-lock window, so this is the
+    input most likely to be new on the day and least likely to be noticed.
+    """
+    without = declared_inputs("data/raw/S/manifest.json", None)
+    with_draw = declared_inputs("data/raw/S/manifest.json", "data/ti2026_groups.yaml")
+
+    assert "data/ti2026_groups.yaml" not in without
+    assert "data/ti2026_groups.yaml" in with_draw
+    assert with_draw[: len(without)] == without, "the draw is added, never a substitution"
+
+
+def test_declared_inputs_do_not_require_the_draw_to_live_in_config():
+    """Kills mutation: append the draw to CONFIG_INPUTS instead of the input list.
+
+    `test_every_tracked_config_is_hashed_into_the_manifest` asserts CONFIG_INPUTS
+    equals `config/*.yaml` exactly. A draw added to that tuple, or a draw file
+    dropped into `config/` to get it hashed, turns the suite red at runbook step
+    9 -- in the middle of the regeneration, over a file that is data rather than
+    configuration.
+    """
+    assert all(not path.startswith("config/") or path in CONFIG_INPUTS for path in CONFIG_INPUTS)
+    with_draw = declared_inputs("data/raw/S/manifest.json", "data/ti2026_groups.yaml")
+    assert "data/ti2026_groups.yaml" not in CONFIG_INPUTS
+    assert with_draw.count("data/ti2026_groups.yaml") == 1
 
 
 def test_the_standalone_diagnostics_are_bundle_producers():
