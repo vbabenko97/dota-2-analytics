@@ -148,30 +148,39 @@ across matchings and the rule would say nothing. It is the seed WITHIN each
 record class, summed over the matching. The real pairs were seeds (1,5), (2,1),
 (3,3), (4,4), (5,2), summing to 8.
 
-`ti26.cli_pairing_check` now reproduces that analysis from the committed store:
+`ti26.cli_pairing_check` reproduces that analysis from the committed store. The
+current figures are in
+[`reports/pairing_check/pairing_check.json`](../../reports/pairing_check/pairing_check.json)
+under `elimination_pairing_rule`, and are deliberately not copied here.
 
-| quantity | value |
-|---|---|
-| real bracket | 8 |
-| best reachable without a rematch | 10 |
-| best ignoring rematches | 12 |
-| pairs the engine shares with the real bracket | 3 of 5 |
+**This section carried a table until 2026-08-09, and it was wrong.** It read a
+best-reachable distance of 10 and 3 of 5 pairs shared. Those came from an engine
+that had ranking criteria 3 and 4 transposed and no duration criterion — the
+state between commits `23beac3` and `106c409` on 2026-08-08. Under the corrected
+ranking the reachable optimum is higher and the shared-pair count is lower.
 
-The 12 was unreachable because it required teams to meet twice, which is why
-repeat avoidance has to be applied before distance rather than after.
+The unconstrained optimum was unreachable because it required teams to meet
+twice, which is why repeat avoidance has to be applied before distance rather
+than after. That part stands.
 
-**The one-swap deviation has a documented cause outside the rules.** Teams were
-notified on 6 September of a previously non-existent constraint — no more than
-two series per day — which was never publicly announced. It forced HEROIC onto
-Yakult; the rule-following pairing was HEROIC vs Spirit and Falcons vs Yakult.
-That is exactly the difference between 8 and 10, and it accounts for the two
-pairs the engine does not share.
+**The deviation has a documented cause outside the rules.** Teams were notified
+on 6 September of a previously non-existent constraint — no more than two series
+per day — which was never publicly announced. It forced HEROIC onto Yakult; the
+rule-following pairing was HEROIC vs Spirit and Falcons vs Yakult. The producer
+carries this as a `known_deviations` entry so the finding travels with its
+explanation.
 
-So the published rule reproduces the event to within one swap, and the swap is
-explained by an unpublished mid-tournament change. **This is not a defect the
-model can fix, and not one it should.** An organiser constraint that is not in
-the rules, not announced, and applied mid-event is not forecastable; the engine
-follows the published rule and the deviation is recorded here.
+**What is WITHDRAWN is the conclusion that the rule reproduces the event to
+within one swap.** That rested on the shortfall being exactly the size of this
+one swap, and under the corrected ranking it is twice that. One unannounced swap
+does not account for the whole gap. Whether the remainder is the rule being
+wrong, or the ranking being TI 2026's rather than TI 2025's, is unresolved and
+recorded as such in the producer's `rule_year` block.
+
+**This is still not a defect the model can fix, and not one it should.** An
+organiser constraint that is not in the rules, not announced, and applied
+mid-event is not forecastable; the engine follows the published rule and the
+deviation is recorded here.
 
 It also settles a question the previous day's work could not: the elimination
 round is paired algorithmically, not chosen by the teams. The analysis treats it

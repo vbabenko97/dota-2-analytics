@@ -83,6 +83,14 @@ gpt-pro-output.md
 !reports/schedule_sensitivity_2026/
 !reports/schedule_sensitivity_2026/**
 
+# The bracket-rule check against TI 2025. Tracked because the provenance
+# comment on `base_pairing_preference` in config/ti2026_rules.yaml now cites
+# this file instead of restating a count -- the count it used to restate went
+# stale twice without anyone noticing, which is the whole argument for the rule
+# that a number must come from the code that emits it.
+!reports/pairing_check/
+!reports/pairing_check/**
+
 # The same calendar window counted across two snapshots taken five days apart.
 # It is what settles whether the thin recent tail is a real pre-major slowdown
 # or an incomplete ingest, and the runbook's instruction not to delay the

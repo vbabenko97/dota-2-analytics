@@ -1,9 +1,15 @@
 """How much does the pairing rule actually move the card?
 
 `cli_pairing_check` established that the engine's within-bucket pairing
-preference does not reproduce TI 2025's real pairings: it matched 4 of the 11
-buckets where it had a choice, which is about what indifference gives. That
-tells you the rule is wrong. It does not tell you whether being wrong costs
+preference does not reproduce TI 2025's real pairings: on the buckets where the
+ranking-distance criterion actually decides something, it matches about what
+indifference would give. The counts live in
+`reports/pairing_check/pairing_check.json` under
+`summary.where_distance_discriminates`, and are not restated here -- the figure
+this docstring used to carry was measured on an engine corrected three times
+since, and was wrong after each.
+
+That tells you the rule is wrong. It does not tell you whether being wrong costs
 anything, and the spec's `schedule_sensitivity.csv` deliverable -- which was
 supposed to answer exactly that -- was never built.
 

@@ -70,39 +70,44 @@ deletion.
 **Done when:** the card regenerates under the corrected rules and the runbook
 explains the duration warning.
 
-## A2. Correct the stale pairing justification in config
+## A2. DONE — the stale pairing justification in config now cites an artifact
 
-**Problem:** [weakness §3c](2026-08-08-known-weaknesses.md#3c-the-configs-own-justification-for-the-pairing-tag-is-stale).
-`base_pairing_preference: refuted_immaterial` is justified by a "4 of 11
-buckets" measurement predating the 2026-08-08 engine corrections. Current value
-is 15 of 17.
+**Problem:** [weakness §3d](2026-08-08-known-weaknesses.md#3d-fixed--the-configs-own-justification-for-the-pairing-tag-was-stale).
+`base_pairing_preference: refuted_immaterial` was justified by a bare count
+written on 2026-08-07, before three separate engine corrections.
 
-**Fix:** re-run `cli_pairing_check`, commit its output as an artifact, and
-rewrite the comment to cite the artifact rather than restate a number. The tag
-itself probably becomes `corroborated_immaterial` — the rule now agrees with
-reality far more often than "refuted" implies, and
-`cli_schedule_sensitivity` separately showed it does not move the card.
+**Done:** the producer's output is committed at
+[`reports/pairing_check/pairing_check.json`](../../reports/pairing_check/pairing_check.json)
+and the comment cites it, stating no count of its own.
 
-**Done when:** the comment cites a committed artifact and no bare number.
+**The tag did NOT become `corroborated_immaterial`, and this entry's reasoning
+for expecting that was wrong.** It rested on the producer reporting a
+comfortable majority of buckets agreeing. That headline counts buckets in which
+every legal matching scores the same ranking distance — where the preference
+cannot be wrong and agreement is not evidence. On the buckets where the
+criterion actually decides something, agreement is close to a coin flip, and the
+original `refuted` verdict survives.
 
-**Effort:** ~30 minutes.
+The producer now emits both denominators (`summary.where_distance_discriminates`)
+so the inflated one cannot be read by accident, which is the same defect as A3's
+in a different field.
 
-## A3. Stop `cli_pairing_check` from misrepresenting its own result
+## A3. DONE — `cli_pairing_check` no longer misrepresents its own result
 
 **Problem:** [weakness §3b](2026-08-08-known-weaknesses.md#3b-the-ti-2025-diagnostic-and-why-its-verdict-field-misleads).
 
-`cli_pairing_check` emits
+`cli_pairing_check` emitted
 
 ```
 engine_reproduces_the_real_bracket: false
-pairs_shared_with_engine: 3 of 5
+pairs_shared_with_engine: <count>
 ```
 
-with no indication of two things a reader needs. The discrepancy has a known,
-documented, external cause — the unannounced two-series-per-day constraint of
-6 September, which forced HEROIC onto Yakult and accounts for exactly the 10→8
-distance gap. And the check now measures **TI 2025's** elimination rule, which
-TI 2026 has replaced entirely, so a `false` here says nothing at all about the
+with no indication of two things a reader needs. Part of the discrepancy has a
+known, documented, external cause — the unannounced two-series-per-day
+constraint of 6 September, which forced HEROIC onto Yakult. And the check
+measures **TI 2025's** elimination rule, which TI 2026 has replaced entirely, so
+a `false` here says nothing at all about the
 shipping engine.
 
 This entry has been through two wrong versions, both caused by reading that
@@ -111,16 +116,28 @@ This entry has been through two wrong versions, both caused by reading that
 emitting a true number that reliably causes a false inference is the same class
 of problem as an unbound number and deserves the same treatment.
 
-**Fix:** carry both in the output. A `known_deviations` field naming the
-constraint, the pairs it moved and its distance cost; and a `rule_year` field
-saying which tournament's rule is being checked, so nobody reads a TI 2025
-diagnostic as a verdict on the TI 2026 card.
+**Done:** the output carries a `known_deviations` entry naming the constraint,
+the teams it moved and the document that sources it; a `rule_year` block naming
+which tournament's rule each check models; and, per seed, the pairs that differ
+in each direction plus a computed `distance_shortfall`.
 
-**Done when:** the JSON explains its own `false`, and a reader who has seen
-neither this document nor the format-rules archive cannot draw the wrong
-conclusion from it.
+**One thing came out differently from the plan.** This entry proposed that
+`known_deviations` state the constraint's distance cost. It does not, because
+that cost was measured under a ranking that has since been corrected and it
+moved. The deviation is named and sourced; every number beside it is computed by
+the run.
 
-**Effort:** ~1 hour.
+**And the fix uncovered a live defect.** The producer had not run at all since
+`106c409` on 2026-08-08: restoring Average Game Duration as the sixth ranking
+criterion put back a criterion whose duration source in this producer had been
+deleted with it, so it raised `DurationUnavailableError` on the TI 2025 store,
+where three teams tie through five criteria. It is not a release producer and no
+test built a bracket with a surviving tie, so nothing noticed. Fixed, with a
+test that builds one.
+
+That is also why §3b's and the format-rules document's figures moved: every
+pairing-check number published before 2026-08-09 came from the engine state
+between `23beac3` and `106c409`.
 
 ## A4. Run the near-lock runbook
 

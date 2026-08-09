@@ -291,14 +291,29 @@ is the wrong trade.
 This entry was written backwards in the first draft of this document and is
 kept, because the way it misleads is worth preserving.
 
-The producer reports:
+The producer reports, in
+[`reports/pairing_check/pairing_check.json`](../../reports/pairing_check/pairing_check.json):
 
 ```
 engine_reproduces_the_real_bracket: false, false, false, false, false   (5 seeds)
 real_bracket_distance:              8
-best_reachable_distance:            10
-pairs_shared_with_engine:           3 of 5
+best_reachable_distance:            12
+pairs_shared_with_engine:           0, 0, 0, 0, 1   (of 5)
+distance_shortfall:                 4
 ```
+
+**These are not the numbers this section carried until 2026-08-09**, and the
+difference matters more than the numbers do. It previously read `10` reachable
+and `3 of 5` shared. Both came from a run between commits `23beac3` (09:33 on
+2026-08-08) and `106c409` (21:10 the same day) — an engine that had ranking
+criteria 3 and 4 transposed and no duration criterion at all.
+
+After `106c409` restored TI 2026's tiebreak, this producer did not run: it
+raised `DurationUnavailableError`, because the criterion came back and its
+duration source did not. Three teams in TI 2025's bracket tie through five
+criteria. Nothing caught it — `cli_pairing_check` is not a release producer, and
+no test built a bracket with a surviving tie. Fixed on 2026-08-09, with a test
+that does.
 
 That measures the engine against **TI 2025's** elimination rule, which is what
 `pair_elimination` still implements and what `cli_pairing_check` needs, since
@@ -315,51 +330,80 @@ already said so:
   at Round 5. A screenshot of the Swiss pairing rules alone does not contain it,
   and does contain the *opposite* general rule (minimise), which is what makes
   this so easy to get backwards.
-- The 8-versus-10 gap has a **documented cause outside the rules**. Teams were
+- Part of the gap has a **documented cause outside the rules**. Teams were
   notified on 6 September of a previously non-existent constraint — no more than
   two series per day — that was never publicly announced. It forced HEROIC onto
   Yakult; the rule-following pairing was HEROIC vs Spirit and Falcons vs Yakult.
-  That single swap is exactly the difference between 8 and 10 and accounts for
-  precisely the two pairs the engine does not share.
+  The producer now carries this as a `known_deviations` entry, so the `false`
+  travels with its explanation.
 
-**So the published rule reproduces the event to within one swap, and the swap is
-an unannounced mid-event rule change.** The engine is corroborated, not
-contradicted.
+**The "reproduces to within one swap" conclusion is WITHDRAWN.** It rested on the
+shortfall being exactly the size of that one swap, and under the corrected
+ranking the shortfall is 4 rather than 2, with 0 of 5 pairs shared on four of
+five seeds. One unannounced swap cannot account for that. What survives is the
+weaker and still-useful claim: the deviation is real, documented, and external,
+and it explains *some* of the difference.
 
-The real weakness is the one underneath: **the organiser demonstrably changes
-the rules mid-event without announcing them, and did so at the only event we can
-check.** One unannounced constraint moved 2 of 5 elimination pairs. That is not
-forecastable, not a model defect, and not fixable — but it is a floor on how
-accurate the elimination categories can ever be, and those are 10 of the 16 card
-slots.
+Whether the rest is the rule being wrong or the ranking being TI 2026's rather
+than TI 2025's is **not settled here**, and the producer now says so in its
+`rule_year` block: it replays TI 2025 under TI 2025's elimination rule but
+TI 2026's tiebreak order, because `tiebreak.py` carries one order and it is the
+shipping one. Resolving that mixture is a modelling decision, and this is four
+days before a lock on a producer that gates nothing.
+
+The real weakness is the one underneath, and it is untouched: **the organiser
+demonstrably changes the rules mid-event without announcing them, and did so at
+the only event we can check.** That is not forecastable, not a model defect, and
+not fixable — but it is a floor on how accurate the elimination categories can
+ever be, and those are 10 of the 16 card slots.
 
 And it is the same hazard as the section above, on a shorter timescale: rules
 that change during an event, and rules published mid-preparation, are both the
 organiser moving the target after you have aimed.
 
-The producer's own field name is a trap: `engine_reproduces_the_real_bracket:
-false` is literally true and reads as "the rule is wrong". It should carry the
-known deviation alongside it.
+The producer's own field name was a trap: `engine_reproduces_the_real_bracket:
+false` is literally true and reads as "the rule is wrong". **Fixed on
+2026-08-09.** The report now carries a `rule_year` block naming which
+tournament's rule each check models, and a `known_deviations` entry naming the
+constraint, so a reader who has seen neither this document nor the format-rules
+archive cannot draw the wrong conclusion from that field.
 
-### 3c. Swiss pairing is much healthier, but not clean
+### 3c. Swiss pairing is healthier than the elimination round, but the headline flatters it
 
-15 of 17 buckets agree across all 5 seeds; 16 of 17 real pairings sit at
-minimum ranking distance. Both disagreements are Round 2, Group A, where the
-ranking is most tie-dominated, and one of them sat at distance 8 — the
-*maximum* — against a minimum-distance rule.
+Numbers in
+[`reports/pairing_check/pairing_check.json`](../../reports/pairing_check/pairing_check.json)
+under `summary`.
 
-### 3d. The config's own justification for the pairing tag is stale
+**Read `where_distance_discriminates`, not the top-level counts.** Where every
+legal matching inside a bucket scores the same ranking distance, the preference
+cannot be wrong, and counting those buckets as agreement inflates the result.
+On TI 2025 that gap is wide: it turns a comfortable-looking majority into
+roughly a coin flip on the buckets that actually test the rule. The producer
+emits both denominators so the distinction cannot be lost again.
 
-[`config/ti2026_rules.yaml:155`](../../config/ti2026_rules.yaml#L155) tags
-`base_pairing_preference: refuted_immaterial`, justified by a comment saying
-the real pairing is among the engine's candidates "in 4 of the 11 buckets".
-That comment is commit `b05569d`, 2026-08-07 — written **before** the rules
-engine was corrected on 2026-08-08 (`23beac3`, `f96fb0e`). Re-running the
-producer today gives 15 of 17.
+The real pairing sits at minimum distance in some of those buckets, at maximum
+in others and strictly between in the rest, so it follows neither the rule nor
+its opposite — which is what `refuted_immaterial` records.
+
+### 3d. FIXED — the config's own justification for the pairing tag was stale
+
+[`config/ti2026_rules.yaml`](../../config/ti2026_rules.yaml) tags
+`base_pairing_preference: refuted_immaterial`, and until 2026-08-09 justified it
+with a bare count written on 2026-08-07 (`b05569d`). The engine was corrected
+twice after that — `23beac3` and `f96fb0e` on 2026-08-08, then `106c409` the
+same evening — and the comment was wrong after each, silently, because prose
+does not re-run.
+
+The comment now cites
+[`reports/pairing_check/pairing_check.json`](../../reports/pairing_check/pairing_check.json)
+and states no count of its own. **The tag itself is unchanged**: on the buckets
+where the distance criterion decides anything, the result still refutes the
+rule, so the correction did not rescue it.
 
 A load-bearing tag resting on a number its own producer no longer reproduces is
 the exact failure mode the correction register exists to prevent, reappearing
-in a config file rather than in an audit.
+in a config file rather than in an audit. It reappeared twice more before it was
+closed.
 
 ### 3e. What remains unsourced, now that the rules are published
 

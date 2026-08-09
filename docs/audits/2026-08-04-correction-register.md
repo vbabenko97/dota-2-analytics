@@ -224,6 +224,51 @@ per-pair rather than concluding the metric was wrong. I reported a finding on
 that basis and withdrew it the same day. Noticing that a measurement makes a rule
 vacuous is a reason to doubt the measurement first.
 
+## A producer stopped running, and its last numbers outlived it
+
+**Added 2026-08-09.** The entries above are about numbers with no producer. This
+one is about a number whose producer still existed, still had a name, and had
+silently stopped being able to run.
+
+Restoring Average Game Duration as the sixth ranking criterion on 2026-08-08
+(`106c409`) put back a criterion whose duration source inside
+`cli_pairing_check` had been deleted alongside it that morning (`23beac3`).
+`rank_teams` refuses to rank a block still tied after five criteria rather than
+skipping to a coin toss, and three teams in TI 2025's bracket tie exactly there.
+The producer raised `DurationUnavailableError` on the real store from 21:10 on
+2026-08-08 until 2026-08-09.
+
+Nothing caught it for two reasons, both structural rather than careless:
+
+- `cli_pairing_check` is a standalone diagnostic, not a `cli_release` producer,
+  so no bundle run exercised it. (`cli_data_health` and `cli_external_cards` had
+  the same exposure and were folded into the bundle on 2026-08-09; this one has
+  not been, because it needs a specific league's bracket rather than the
+  production store.)
+- Its tests all used fixtures whose rankings are settled above the fifth
+  criterion, so the suite passed while the producer could not run on real data.
+  This is the same shape as the transposed-criteria defect recorded above:
+  coverage of a behaviour is not evidence the behaviour is right, and here it
+  was not even evidence the code executes.
+
+**Meanwhile its last successful output stayed in three documents as current
+fact.** Every pairing-check figure published before 2026-08-09 came from the
+engine state between `23beac3` and `106c409` — criteria 3 and 4 transposed, no
+duration criterion. Under the corrected engine those figures move, and one
+conclusion built on them, that TI 2025's elimination round followed the
+published rule to within a single documented swap, is withdrawn.
+
+The number that had been used to justify `base_pairing_preference` in
+`config/ti2026_rules.yaml` was wrong after each of three corrections and looked
+identical every time. It is now a citation to
+`reports/pairing_check/pairing_check.json` rather than a count.
+
+**What this adds to the register's thesis.** "Bind every number to a producer"
+is not sufficient on its own. A binding to a producer that no longer runs is
+indistinguishable, in prose, from a binding to one that does — and a diagnostic
+outside the bundle has nothing that would notice. The rule needs a companion:
+a number's producer must be exercised by something that fails loudly.
+
 ## What is still unverified
 
 - The pre-registration timing of D3b as a one-condition test rests on commit
