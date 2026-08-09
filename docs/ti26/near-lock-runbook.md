@@ -25,6 +25,26 @@ Commit the new `data/raw/<snapshot-id>/` directory -- chunks and manifest --
 before generating anything from it. A run bundle whose input is not committed
 cannot be reproduced by anyone else, which is the whole point of the exercise.
 
+**Do not delay this step hoping for a fuller tail.** Measured on 2026-08-09
+across the two committed snapshots, five days apart: of 421 maps in the last 30
+days, 3 had not arrived when the earlier snapshot was taken, all on its single
+final day. Waiting buys about one day of completeness and nothing else. The
+thin recent evidence is real -- 14.0 maps/day against 76.2 over the whole window
+-- and is a fact the forecast has to carry, not one a later snapshot fixes.
+
+Once the fresh snapshot is committed, re-run the comparison against the previous
+one, which is the same check on a longer arm:
+
+```
+.venv/bin/python -m ti26.cli_snapshot_lag \
+  --older 20260807T182355Z --newer <snapshot-id-from-above> --out reports/snapshot_lag
+```
+
+**STOP -- owner decision required** if `dropped_maps` is anything but zero. That
+means a match present in the earlier snapshot is absent from the later one, so
+the source rewrote history, and every backfill number in the report becomes
+unsafe to read.
+
 ## 2. Rebuild and verify the store
 
 ```
@@ -154,9 +174,15 @@ change only after the underlying account set has passed step 4.
   --source-revision $(git rev-parse HEAD)
 ```
 
-This rebuilds the store from the committed chunks, runs D2, D3, D3b, the card and
-D4, builds the frozen-gate artifact, re-renders the card report against it, and
-writes `reports/runs/<run-id>/manifest.json` hashing every output.
+This rebuilds the store from the committed chunks, runs D2, D3, D3b, the card,
+D4, `cli_data_health` and `cli_external_cards`, builds the frozen-gate artifact,
+re-renders the card report against it, and writes
+`reports/runs/<run-id>/manifest.json` hashing every output.
+
+The last two joined the bundle on 2026-08-09, so **this run id will not match
+the shape of any earlier bundle's** — the id derives from the producer list. A
+non-zero exit from either stops the run, unlike a gate's, whose non-zero exit is
+its verdict.
 
 Run it AFTER committing the code and the snapshot, so `--source-revision` names a
 commit that actually contains the producers. The bundle is then a second commit.

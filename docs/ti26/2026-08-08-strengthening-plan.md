@@ -131,24 +131,33 @@ regeneration, verify the bundle.
 
 **Effort:** ~2 hours including ingest.
 
-## A5. Settle whether the recent-data collapse is real or ingest lag
+## A5. DONE — the recent-data collapse is real, not ingest lag
 
 **Problem:** [weakness §2d](2026-08-08-known-weaknesses.md#2d-the-freshest-evidence-is-the-thinnest).
-The corpus holds 76 maps/day overall and 13.9/day across the last 30. That is
+The corpus holds 76 maps/day overall and 14/day across the last 30. That is
 either a real pre-major slowdown or the incomplete tail every snapshot has, and
 the two call for opposite responses.
 
-**Fix:** both `data/raw/20260802T165535Z` and `data/raw/20260807T182355Z` are
-already committed. Rebuild each and compare map counts over an identical
-historical window. If the older snapshot reports fewer maps for the same window
-than the newer one, the gap is ingest lag and the answer is simply to snapshot
-later on lock day. If the counts match, the slowdown is real.
+**Answered by `cli_snapshot_lag`**, which counts the same calendar window across
+the two committed snapshots rather than each snapshot's own recent window —
+`cli_data_health` cannot do this, because its recency windows are measured from
+each store's own last map, so running it twice compares two different windows.
 
-**Why it earns a slot:** it changes the lock-day procedure, it costs one
-comparison, and it is the difference between "take the snapshot as late as
-possible" and "widen uncertainty on recent form".
+Of 421 maps in the tail, 3 were absent from the older snapshot, all of them on
+its single final day of coverage. The tail rate on the newer snapshot is 14.0
+maps/day against 76.2 over the whole window, a ratio of 0.18, and 0 maps were
+dropped between the two. Lag is real, confined to about one day, and far too
+small to explain the gap.
 
-**Effort:** ~30 minutes.
+**Consequences, both now in the runbook:** taking the lock-day snapshot later
+buys roughly one day of completeness, so step 1 should not be delayed for it;
+and the thin recent evidence is a fact the forecast carries rather than a defect
+to be snapshotted away. The runbook also re-runs the comparison against the new
+snapshot and stops on any non-zero `dropped_maps`.
+
+**Bound on the claim:** the two snapshots are 5.1 days apart, which is the
+longest backfill this comparison can observe. The producer emits that as
+`observation_horizon_days` rather than leaving it implicit.
 
 ## A6. Condition on the group draw the moment it is published
 
@@ -158,19 +167,27 @@ is correct and is recorded as `group_draw: null` in the payload.
 
 **Effort:** minutes.
 
-## A7. Emit the standalone diagnostics into the release bundle
+## A7. DONE — emit the standalone diagnostics into the release bundle
 
-`cli_data_health` and `cli_external_cards` both run standalone today. Adding
-them to `cli_release`'s producer list puts the corpus's tier mix, patch mix,
-recency and per-team volume — and the external-card ceiling result — into the
-manifest-bound bundle, so the card ships alongside a statement of what it was
+`cli_data_health` and `cli_external_cards` ran standalone until 2026-08-09. Both
+are now `cli_release` producers, so the corpus's tier mix, patch mix, recency and
+per-team volume — and the external-card ceiling result — land inside the
+manifest-bound bundle. The card now ships alongside a statement of what it was
 trained on and of how much a card score can prove.
 
-Both configs are already hashed into the manifest, so this is a producer-list
-change only. Note it moves the run id, since the id is derived from the
-descriptor and the descriptor contains the producer list.
+**This moves the run id**, since the id derives from the descriptor and the
+descriptor contains the producer list. That is correct: a bundle containing
+different outputs is a different bundle.
 
-**Effort:** ~30 minutes.
+**Two things changed beyond the list itself**, both consequences of it growing:
+
+- The must-succeed check named the card and D4 explicitly, so anything added
+  afterwards could fail in silence. It now names the *gates* — whose non-zero
+  exit is a registered verdict — and treats every other producer as
+  must-succeed. A producer added later is protected by default.
+- The frozen-gate re-run found the card by list index. The index still happened
+  to be right, which is exactly why it was worth removing: it is found by name
+  now, and a test moves the card to prove it.
 
 ## Explicitly NOT before the lock
 

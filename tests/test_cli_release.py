@@ -1,6 +1,32 @@
+from argparse import Namespace
 from pathlib import Path
 
-from ti26.cli_release import CONFIG_INPUTS, _prefix_markdown
+import pytest
+
+from ti26.cli_release import (
+    CONFIG_INPUTS,
+    GATE_PRODUCERS,
+    _prefix_markdown,
+    build_producers,
+    card_producer,
+    non_gate_failures,
+)
+
+
+def release_args(**overrides):
+    args = Namespace(
+        min_train=500,
+        card_sims=2000,
+        card_seed=1,
+        sweep_sims="2000",
+        sweep_seeds="1",
+        random_samples=1000,
+        random_seed=1,
+        groups=None,
+    )
+    for key, value in overrides.items():
+        setattr(args, key, value)
+    return args
 
 
 def test_report_prefix_is_prepended_and_leaves_the_body_untouched(tmp_path):
@@ -45,6 +71,79 @@ def test_declared_inputs_all_exist():
     """
     missing = [path for path in CONFIG_INPUTS if not Path(path).is_file()]
     assert not missing, f"declared manifest inputs do not exist: {missing}"
+
+
+def test_the_standalone_diagnostics_are_bundle_producers():
+    """Kills mutation: drop cli_data_health or cli_external_cards from the list.
+
+    Both ran standalone until 2026-08-09, which put the corpus composition and
+    the external-card ceiling outside every manifest: numbers the weaknesses
+    document quotes, with no hash binding them to the snapshot and configs they
+    came from. Removing either restores exactly that gap, and nothing else in
+    the suite would notice, because a bundle short an output still verifies.
+    """
+    names = {producer[0] for producer in build_producers(release_args(), Path("s.sqlite"))}
+    assert "ti26.cli_data_health" in names
+    assert "ti26.cli_external_cards" in names
+
+
+def test_the_groups_draw_reaches_the_card_and_nothing_else():
+    """Kills mutation: append --groups to every producer, or to d4.
+
+    D4 backtests TI 2025, whose group draw was its own. Handing it TI 2026's
+    draw would be a leak dressed as a fix -- the held-out event scored under
+    information from the event being forecast.
+    """
+    producers = build_producers(release_args(groups="config/groups.yaml"), Path("s.sqlite"))
+    carrying = {producer[0] for producer in producers if "--groups" in producer}
+    assert carrying == {"ti26.cli_card"}
+
+
+def test_the_card_is_found_by_name_when_the_producer_order_changes():
+    """Kills mutation: select the card for the frozen-gate re-run by index.
+
+    The card runs twice: once with the others, then again once the frozen-gate
+    artifact exists. The list has grown twice, and a positional lookup that slid
+    onto a neighbour would re-run that neighbour with the card's arguments and
+    overwrite the card directory with its output -- producing a bundle whose
+    `card/` holds something else entirely, which still hashes and still verifies.
+    """
+    producers = build_producers(release_args(), Path("s.sqlite"))
+    assert card_producer(producers)[0] == "ti26.cli_card"
+
+    # Moved to the end, so no fixed index finds it. Reversing is not enough:
+    # the list has an odd length and the card sits at its centre, so index 3
+    # survives a reversal and the positional mutation passes.
+    card = card_producer(producers)
+    moved = [producer for producer in producers if producer[0] != "ti26.cli_card"] + [card]
+    assert moved.index(card) == len(moved) - 1
+    assert card_producer(moved)[0] == "ti26.cli_card"
+
+
+def test_a_failing_diagnostic_stops_the_run_but_a_failing_gate_does_not():
+    """Kills mutation: check only the card and d4 for non-zero exits.
+
+    A gate's non-zero exit is its registered verdict and must not abort the
+    bundle. Every other producer exiting non-zero means it could not produce,
+    and the old explicit card/d4 check would have let a newly added diagnostic
+    fail in silence -- leaving the bundle short an output nobody looks for.
+    """
+    assert non_gate_failures({"d2": 1, "d3": 1, "d3b": 0, "card": 0}) == {}
+    assert non_gate_failures({"d2": 1, "data_health": 2}) == {"data_health": 2}
+    assert non_gate_failures({"external_cards": 1}) == {"external_cards": 1}
+
+
+@pytest.mark.parametrize("gate", sorted(GATE_PRODUCERS))
+def test_every_gate_named_here_is_a_producer_that_runs(gate):
+    """Kills mutation: leave a stale name in GATE_PRODUCERS.
+
+    A name here exempts a producer from the failure check. One that no longer
+    matches any producer is dead, but a name that later collides with a real
+    non-gate producer would exempt it silently, which is the failure this set
+    exists to prevent.
+    """
+    names = {producer[0] for producer in build_producers(release_args(), Path("s.sqlite"))}
+    assert f"ti26.cli_{gate}" in names
 
 
 def test_a_complete_bundle_is_refused_and_an_incomplete_one_is_replaced(tmp_path, monkeypatch):

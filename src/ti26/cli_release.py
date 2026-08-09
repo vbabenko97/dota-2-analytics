@@ -44,6 +44,10 @@ from ti26.provenance import (
 # the manifest then records the repository's whole configuration state at run
 # time, so a reader comparing two bundles can tell what changed between them
 # without knowing which producer consumed what.
+# The registered gates. A non-zero exit from one of these is its verdict, not a
+# build failure, and the driver records it and carries on.
+GATE_PRODUCERS = frozenset({"d2", "d3", "d3b"})
+
 CONFIG_INPUTS = (
     "config/d2_gate.yaml",
     "config/team_aliases.yaml",
@@ -53,6 +57,68 @@ CONFIG_INPUTS = (
     "config/ti2025_external_cards.yaml",
     "pyproject.toml",
 )
+
+
+def build_producers(args, store_path: Path) -> list[list[str]]:
+    """Every command the bundle runs, in order, as `python -m` argument lists.
+
+    The list IS the run id: it goes into the descriptor, and the id is derived
+    from the descriptor before any output exists. Adding a producer therefore
+    moves the run id, which is correct -- a bundle containing different outputs
+    is a different bundle.
+    """
+    store = str(store_path)
+    min_train = str(args.min_train)
+    return [
+        ["ti26.cli_d2", "--store", store, "--min-train", min_train],
+        ["ti26.cli_d3", "--store", store, "--min-train", min_train],
+        ["ti26.cli_d3b", "--store", store, "--min-train", min_train],
+        # --groups reaches the CARD only. D4 backtests TI 2025, whose groups
+        # were its own; handing it TI 2026's draw would be a leak, not a fix.
+        ["ti26.cli_card", "--store", store, "--min-train", min_train,
+         "--card-sims", str(args.card_sims), "--card-seed", str(args.card_seed),
+         *(["--groups", args.groups] if args.groups else [])],
+        ["ti26.cli_d4", "--store", store, "--min-train", min_train,
+         "--card-sims", str(args.card_sims), "--card-seed", str(args.card_seed),
+         "--sweep-sims", args.sweep_sims, "--sweep-seeds", args.sweep_seeds,
+         "--random-samples", str(args.random_samples), "--random-seed", str(args.random_seed)],
+        # Neither of these two scores the model. They state what the card was
+        # built from and what a card score can prove, and both belong in the
+        # bundle for the same reason the manifest exists: a number that ships
+        # beside the card should be as traceable as the card. `external_cards`
+        # reads no store -- it scores published cards against a frozen truth --
+        # so it takes the same inputs in every run and lands here as a constant.
+        ["ti26.cli_data_health", "--store", store],
+        ["ti26.cli_external_cards"],
+    ]
+
+
+def card_producer(producers: list[list[str]]) -> list[str]:
+    """The card's argument list, found by name rather than by position.
+
+    The card is run twice: once with the others, then again once the frozen-gate
+    artifact exists so its report can cite the gate lineage. The second call has
+    to reach the same producer, and the list above has grown twice. A positional
+    lookup that slid onto a neighbour would re-run that neighbour with the card's
+    arguments and overwrite the card directory with its output.
+    """
+    return next(producer for producer in producers if producer[0] == "ti26.cli_card")
+
+
+def non_gate_failures(exits: dict[str, int]) -> dict[str, int]:
+    """Producers that failed and were not entitled to.
+
+    A registered gate's non-zero exit is its verdict and expected evidence.
+    Everything else that exits non-zero could not produce at all. Naming the
+    gates rather than the non-gates means a producer added later is must-succeed
+    by default, which is the safe direction: a diagnostic that failed silently
+    leaves the bundle short an output nobody notices is missing.
+    """
+    return {
+        name: code
+        for name, code in exits.items()
+        if code != 0 and name not in GATE_PRODUCERS
+    }
 
 
 def _run(argv: list[str], repo_root: Path) -> int:
@@ -148,20 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"store digest: {store_digest['sha256']} over {store_digest['row_count']} rows", flush=True)
 
     # --- 3. The descriptor, and therefore the run id, before any output ------
-    producers = [
-        ["ti26.cli_d2", "--store", str(store_path), "--min-train", str(args.min_train)],
-        ["ti26.cli_d3", "--store", str(store_path), "--min-train", str(args.min_train)],
-        ["ti26.cli_d3b", "--store", str(store_path), "--min-train", str(args.min_train)],
-        # --groups reaches the CARD only. D4 backtests TI 2025, whose groups
-        # were its own; handing it TI 2026's draw would be a leak, not a fix.
-        ["ti26.cli_card", "--store", str(store_path), "--min-train", str(args.min_train),
-         "--card-sims", str(args.card_sims), "--card-seed", str(args.card_seed),
-         *(["--groups", args.groups] if args.groups else [])],
-        ["ti26.cli_d4", "--store", str(store_path), "--min-train", str(args.min_train),
-         "--card-sims", str(args.card_sims), "--card-seed", str(args.card_seed),
-         "--sweep-sims", args.sweep_sims, "--sweep-seeds", args.sweep_seeds,
-         "--random-samples", str(args.random_samples), "--random-seed", str(args.random_seed)],
-    ]
+    producers = build_producers(args, store_path)
     descriptor = {
         "schema_version": RUN_MANIFEST_SCHEMA_VERSION,
         "run_kind": args.run_kind,
@@ -217,10 +270,9 @@ def main(argv: list[str] | None = None) -> int:
         exits[name] = _run([*producer, "--out", str(bundle / name)], repo_root)
         print(f"  {name} exited {exits[name]}", flush=True)
 
-    # A gate's registered failure exit is expected evidence. Only a producer
-    # that cannot produce at all is a problem.
-    if exits.get("card", 0) != 0 or exits.get("d4", 0) != 0:
-        raise SystemExit(f"a non-gate producer failed: {exits}")
+    failed = non_gate_failures(exits)
+    if failed:
+        raise SystemExit(f"a non-gate producer failed: {failed}")
 
     # --- 5. The frozen gate artifact, from those three results ---------------
     artifact_path = bundle / "frozen_gate_results.json"
@@ -237,7 +289,11 @@ def main(argv: list[str] | None = None) -> int:
     # The card report's gate lineage must come from that artifact, so the card
     # is rendered again now that it exists. The card itself is unchanged: same
     # store, same seed, same sim count, same strengths.
-    card_argv = [*producers[3], "--out", str(bundle / "card"), "--frozen-gates", str(artifact_path)]
+    card_argv = [
+        *card_producer(producers),
+        "--out", str(bundle / "card"),
+        "--frozen-gates", str(artifact_path),
+    ]
     for stale in (bundle / "card").glob("*"):
         stale.unlink()
     exits["card"] = _run(card_argv, repo_root)

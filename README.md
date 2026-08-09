@@ -89,7 +89,7 @@ the digest of every config file consulted.
 
 ```bash
 uv sync                                    # create .venv from uv.lock
-.venv/bin/python -m pytest -q              # 857 tests, no network
+.venv/bin/python -m pytest -q              # 900 tests, no network
 .venv/bin/python -m ruff check .
 ```
 
@@ -123,6 +123,7 @@ bundle, never retried with different arguments.
 | `cli_d4` | Card backtest against TI 2025 — diagnostic, never a gate |
 | `cli_series_score` | Score the strengths against all 58 TI 2025 series |
 | `cli_data_health` | What the training corpus actually contains |
+| `cli_snapshot_lag` | Is a thin recent tail real, or rows that had not arrived? |
 | `cli_external_cards` | Score expert cards published before TI 2025 against the frozen truth |
 | `cli_pairing_check` | Check the bracket rules against the only event that ran them |
 | `cli_ladder_check` | What does the simulation add over sorting by strength? |
@@ -150,7 +151,7 @@ config/        rules, teams, aliases, gate registration — every value tagged w
 data/raw/      pinned, hashed snapshots (committed)
 docs/          specs, audits, runbooks, weaknesses, plan
 reports/runs/  content-addressed run bundles
-tests/         857 tests; each names the mutation it kills
+tests/         900 tests; each names the mutation it kills
 ```
 
 ## Documentation

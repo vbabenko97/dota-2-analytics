@@ -83,6 +83,13 @@ gpt-pro-output.md
 !reports/schedule_sensitivity_2026/
 !reports/schedule_sensitivity_2026/**
 
+# The same calendar window counted across two snapshots taken five days apart.
+# It is what settles whether the thin recent tail is a real pre-major slowdown
+# or an incomplete ingest, and the runbook's instruction not to delay the
+# lock-day snapshot rests on it, so the numbers have to be checkable.
+!reports/snapshot_lag/
+!reports/snapshot_lag/**
+
 # The card regenerated on the corrected TI 2026 rules, kept alongside the
 # pre-correction bundle it supersedes so the two-slot difference -- and the fact
 # that the corrected card equals the naive strength sort -- can be diffed.

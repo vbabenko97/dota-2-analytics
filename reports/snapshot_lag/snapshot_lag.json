@@ -1,0 +1,224 @@
+{
+  "comparison": {
+    "baseline": {
+      "newer_maps_per_day": 76.19074074074074
+    },
+    "daily": [
+      {
+        "added_maps": 3,
+        "days_before_window_end": 0,
+        "newer_maps": 25,
+        "older_maps": 22
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 1,
+        "newer_maps": 42,
+        "older_maps": 42
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 2,
+        "newer_maps": 37,
+        "older_maps": 37
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 3,
+        "newer_maps": 28,
+        "older_maps": 28
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 4,
+        "newer_maps": 15,
+        "older_maps": 15
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 5,
+        "newer_maps": 23,
+        "older_maps": 23
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 6,
+        "newer_maps": 8,
+        "older_maps": 8
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 7,
+        "newer_maps": 11,
+        "older_maps": 11
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 8,
+        "newer_maps": 10,
+        "older_maps": 10
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 9,
+        "newer_maps": 15,
+        "older_maps": 15
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 10,
+        "newer_maps": 14,
+        "older_maps": 14
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 11,
+        "newer_maps": 11,
+        "older_maps": 11
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 12,
+        "newer_maps": 11,
+        "older_maps": 11
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 13,
+        "newer_maps": 9,
+        "older_maps": 9
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 14,
+        "newer_maps": 5,
+        "older_maps": 5
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 15,
+        "newer_maps": 5,
+        "older_maps": 5
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 16,
+        "newer_maps": 4,
+        "older_maps": 4
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 17,
+        "newer_maps": 5,
+        "older_maps": 5
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 18,
+        "newer_maps": 10,
+        "older_maps": 10
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 19,
+        "newer_maps": 7,
+        "older_maps": 7
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 20,
+        "newer_maps": 0,
+        "older_maps": 0
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 21,
+        "newer_maps": 12,
+        "older_maps": 12
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 22,
+        "newer_maps": 18,
+        "older_maps": 18
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 23,
+        "newer_maps": 24,
+        "older_maps": 24
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 24,
+        "newer_maps": 25,
+        "older_maps": 25
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 25,
+        "newer_maps": 27,
+        "older_maps": 27
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 26,
+        "newer_maps": 17,
+        "older_maps": 17
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 27,
+        "newer_maps": 0,
+        "older_maps": 0
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 28,
+        "newer_maps": 0,
+        "older_maps": 0
+      },
+      {
+        "added_maps": 0,
+        "days_before_window_end": 29,
+        "newer_maps": 3,
+        "older_maps": 3
+      }
+    ],
+    "tail": {
+      "added_maps": 3,
+      "newer_maps": 421,
+      "newer_maps_per_day": 14.033333333333333,
+      "older_maps": 418,
+      "older_maps_per_day": 13.933333333333334
+    },
+    "whole_window": {
+      "added_maps": 3,
+      "dropped_maps": 0,
+      "newer_maps": 41143,
+      "older_maps": 41140
+    },
+    "window": {
+      "days": 540.0,
+      "end": 1785689735,
+      "start": 1739033735,
+      "tail_days": 30
+    }
+  },
+  "headline": {
+    "dropped_maps": 0,
+    "observation_horizon_days": 5.1,
+    "tail_backfill_share": 0.007125890736342043,
+    "tail_rate_ratio": 0.18418686046229008
+  },
+  "newer": {
+    "retrieved_at": "2026-08-07T18:23:55.987711Z",
+    "snapshot_id": "20260807T182355Z"
+  },
+  "older": {
+    "retrieved_at": "2026-08-02T16:55:35Z",
+    "snapshot_id": "20260802T165535Z"
+  },
+  "schema": "ti26.snapshot-lag.v1",
+  "status": "DIAGNOSTIC -- no threshold, gates nothing, cannot alter the card"
+}
