@@ -139,20 +139,40 @@ evidence as equal when propagating a team through five rounds of a bracket.
 | last 180 days | 10,963 | 26.6% |
 
 The corpus averages 76 maps/day overall and 14/day across the last 30. Two
-explanations, and this project has not distinguished them:
+explanations, which call for opposite responses:
 
 1. **Real.** Teams stop playing publicly before a major — they qualify, then
-   bootcamp privately.
+   bootcamp privately. The response is to widen uncertainty on recent form.
 2. **Artefact.** The tail of any OpenDota snapshot is incomplete, because match
-   ingestion and parsing lag behind play.
+   ingestion and parsing lag behind play. The response is to snapshot later and
+   to stop reading the final days as evidence.
 
-Both produce the same immediate problem — the period whose form matters most is
-the period with the least data — but they call for opposite responses. If it is
-real, the model should widen its uncertainty. If it is ingest lag, the snapshot
-should simply be taken later, and treating it as a real slowdown would be
-wrong. **Distinguishing them is one query** (compare map counts for a fixed
-historical window across two snapshots taken weeks apart) and both snapshots
-already exist in `data/raw/`.
+**Measured on 2026-08-09, and it is the first.** `cli_snapshot_lag` counts the
+same calendar window across the two committed snapshots, five days apart
+([`reports/snapshot_lag/`](../../reports/snapshot_lag/snapshot_lag.md)):
+
+| quantity | value |
+|---|---|
+| tail maps present in the newer snapshot but not the older | 3 of 421 (0.7%) |
+| tail rate, newer snapshot | 14.0 maps/day |
+| whole-window rate, newer snapshot | 76.2 maps/day |
+| ratio | 0.18 |
+| maps dropped between snapshots | 0 |
+
+All three backfilled maps fall on the single last day of the older snapshot's
+coverage; every earlier day is identical in both. So lag exists, is confined to
+roughly the final day, and is nowhere near large enough to explain a rate 82%
+below the corpus average. **The slowdown is real, and the response is the first
+one.**
+
+**What this cannot see.** The two snapshots are 5.1 days apart, so a row
+arriving later than that is scored here as no lag at all. The measurement bounds
+backfill within five days; it says nothing about a longer one. That number is
+emitted as `observation_horizon_days` rather than left implicit.
+
+Two consequences follow, both now in the runbook: taking the lock-day snapshot
+later buys almost nothing, and the thin recent evidence is a fact about the
+world that the model has to carry rather than a defect to be snapshotted away.
 
 Note this is a corpus-wide effect, not a per-team one: most of the sixteen
 played within two days of the snapshot (§2c). Glicko's answer to idleness is RD
