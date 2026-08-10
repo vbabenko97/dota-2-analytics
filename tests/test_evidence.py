@@ -1,7 +1,11 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from ti26.evidence import (
     EvidenceError,
+    EvidenceExistsError,  # noqa: F401 -- imported per Step 2's RED-import assertion
     ReconciliationError,
     canonical_evidence_json_bytes,
     evidence_id_for_manifest,
@@ -12,6 +16,7 @@ from ti26.evidence import (
     validate_evidence_manifest,
     validate_kind_payload,
     validate_record_sources,
+    write_evidence_record,
 )
 from ti26.provenance import canonical_json_bytes
 
@@ -163,6 +168,42 @@ def _negative_manifest(*, checked: list[str]) -> dict[str, object]:
     return payload
 
 
+def _negative_record_with_payload_bytes(
+    *, checked: list[str] | None = None
+) -> tuple[dict[str, object], dict[str, bytes]]:
+    """Build a manifest-valid absent-observation payload plus its exact payload bytes.
+
+    In the style of `_negative_manifest`, but every declared digest is derived
+    from real bytes returned alongside the manifest, so the result can be
+    handed to `write_evidence_record` -- not merely shape-validated.
+    """
+    checked = checked if checked is not None else ["valve-ti-group-stage-rules"]
+    registry_bytes = _bound_registry()
+    payload_bytes: dict[str, bytes] = {"authority-registry.json": registry_bytes}
+    payloads = [{"path": "authority-registry.json", "sha256": _sha(registry_bytes)}]
+    captures = []
+    for key in checked:
+        path = "rendered.txt" if key == "valve-ti-group-stage-rules" else f"captures/{key}.bin"
+        data = f"synthetic-{key}".encode()
+        payload_bytes[path] = data
+        payloads.append({"path": path, "sha256": _sha(data)})
+        captures.append({"source_url_key": key, "path": path})
+    payload = _manifest()
+    payload["payloads"] = payloads
+    payload["attestation"] = None
+    payload["observation"] = {
+        "assertion": "absent",
+        "observed_at_utc": "2026-01-01T00:00:01Z",
+        "supported_through_utc": "2026-01-01T00:00:01Z",
+        "captures": captures,
+        "authoritative_source_keys_checked": list(checked),
+        "diagnostic_reason": None,
+    }
+    payload["evidence_id"] = ""
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    return payload, payload_bytes
+
+
 def test_evidence_json_encoding_matches_run_provenance_encoding():
     """Kills mutation: use a different canonical JSON separator in evidence IDs."""
     value = {"z": [2, 1], "a": "text"}
@@ -294,3 +335,43 @@ def test_negative_observation_cannot_omit_a_registered_authority(tmp_path):
     )
     with pytest.raises(EvidenceError, match="complete authority set"):
         validate_record_sources(record, registry)
+
+
+def test_write_evidence_record_binds_written_bytes_and_writes_manifest_last(tmp_path, monkeypatch):
+    """Kills mutation: create manifest.json before validating every payload digest."""
+    seen_manifest = []
+    original = Path.open
+
+    def observing_open(path, mode="r", *args, **kwargs):
+        if Path(path).name == "manifest.json" and "x" in mode:
+            assert (Path(path).parent / "authority-registry.json").is_file()
+            assert (Path(path).parent / "rendered.txt").is_file()
+            assert (Path(path).parent / "extracted.json").is_file()
+            seen_manifest.append(True)
+        return original(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", observing_open)
+    record = write_evidence_record(
+        tmp_path, _manifest(),
+        {"authority-registry.json": _bound_registry(), "rendered.txt": b"Group Stage Rules\n", "extracted.json": canonical_json_bytes({"schema": "ti26.rules-extracted.v1", "facts": {}}) + b"\n"},
+    )
+    assert seen_manifest == [True]
+    assert validate_evidence_manifest(record, json.loads((record / "manifest.json").read_text()))
+
+
+def test_write_evidence_record_reuses_only_an_identical_complete_record(tmp_path):
+    """Kills mutation: reject an identical complete content-addressed retry or overwrite different bytes."""
+    payloads = {"authority-registry.json": _bound_registry(), "rendered.txt": b"Group Stage Rules\n", "extracted.json": canonical_json_bytes({"schema": "ti26.rules-extracted.v1", "facts": {}}) + b"\n"}
+    write_evidence_record(tmp_path, _manifest(), payloads)
+    assert write_evidence_record(tmp_path, _manifest(), payloads) == tmp_path / "rules" / _manifest()["evidence_id"]
+
+
+def test_write_evidence_record_rejects_caller_digest_that_does_not_describe_bytes(tmp_path):
+    """Kills mutation: trust a caller-supplied payload digest instead of hashing bytes written."""
+    payload, payload_bytes = _negative_record_with_payload_bytes()
+    corrupted = next(entry for entry in payload["payloads"] if entry["path"] != "authority-registry.json")
+    corrupted["sha256"] = "0" * 64
+    payload["evidence_id"] = ""
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    with pytest.raises(EvidenceError, match="sha256"):
+        write_evidence_record(tmp_path, payload, payload_bytes)

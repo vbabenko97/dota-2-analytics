@@ -882,3 +882,170 @@ def validate_record_sources(record: EvidenceManifest, registry: EvidenceSourceRe
                 "a negative observation must check the complete authority set for "
                 f"{record.kind}:{record.subject_key}"
             )
+
+
+class EvidenceExistsError(FileExistsError):
+    """An evidence destination already exists and is not a verified-identical retry."""
+
+
+def _require_safe_path_component(value: object, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or "/" in value
+        or "\\" in value
+        or value in (".", "..")
+    ):
+        raise EvidenceError(f"{label} must be a single safe path component")
+    return value
+
+
+def evidence_record_path(root: Path, kind: str, evidence_id: str) -> Path:
+    """Return `root / kind / evidence_id`, validating both as one safe path component."""
+    kind_component = _require_safe_path_component(kind, "kind")
+    id_component = _require_safe_path_component(evidence_id, "evidence_id")
+    if not _is_sha256(id_component):
+        raise EvidenceError("evidence_id must be a lower-case 64-hex sha256 digest")
+    return root / kind_component / id_component
+
+
+def _ancestor_chain(base: Path, target: Path) -> tuple[Path, ...]:
+    """Return `base`, then every path from `base` down through `target`, inclusive."""
+    chain = [base]
+    current = base
+    for part in target.relative_to(base).parts:
+        current = current / part
+        chain.append(current)
+    return tuple(chain)
+
+
+def _require_safe_dir(path: Path, label: str) -> None:
+    """Raise unless `path` is absent, or an existing non-symlink directory."""
+    if path.is_symlink():
+        raise EvidenceError(f"{label} must not be a symlink: {path}")
+    if path.exists() and not path.is_dir():
+        raise EvidenceError(f"{label} must be a directory: {path}")
+
+
+def _ensure_dir(path: Path, label: str) -> None:
+    """lstat-revalidate `path`, then create it with exclusive-create semantics if absent."""
+    _require_safe_dir(path, label)
+    if not path.exists():
+        try:
+            path.mkdir()
+        except FileExistsError:
+            pass
+        _require_safe_dir(path, label)
+        if not path.is_dir():
+            raise EvidenceError(f"{label} must be a directory: {path}")
+
+
+def _reuse_existing_record(
+    record: Path, manifest: dict[str, object], payloads: dict[str, bytes]
+) -> Path | None:
+    """Return `record` only when it already holds a complete, byte-identical record.
+
+    Any incomplete directory, non-directory, or content mismatch raises
+    `EvidenceExistsError` without touching the existing destination.
+    """
+    if record.is_symlink():
+        raise EvidenceExistsError(f"evidence destination must not be a symlink: {record}")
+    if not record.exists():
+        return None
+    if not record.is_dir():
+        raise EvidenceExistsError(f"evidence destination exists and is not a directory: {record}")
+    manifest_path = record / "manifest.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise EvidenceExistsError(f"evidence destination is incomplete: {record}")
+    try:
+        existing_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EvidenceExistsError(
+            f"evidence destination manifest is unreadable: {record}"
+        ) from exc
+    try:
+        validate_evidence_manifest(record, existing_manifest, verify_payloads=True)
+    except EvidenceError as exc:
+        raise EvidenceExistsError(
+            f"evidence destination manifest is invalid: {record}"
+        ) from exc
+    if canonical_evidence_json_bytes(existing_manifest) != canonical_evidence_json_bytes(manifest):
+        raise EvidenceExistsError(
+            f"evidence destination content differs from the requested record: {record}"
+        )
+    for path_text, payload_bytes in payloads.items():
+        _, file_path = safe_relative_file(record, path_text, "payload")
+        if not file_path.is_file() or file_path.read_bytes() != payload_bytes:
+            raise EvidenceExistsError(
+                f"evidence destination payload differs from requested bytes: {path_text}"
+            )
+    return record
+
+
+def _write_payload_exclusive(record: Path, digest: PayloadDigest, data: bytes) -> None:
+    """Exclusively create one payload file, then reject a written-bytes digest mismatch."""
+    _, file_path = safe_relative_file(record, digest.path, "payload")
+    for ancestor in _ancestor_chain(record, file_path.parent):
+        _ensure_dir(ancestor, "evidence capture parent")
+    with file_path.open("xb") as file:
+        file.write(data)
+    written_digest = _sha256_file(file_path)
+    if written_digest != digest.sha256:
+        raise EvidenceError(
+            f"written payload sha256 does not match its declared digest: {digest.path}"
+        )
+
+
+def write_evidence_record(
+    root: Path, manifest: dict[str, object], payloads: dict[str, bytes]
+) -> Path:
+    """Publish one content-addressed evidence record, payloads first and manifest last.
+
+    An absent destination is created from scratch with exclusive `open("xb")`
+    writes in sorted payload-path order, each recomputed from the bytes just
+    written. `manifest.json` is exclusively created only after every payload
+    is bound. An existing destination is returned unmodified only when it is
+    complete and byte-identical to the requested record; otherwise
+    `EvidenceExistsError` is raised without overwriting. Every
+    filesystem-mutating step lstat-revalidates its ancestor directories
+    immediately beforehand, closing a symlink substituted after an earlier
+    check.
+    """
+    if not isinstance(manifest, dict):
+        raise EvidenceError("evidence manifest must be a JSON object")
+    if not isinstance(payloads, dict) or not all(
+        isinstance(value, bytes) for value in payloads.values()
+    ):
+        raise EvidenceError("payloads must be a mapping of payload path to bytes")
+
+    record = evidence_record_path(root, manifest.get("kind"), manifest.get("evidence_id"))
+    chain = _ancestor_chain(root, record)
+    for ancestor in chain[:-1]:
+        _require_safe_dir(ancestor, "evidence path ancestor")
+
+    existing = _reuse_existing_record(record, manifest, payloads)
+    if existing is not None:
+        return existing
+
+    validated = validate_evidence_manifest(record, manifest, verify_payloads=False)
+    declared_paths = {digest.path for digest in validated.payloads}
+    if set(payloads) != declared_paths:
+        raise EvidenceError("payload map keys must exactly equal the manifest payload paths")
+
+    for ancestor in chain:
+        _ensure_dir(ancestor, "evidence path component")
+
+    for digest in sorted(validated.payloads, key=lambda item: item.path):
+        _write_payload_exclusive(record, digest, payloads[digest.path])
+
+    for ancestor in chain:
+        _require_safe_dir(ancestor, "evidence path component")
+    manifest_path = record / "manifest.json"
+    if manifest_path.is_symlink():
+        raise EvidenceError(f"manifest.json must not be a symlink: {manifest_path}")
+    with manifest_path.open("xb") as file:
+        file.write(canonical_evidence_json_bytes(manifest) + b"\n")
+
+    written_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    validate_evidence_manifest(record, written_manifest, verify_payloads=True)
+    return record
