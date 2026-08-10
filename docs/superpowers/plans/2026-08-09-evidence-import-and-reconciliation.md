@@ -421,13 +421,16 @@ def test_write_evidence_record_reuses_only_an_identical_complete_record(tmp_path
 
 def test_write_evidence_record_rejects_caller_digest_that_does_not_describe_bytes(tmp_path):
     """Kills mutation: trust a caller-supplied payload digest instead of hashing bytes written."""
-    payload = _manifest()
-    payload["payloads"][0]["sha256"] = "0" * 64
+    payload, payload_bytes = _negative_record_with_payload_bytes()
+    corrupted = next(entry for entry in payload["payloads"] if entry["path"] != "authority-registry.json")
+    corrupted["sha256"] = "0" * 64
     payload["evidence_id"] = ""
     payload["evidence_id"] = evidence_id_for_manifest(payload)
     with pytest.raises(EvidenceError, match="sha256"):
-        write_evidence_record(tmp_path, payload, {"authority-registry.json": _bound_registry(), "rendered.txt": b"Group Stage Rules\n", "extracted.json": canonical_json_bytes({"schema": "ti26.rules-extracted.v1", "facts": {}}) + b"\n"})
+        write_evidence_record(tmp_path, payload, payload_bytes)
 ```
+
+`_negative_record_with_payload_bytes` is a test-helper-convention fixture: it builds a negative-observation manifest (in the style of `_negative_manifest`) together with the exact payload-byte map its declared paths require, all digests derived from the actual bytes. The corrupted entry is deliberately a capture payload on a negative record — the one digest no attestation or authority-registry cross-check references — so removing the write-time recompute is the only thing that can let it through, which is exactly the mutation this test kills. Do not corrupt the `authority-registry.json` entry here: Task 1's binding cross-check already rejects that during pre-write shape validation, before the write-time check runs.
 
 - [ ] **Step 2: Run RED**
 
@@ -452,7 +455,7 @@ The destination is `root / kind / evidence_id`; validate both ids as one safe pa
 
 Before every `mkdir`, `open("xb")`, hash, and manifest open, lstat every ancestor from root through the nested capture parent and revalidate it remains a regular non-symlink directory; create missing nested capture parents one safe component at a time with exclusive semantics. This closes parent-symlink races as well as final-file redirects.
 
-For a positive assertion, exact-pair registry authorization is required for every `--capture SOURCE_URL_KEY`, including secondary captures; add `test_import_rejects_unregistered_positive_secondary_capture` (`Kills mutation: authorize only the primary present capture.`), remove the per-capture loop to observe RED, restore GREEN.
+Per-capture registry authorization for positive assertions belongs to the importer, not to `write_evidence_record`: `test_import_rejects_unregistered_positive_secondary_capture` and its mutation live in Task 6, which owns the `--capture` interface. Task 2 adds no such test.
 
 - [ ] **Step 4: Run GREEN and every mutation**
 
