@@ -529,6 +529,30 @@ def validate_evidence_manifest(
     )
 
 
+def evidence_is_admissible(
+    record: EvidenceManifest, cutoff_utc: str, *, allow_reconstructed_unknown: bool = False
+) -> bool:
+    """Return whether `record` is a valid observation as of `cutoff_utc`.
+
+    Pure predicate: false when the parsed cutoff precedes
+    `source.available_at_utc`; for an `absent` observation it also requires
+    `cutoff <= supported_through_utc`, using
+    `max(available_at_utc, observed_at_utc)` as the lower bound so a negative
+    observation cannot apply before it was actually made. A
+    `reconstructed_unknown` record is inadmissible unless a diagnostic caller
+    opts in explicitly. This function never back-projects a later negative
+    observation to an earlier cutoff and invents no freshness policy beyond
+    the bound `supported_through_utc`; current-tip selection is separate.
+    """
+    cutoff = parse_utc(cutoff_utc, "cutoff_utc")
+    if record.construction == "reconstructed_unknown" and not allow_reconstructed_unknown:
+        return False
+    if record.observation.assertion == "present":
+        return cutoff >= record.source.available_at_utc
+    lower_bound = max(record.source.available_at_utc, record.observation.observed_at_utc)
+    return lower_bound <= cutoff <= record.observation.supported_through_utc
+
+
 class ReconciliationError(ValueError):
     """A pure fact comparison between expected and observed evidence disagrees."""
 

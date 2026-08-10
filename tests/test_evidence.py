@@ -9,6 +9,7 @@ from ti26.evidence import (
     ReconciliationError,
     canonical_evidence_json_bytes,
     evidence_id_for_manifest,
+    evidence_is_admissible,
     load_source_registry,
     reconcile_draw,
     reconcile_participants,
@@ -375,3 +376,93 @@ def test_write_evidence_record_rejects_caller_digest_that_does_not_describe_byte
     payload["evidence_id"] = evidence_id_for_manifest(payload)
     with pytest.raises(EvidenceError, match="sha256"):
         write_evidence_record(tmp_path, payload, payload_bytes)
+
+
+def test_present_evidence_requires_availability_no_later_than_cutoff(tmp_path):
+    """Kills mutation: admit a positive fact based only on retrieval time."""
+    record = validate_evidence_manifest(tmp_path, _manifest(), verify_payloads=False)
+    assert evidence_is_admissible(record, "2026-01-01T00:00:00Z") is True
+    assert evidence_is_admissible(record, "2025-12-31T23:59:59Z") is False
+
+
+def test_absent_evidence_expires_after_supported_through(tmp_path):
+    """Kills mutation: treat an old negative observation as absence forever."""
+    record = validate_evidence_manifest(
+        tmp_path,
+        _manifest(
+            observation={
+                "assertion": "absent",
+                "observed_at_utc": "2026-01-01T00:00:01Z",
+                "supported_through_utc": "2026-01-01T00:00:01Z",
+                "captures": [
+                    {
+                        "source_url_key": "valve-ti-group-stage-rules",
+                        "path": "rendered.txt",
+                    }
+                ],
+                "authoritative_source_keys_checked": [
+                    "valve-ti-group-stage-rules"
+                ],
+                "diagnostic_reason": None,
+            }
+        ),
+        verify_payloads=False,
+    )
+    assert evidence_is_admissible(record, "2026-01-01T00:00:00Z") is False
+    assert evidence_is_admissible(record, "2026-01-01T00:00:01Z") is True
+    assert evidence_is_admissible(record, "2026-01-01T00:00:02Z") is False
+
+
+def test_present_evidence_without_a_bound_capture_is_rejected(tmp_path):
+    """Kills mutation: allow a positive assertion with no source bytes."""
+    payload = _manifest()
+    payload["observation"]["captures"] = []
+    with pytest.raises(EvidenceError, match="capture"):
+        validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
+
+
+def test_negative_evidence_binds_one_capture_for_every_checked_authority(tmp_path):
+    """Kills mutation: let one captured page prove absence across multiple authorities."""
+    payload = _manifest()
+    payload["observation"] = {
+        "assertion": "absent",
+        "observed_at_utc": "2026-01-01T00:00:01Z",
+        "supported_through_utc": "2026-01-01T00:00:01Z",
+        "captures": [
+            {
+                "source_url_key": "valve-ti-group-stage-rules",
+                "path": "rendered.txt",
+            }
+        ],
+        "authoritative_source_keys_checked": [
+            "valve-ti-group-stage-rules",
+            "valve-ti-series-page",
+        ],
+        "diagnostic_reason": None,
+    }
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    with pytest.raises(EvidenceError, match="every checked authority"):
+        validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
+
+
+def test_positive_attestation_rejects_facts_swapped_between_captures(tmp_path):
+    """Kills mutation: accept positive facts whose owner attestation names another payload digest."""
+    payload = _manifest()
+    payload["attestation"]["fact_payload_sha256"] = "0" * 64
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    with pytest.raises(EvidenceError, match="fact_payload_sha256"):
+        validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
+
+
+def test_reconstructed_unknown_is_diagnostic_only_by_default(tmp_path):
+    """Kills mutation: admit reconstructed-unknown evidence into release selection by default."""
+    payload = _manifest()
+    payload["construction"] = "reconstructed_unknown"
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    record = validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
+    assert evidence_is_admissible(record, "2026-01-01T00:00:00Z") is False
+    assert evidence_is_admissible(
+        record,
+        "2026-01-01T00:00:00Z",
+        allow_reconstructed_unknown=True,
+    ) is True
