@@ -1,0 +1,467 @@
+{
+  "status": "DIAGNOSTIC -- not a gate; does not alter the shipping card",
+  "league_id": 18324,
+  "training_maps": 16958,
+  "training_from": null,
+  "training_window_days": 207.3,
+  "observed_score": 1,
+  "random_baseline": 3.75,
+  "optimizer_marginal_objective": 4.163652,
+  "evaluation_simulation_mean_score": 4.160128,
+  "percentile_strictly_below": 0.7164,
+  "percentile_at_or_below": 4.9876,
+  "calibration_slope_refit_precutoff": 0.20159703583318264,
+  "calibration_slope_production_full_store": 0.4050679099529673,
+  "prior_driven_teams": [],
+  "n_sims": 250000,
+  "card_seed": 1,
+  "eval_seed": 90001,
+  "score_distribution": {
+    "0": 1791,
+    "1": 10678,
+    "2": 29686,
+    "3": 49497,
+    "4": 57254,
+    "5": 48013,
+    "6": 30307,
+    "7": 14704,
+    "8": 5697,
+    "9": 1805,
+    "10": 459,
+    "11": 84,
+    "12": 21,
+    "13": 3,
+    "14": 1
+  },
+  "card": {
+    "Aurora Gaming": "0-4",
+    "BOOM Esports": "elim_loss",
+    "BoomBoys": "elim_win",
+    "HEROIC": "elim_loss",
+    "Natus Vincere": "elim_loss",
+    "Nigma Galaxy": "elim_loss",
+    "TEAM VISION": "4-1",
+    "Team Falcons": "4-0",
+    "Team Liquid": "elim_win",
+    "Team Nemesis": "elim_loss",
+    "Team Spirit": "4-1",
+    "Team Tidebound": "elim_win",
+    "Tundra Esports": "elim_win",
+    "Wildcard": "1-4",
+    "Xtreme Gaming": "elim_win",
+    "Yakult Brothers": "1-4"
+  },
+  "per_slot": [
+    {
+      "team": "Aurora Gaming",
+      "predicted": "0-4",
+      "observed": "elim_loss",
+      "hit": false
+    },
+    {
+      "team": "BOOM Esports",
+      "predicted": "elim_loss",
+      "observed": "1-4",
+      "hit": false
+    },
+    {
+      "team": "BoomBoys",
+      "predicted": "elim_win",
+      "observed": "4-1",
+      "hit": false
+    },
+    {
+      "team": "HEROIC",
+      "predicted": "elim_loss",
+      "observed": "elim_win",
+      "hit": false
+    },
+    {
+      "team": "Natus Vincere",
+      "predicted": "elim_loss",
+      "observed": "1-4",
+      "hit": false
+    },
+    {
+      "team": "Nigma Galaxy",
+      "predicted": "elim_loss",
+      "observed": "elim_win",
+      "hit": false
+    },
+    {
+      "team": "TEAM VISION",
+      "predicted": "4-1",
+      "observed": "elim_win",
+      "hit": false
+    },
+    {
+      "team": "Team Falcons",
+      "predicted": "4-0",
+      "observed": "elim_win",
+      "hit": false
+    },
+    {
+      "team": "Team Liquid",
+      "predicted": "elim_win",
+      "observed": "elim_loss",
+      "hit": false
+    },
+    {
+      "team": "Team Nemesis",
+      "predicted": "elim_loss",
+      "observed": "0-4",
+      "hit": false
+    },
+    {
+      "team": "Team Spirit",
+      "predicted": "4-1",
+      "observed": "elim_loss",
+      "hit": false
+    },
+    {
+      "team": "Team Tidebound",
+      "predicted": "elim_win",
+      "observed": "4-1",
+      "hit": false
+    },
+    {
+      "team": "Wildcard",
+      "predicted": "1-4",
+      "observed": "elim_loss",
+      "hit": false
+    },
+    {
+      "team": "Xtreme Gaming",
+      "predicted": "elim_win",
+      "observed": "4-0",
+      "hit": false
+    },
+    {
+      "team": "Yakult Brothers",
+      "predicted": "1-4",
+      "observed": "elim_loss",
+      "hit": false
+    },
+    {
+      "team": "Tundra Esports",
+      "predicted": "elim_win",
+      "observed": "elim_win",
+      "hit": true
+    }
+  ],
+  "sweep": {
+    "n_sims": [
+      2000,
+      20000,
+      250000
+    ],
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "entries": [
+      {
+        "n_sims": 2000,
+        "seed": 1,
+        "optimizer_marginal_objective": 4.225,
+        "observed_score": 4,
+        "card": {
+          "Aurora Gaming": "elim_win",
+          "BOOM Esports": "elim_loss",
+          "BoomBoys": "elim_loss",
+          "HEROIC": "elim_loss",
+          "Natus Vincere": "1-4",
+          "Nigma Galaxy": "elim_loss",
+          "TEAM VISION": "elim_win",
+          "Team Falcons": "elim_win",
+          "Team Liquid": "4-0",
+          "Team Nemesis": "elim_loss",
+          "Team Spirit": "4-1",
+          "Team Tidebound": "elim_win",
+          "Tundra Esports": "elim_win",
+          "Wildcard": "1-4",
+          "Xtreme Gaming": "4-1",
+          "Yakult Brothers": "0-4"
+        }
+      },
+      {
+        "n_sims": 2000,
+        "seed": 2,
+        "optimizer_marginal_objective": 4.23,
+        "observed_score": 1,
+        "card": {
+          "Aurora Gaming": "elim_win",
+          "BOOM Esports": "elim_loss",
+          "BoomBoys": "elim_win",
+          "HEROIC": "elim_loss",
+          "Natus Vincere": "elim_loss",
+          "Nigma Galaxy": "0-4",
+          "TEAM VISION": "4-0",
+          "Team Falcons": "4-1",
+          "Team Liquid": "elim_win",
+          "Team Nemesis": "elim_loss",
+          "Team Spirit": "4-1",
+          "Team Tidebound": "elim_loss",
+          "Tundra Esports": "elim_win",
+          "Wildcard": "1-4",
+          "Xtreme Gaming": "elim_win",
+          "Yakult Brothers": "1-4"
+        }
+      },
+      {
+        "n_sims": 2000,
+        "seed": 3,
+        "optimizer_marginal_objective": 4.236,
+        "observed_score": 3,
+        "card": {
+          "Aurora Gaming": "elim_loss",
+          "BOOM Esports": "elim_loss",
+          "BoomBoys": "4-0",
+          "HEROIC": "1-4",
+          "Natus Vincere": "elim_loss",
+          "Nigma Galaxy": "elim_loss",
+          "TEAM VISION": "elim_win",
+          "Team Falcons": "4-1",
+          "Team Liquid": "elim_win",
+          "Team Nemesis": "elim_loss",
+          "Team Spirit": "4-1",
+          "Team Tidebound": "elim_win",
+          "Tundra Esports": "elim_win",
+          "Wildcard": "0-4",
+          "Xtreme Gaming": "elim_win",
+          "Yakult Brothers": "1-4"
+        }
+      },
+      {
+        "n_sims": 20000,
+        "seed": 1,
+        "optimizer_marginal_objective": 4.1591000000000005,
+        "observed_score": 4,
+        "card": {
+          "Aurora Gaming": "elim_loss",
+          "BOOM Esports": "1-4",
+          "BoomBoys": "4-0",
+          "HEROIC": "elim_loss",
+          "Natus Vincere": "elim_loss",
+          "Nigma Galaxy": "elim_loss",
+          "TEAM VISION": "4-1",
+          "Team Falcons": "elim_win",
+          "Team Liquid": "elim_win",
+          "Team Nemesis": "elim_loss",
+          "Team Spirit": "4-1",
+          "Team Tidebound": "elim_win",
+          "Tundra Esports": "elim_win",
+          "Wildcard": "0-4",
+          "Xtreme Gaming": "elim_win",
+          "Yakult Brothers": "1-4"
+        }
+      },
+      {
+        "n_sims": 20000,
+        "seed": 2,
+        "optimizer_marginal_objective": 4.1814,
+        "observed_score": 5,
+        "card": {
+          "Aurora Gaming": "elim_loss",
+          "BOOM Esports": "elim_loss",
+          "BoomBoys": "4-1",
+          "HEROIC": "elim_loss",
+          "Natus Vincere": "elim_loss",
+          "Nigma Galaxy": "1-4",
+          "TEAM VISION": "elim_win",
+          "Team Falcons": "elim_win",
+          "Team Liquid": "4-0",
+          "Team Nemesis": "elim_loss",
+          "Team Spirit": "4-1",
+          "Team Tidebound": "elim_win",
+          "Tundra Esports": "elim_win",
+          "Wildcard": "0-4",
+          "Xtreme Gaming": "elim_win",
+          "Yakult Brothers": "1-4"
+        }
+      },
+      {
+        "n_sims": 20000,
+        "seed": 3,
+        "optimizer_marginal_objective": 4.16705,
+        "observed_score": 2,
+        "card": {
+          "Aurora Gaming": "elim_loss",
+          "BOOM Esports": "elim_loss",
+          "BoomBoys": "elim_win",
+          "HEROIC": "elim_loss",
+          "Natus Vincere": "elim_loss",
+          "Nigma Galaxy": "0-4",
+          "TEAM VISION": "4-1",
+          "Team Falcons": "4-1",
+          "Team Liquid": "elim_win",
+          "Team Nemesis": "elim_loss",
+          "Team Spirit": "4-0",
+          "Team Tidebound": "elim_win",
+          "Tundra Esports": "elim_win",
+          "Wildcard": "1-4",
+          "Xtreme Gaming": "elim_win",
+          "Yakult Brothers": "1-4"
+        }
+      },
+      {
+        "n_sims": 250000,
+        "seed": 1,
+        "optimizer_marginal_objective": 4.163652,
+        "observed_score": 1,
+        "card": {
+          "Aurora Gaming": "0-4",
+          "BOOM Esports": "elim_loss",
+          "BoomBoys": "elim_win",
+          "HEROIC": "elim_loss",
+          "Natus Vincere": "elim_loss",
+          "Nigma Galaxy": "elim_loss",
+          "TEAM VISION": "4-1",
+          "Team Falcons": "4-0",
+          "Team Liquid": "elim_win",
+          "Team Nemesis": "elim_loss",
+          "Team Spirit": "4-1",
+          "Team Tidebound": "elim_win",
+          "Tundra Esports": "elim_win",
+          "Wildcard": "1-4",
+          "Xtreme Gaming": "elim_win",
+          "Yakult Brothers": "1-4"
+        }
+      },
+      {
+        "n_sims": 250000,
+        "seed": 2,
+        "optimizer_marginal_objective": 4.167268,
+        "observed_score": 2,
+        "card": {
+          "Aurora Gaming": "elim_loss",
+          "BOOM Esports": "elim_loss",
+          "BoomBoys": "elim_win",
+          "HEROIC": "elim_loss",
+          "Natus Vincere": "elim_loss",
+          "Nigma Galaxy": "0-4",
+          "TEAM VISION": "4-0",
+          "Team Falcons": "4-1",
+          "Team Liquid": "elim_win",
+          "Team Nemesis": "elim_loss",
+          "Team Spirit": "4-1",
+          "Team Tidebound": "elim_win",
+          "Tundra Esports": "elim_win",
+          "Wildcard": "1-4",
+          "Xtreme Gaming": "elim_win",
+          "Yakult Brothers": "1-4"
+        }
+      },
+      {
+        "n_sims": 250000,
+        "seed": 3,
+        "optimizer_marginal_objective": 4.162176,
+        "observed_score": 2,
+        "card": {
+          "Aurora Gaming": "0-4",
+          "BOOM Esports": "elim_loss",
+          "BoomBoys": "elim_win",
+          "HEROIC": "elim_loss",
+          "Natus Vincere": "elim_loss",
+          "Nigma Galaxy": "elim_loss",
+          "TEAM VISION": "4-1",
+          "Team Falcons": "elim_win",
+          "Team Liquid": "4-0",
+          "Team Nemesis": "elim_loss",
+          "Team Spirit": "4-1",
+          "Team Tidebound": "elim_win",
+          "Tundra Esports": "elim_win",
+          "Wildcard": "1-4",
+          "Xtreme Gaming": "elim_win",
+          "Yakult Brothers": "1-4"
+        }
+      }
+    ]
+  },
+  "random_control": {
+    "samples": 200000,
+    "seed": 1,
+    "mean_score": 3.74856,
+    "score_counts": {
+      "0": 2442,
+      "1": 12581,
+      "2": 30927,
+      "3": 46061,
+      "4": 46239,
+      "5": 33220,
+      "6": 17909,
+      "7": 7418,
+      "8": 2389,
+      "9": 631,
+      "10": 148,
+      "11": 33,
+      "12": 2
+    }
+  },
+  "naive_ladder": {
+    "card": {
+      "Aurora Gaming": "elim_loss",
+      "BOOM Esports": "elim_loss",
+      "BoomBoys": "elim_win",
+      "HEROIC": "elim_loss",
+      "Natus Vincere": "elim_loss",
+      "Nigma Galaxy": "1-4",
+      "TEAM VISION": "4-1",
+      "Team Falcons": "4-1",
+      "Team Liquid": "elim_win",
+      "Team Nemesis": "elim_loss",
+      "Team Spirit": "4-0",
+      "Team Tidebound": "elim_win",
+      "Tundra Esports": "elim_win",
+      "Wildcard": "0-4",
+      "Xtreme Gaming": "elim_win",
+      "Yakult Brothers": "1-4"
+    },
+    "score": 2
+  },
+  "rank_diagnostics": {
+    "spearman_rho": 0.4780564263322884,
+    "exact": [
+      "Tundra Esports"
+    ],
+    "off_by_one": [
+      "BOOM Esports",
+      "BoomBoys",
+      "HEROIC",
+      "Natus Vincere",
+      "Nigma Galaxy",
+      "TEAM VISION",
+      "Team Liquid",
+      "Team Tidebound",
+      "Wildcard",
+      "Yakult Brothers"
+    ],
+    "off_by_two_or_more": [
+      "Aurora Gaming",
+      "Team Falcons",
+      "Team Nemesis",
+      "Team Spirit",
+      "Xtreme Gaming"
+    ],
+    "displacement": {
+      "Aurora Gaming": 2,
+      "BOOM Esports": 1,
+      "BoomBoys": 1,
+      "HEROIC": 1,
+      "Natus Vincere": 1,
+      "Nigma Galaxy": 1,
+      "TEAM VISION": 1,
+      "Team Falcons": 2,
+      "Team Liquid": 1,
+      "Team Nemesis": 2,
+      "Team Spirit": 2,
+      "Team Tidebound": 1,
+      "Tundra Esports": 0,
+      "Wildcard": 1,
+      "Xtreme Gaming": 2,
+      "Yakult Brothers": 1
+    },
+    "mean_absolute_displacement": 1.25
+  }
+}

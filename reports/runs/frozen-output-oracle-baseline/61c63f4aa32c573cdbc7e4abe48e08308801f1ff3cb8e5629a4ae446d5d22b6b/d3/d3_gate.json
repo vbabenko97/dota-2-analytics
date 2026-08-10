@@ -1,0 +1,41 @@
+{
+  "conditions": {
+    "ci": {
+      "excludes": 0.0,
+      "passed": false,
+      "value": [
+        -0.00046250530987296067,
+        0.00500438920747746
+      ]
+    },
+    "margin": {
+      "passed": false,
+      "threshold": 0.003,
+      "value": 0.0019064840793850595
+    },
+    "slope": {
+      "band": [
+        0.9,
+        1.1
+      ],
+      "passed": false,
+      "value": 0.6569032104594531
+    }
+  },
+  "config": {
+    "bootstrap_ci": 0.95,
+    "bootstrap_draws": 10000,
+    "min_train": 500,
+    "seed": 20260802
+  },
+  "excluded": {
+    "null_team": 2093
+  },
+  "exit_code": 1,
+  "gate": "d3",
+  "method": "cluster bootstrap over 191 tournaments",
+  "n_maps": 26830,
+  "registration": "docs/superpowers/specs/2026-08-01-ti2026-forecast-design.md section II, D3 calibration gate (Elo, sole gated candidate)",
+  "schema": "ti26.gate-result.v1",
+  "verdict": "FAIL"
+}
