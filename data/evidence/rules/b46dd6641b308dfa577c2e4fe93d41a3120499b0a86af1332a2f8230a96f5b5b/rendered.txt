@@ -1,0 +1,114 @@
+GAME
+PATCHES
+GAMEPLAY UPDATES
+PREVIOUS UPDATES
+HEROES
+NEWS
+ESPORTS
+LOGIN
+SELECT LANGUAGE
+GO TO SCHEDULE
+04:00
+GROUP STAGE
+TEAM FALCONS
+LGD GAMING
+VIEW IN SCHEDULE
+04:00
+GROUP STAGE
+IRON WING
+NIGMA GALAXY
+VIEW IN SCHEDULE
+04:00
+GROUP STAGE
+BOOMBOYS
+OG
+VIEW IN SCHEDULE
+04:00
+GROUP STAGE
+TEAM VISION
+TEAM RESILIENCE
+VIEW IN SCHEDULE
+07:00
+GROUP STAGE
+TEAM SPIRIT
+XTREME GAMING
+VIEW IN SCHEDULE
+07:00
+GROUP STAGE
+TEAM LIQUID
+VICI GAMING
+VIEW IN SCHEDULE
+07:00
+GROUP STAGE
+AURORA GAMING
+GAMERLEGION
+VIEW IN SCHEDULE
+07:00
+GROUP STAGE
+TEAM YANDEX
+HULIGANI
+VIEW IN SCHEDULE
+GO TO SCHEDULE
+13 AUG
+TOTAL PRIZE POOL
+$2,809,920
+SELECT LEAGUE
+WATCH
+SCHEDULE
+STANDINGS
+RULES
+SPOILERS:
+VISIBLE
+The International 2026
+The International: Group Stage Rules
+Teams are ranked from best to worst based on the following criteria, evaluated in order:
+Number of Matches Won
+Number of Matches Lost
+Total Number of Matches Won by Opponents Played
+Percentage of Games Won
+Average Percentage of Games Won by Opponents Played
+Average Game Duration (Shorter is Better)
+Coin Toss
+
+
+Teams are paired using the General Swiss Pairing Rules. Rounds that have modifications to these rules are notated below
+Teams with the same record are paired against each other
+Avoid repeat pairings when possible
+Minimize the distance in ranking between the teams when possible
+
+
+Modifications to the General Swiss Pairing Rules by Round
+Round 1
+Teams are split into two different Groups
+Matchups are set by the tournament organizer, with teams playing other members of their group
+Round 2
+Teams are only matched against other members of their initial group
+Round 3
+Teams are only matched against other members of their initial group
+Round 4
+Teams are only matched against members of the other group
+Round 5
+For matches where the loser is eliminated, maximize the distance in ranking between the teams
+
+
+Elimination Round
+Starting with the best 3-2 team, they will choose any of the five 2-3 teams as their opponent.
+The next best 3-2 team will then choose any of the remaining 2-3 teams as their opponent.
+Repeat the above until all teams have chosen an opponent.
+The International: Seeding
+All eight teams that qualify to The International will be seeded based on their final Swiss Ranking
+Selection Priority Rules
+Best of Three
+Selection Priority is determined via Coin Toss
+First Game: Coin Toss Winner chooses pick or side
+Second Game: Coin Toss Loser chooses pick or side
+Third Game (If Applicable): New Coin Toss. New Coin Toss Winner chooses pick or side
+
+
+Best of Five
+First Game: Upper Bracket Winner chooses pick or side
+Second Game: Lower Bracket Winner chooses pick or side
+Third Game: Upper Bracket Winner chooses pick or side
+Fourth Game (If Applicable): Lower Bracket Winner chooses pick or side
+Fifth Game (If Applicable): Coin Toss. Coin Toss Winner chooses pick or side
+Dota and the Dota logo are trademarks and/or registered trademarks of Valve Corporation. 2026 Valve Corporation, all rights reserved.

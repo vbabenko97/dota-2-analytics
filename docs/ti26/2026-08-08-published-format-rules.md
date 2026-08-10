@@ -1,3 +1,10 @@
+> **Superseded as a current TI 2026 rules source.** The group-stage rules Valve
+> later published are bound as immutable evidence at
+> [`data/evidence/rules/b46dd6641b308dfa577c2e4fe93d41a3120499b0a86af1332a2f8230a96f5b5b/manifest.json`](../../data/evidence/rules/b46dd6641b308dfa577c2e4fe93d41a3120499b0a86af1332a2f8230a96f5b5b/manifest.json).
+> This transcript remains below, unchanged, as historical evidence of what the
+> owner saw on the morning it was supplied. The known difference between its
+> morning state and the later capture is exactly why it remains.
+
 # The published format rules, as transcribed by the project owner
 
 **Supplied 2026-08-08 by the project owner.** This is the archived copy this

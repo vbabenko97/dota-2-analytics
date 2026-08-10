@@ -1,7 +1,14 @@
+from pathlib import Path
+
 import pytest
 import yaml
 
-from ti26.evidence import extract_ti2026_rules, reconcile_rules_facts
+from ti26.evidence import (
+    RELEASE_SUBJECTS,
+    extract_ti2026_rules,
+    load_release_evidence,
+    reconcile_rules_facts,
+)
 from ti26.optimize import solve_card
 from ti26.rules import (
     category_for_terminal_record,
@@ -281,3 +288,14 @@ def test_is_active_uses_configured_thresholds():
     assert rules.is_active(TeamState(team_id="b", initial_group="A", series_wins=4)) is False
     assert rules.is_active(TeamState(team_id="c", initial_group="B", series_losses=4)) is False
     assert rules.is_active(TeamState(team_id="d", initial_group="B", series_wins=3, series_losses=2)) is True
+
+
+def test_morning_rules_transcript_has_a_superseded_banner_and_preserves_its_body():
+    """Kills mutation: silently replace the earlier owner transcript instead of retaining superseded evidence."""
+    text = Path("docs/ti26/2026-08-08-published-format-rules.md").read_text(encoding="utf-8")
+    assert any("Superseded" in line for line in text.splitlines()[:8])
+    assert "## TI 2025" in text
+    assert "## TI 2026, as published on 2026-08-08" in text
+    catalog = load_release_evidence(Path("data/evidence"))
+    linked = [record for record in catalog.records if record.subject_key == RELEASE_SUBJECTS["rules"]]
+    assert any(str(record.root / "manifest.json") in text for record in linked)

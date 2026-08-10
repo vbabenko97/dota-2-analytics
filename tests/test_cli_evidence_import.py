@@ -424,6 +424,57 @@ def test_rules_import_creates_capture_extraction_and_manifest(tmp_path, clean_im
     assert (record / "manifest.json").is_file()
 
 
+def test_dry_run_emits_digests_without_writing(tmp_path, monkeypatch):
+    """Kills mutation: write evidence before owner attestation approval.
+
+    A dry run is the pre-attestation half of the import contract: it prints
+    the digests the owner will attest to, accepts a null attestation, never
+    resolves `HEAD`, and writes nothing under `--root`.
+    """
+
+    def _forbidden(_root):
+        raise AssertionError("--dry-run must not resolve HEAD")
+
+    monkeypatch.setattr("ti26.cli_evidence_import.clean_head_revision", _forbidden)
+    root = tmp_path / "evidence-root"
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    capture = _complete_rules_text()
+    capture_path = inputs / "capture.bin"
+    capture_path.write_bytes(capture)
+    registry_path = _source_registry(
+        inputs,
+        kind="rules",
+        subject_key=_DEFAULT_SUBJECT["rules"],
+        source_keys=[_PRIMARY_SOURCE_KEY],
+    )
+    metadata_path = _write_json(
+        inputs / "source.json", _source_metadata(assertion="present", attestation=None)
+    )
+    fact_bytes = canonical_evidence_json_bytes(
+        extract_ti2026_rules(capture.decode("utf-8"))
+    ) + b"\n"
+
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        main([
+            "rules",
+            "--root", str(root),
+            "--event-id", "ti2026",
+            "--subject-key", _DEFAULT_SUBJECT["rules"],
+            "--source-registry", str(registry_path),
+            "--source", str(metadata_path),
+            "--capture", f"{_PRIMARY_SOURCE_KEY}={capture_path}",
+            "--dry-run",
+        ])
+
+    assert out.getvalue().splitlines() == [
+        f"rendered.txt {_sha(capture)}",
+        f"facts {_sha(fact_bytes)}",
+    ]
+    assert not root.exists()
+
+
 @pytest.mark.parametrize(
     ("kind", "facts", "normalized_name"),
     [

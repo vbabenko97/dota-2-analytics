@@ -31,6 +31,7 @@ from ti26.evidence import (
     write_evidence_record,
 )
 from ti26.provenance import canonical_json_bytes
+from ti26.rules import shipping_rules_facts
 
 
 def _sha(payload: bytes) -> str:
@@ -1165,3 +1166,19 @@ def test_release_reconciliation_rejects_roster_coverage_gap(tmp_path):
     catalog = _release_catalog(tmp_path, team_ids=[101, 102], roster_team_ids=[101])
     with pytest.raises(ReconciliationError, match="coverage"):
         reconcile_release_evidence(catalog, **_release_inputs(tmp_path, team_ids=[101, 102]))
+
+
+def test_committed_valve_rules_evidence_is_complete_and_reconciles_with_shipping_config():
+    """Kills mutation: commit a rendered rules archive without a validated manifest-bound extraction."""
+    catalog = load_release_evidence(Path("data/evidence"))
+    rules_records = [record for record in catalog.records if record.subject_key == RELEASE_SUBJECTS["rules"]]
+    assert rules_records
+    cutoff = max(record.source.available_at_utc for record in rules_records)
+    current = select_current_evidence(
+        catalog.records,
+        "rules",
+        RELEASE_SUBJECTS["rules"],
+        cutoff.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+    extracted = json.loads((current.selected.root / "extracted.json").read_text(encoding="utf-8"))
+    assert reconcile_rules_facts(shipping_rules_facts("config/ti2026_rules.yaml"), extracted) == []
