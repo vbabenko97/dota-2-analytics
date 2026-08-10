@@ -1,17 +1,28 @@
 import json
+import subprocess
 from pathlib import Path, PurePosixPath
 
 import pytest
 
 from ti26 import frozen_output_oracle as oracle
+from ti26.data.snapshot import sha256_file
 from ti26.frozen_output_oracle import (
     BASELINE_ROOT,
     BASELINE_RUN_KIND,
+    FrozenOutput,
     FrozenOutputOracleError,
     load_current_baseline,
+    load_frozen_output,
+    load_staged_frozen_output,
     registered_baseline_bundle,
     registered_baseline_invocation,
 )
+from ti26.gate_artifacts import (
+    gate_result_payload,
+    write_frozen_gate_artifact,
+    write_gate_result,
+)
+from ti26.provenance import write_run_manifest
 
 
 def test_registered_baseline_is_the_sole_runtime_named_bundle():
@@ -98,3 +109,159 @@ def test_current_baseline_loads_complete_manifest_declared_gate_and_card_objects
     assert output.card == json.loads(
         (bundle / "card" / "recommended_card.json").read_text(encoding="utf-8")
     )
+
+
+def _git_text(repo: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+    )
+    return completed.stdout.decode("utf-8").strip()
+
+
+def _synthetic_gate(gate: str) -> dict[str, object]:
+    return gate_result_payload(
+        gate=gate,
+        verdict="PASS",
+        exit_code=0,
+        registration="synthetic",
+        conditions={"synthetic": {"value": "synthetic", "passed": True}},
+        method="synthetic",
+        n_maps=0,
+        excluded={},
+        config={},
+    )
+
+
+def synthetic_oracle_bundle(
+    tmp_path: Path,
+    *,
+    omit_file: str | None = None,
+    omit_manifest_output: str | None = None,
+    card_bytes: bytes = b"{}\n",
+    frozen_gate_bytes: bytes | None = None,
+    replace_gate: str | None = None,
+) -> tuple[Path, Path]:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git_text(repo_root, "init", "--quiet")
+    _git_text(repo_root, "config", "user.name", "Oracle Test")
+    _git_text(repo_root, "config", "user.email", "oracle@example.invalid")
+    source = repo_root / "input.txt"
+    source.write_text("synthetic input\n", encoding="utf-8")
+    _git_text(repo_root, "add", "input.txt")
+    _git_text(repo_root, "commit", "--quiet", "-m", "synthetic oracle input")
+    revision = _git_text(repo_root, "rev-parse", "HEAD")
+
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    paths: dict[str, Path] = {}
+    for gate in ("d2", "d3", "d3b"):
+        path = bundle / gate / f"{gate}_gate.json"
+        path.parent.mkdir()
+        write_gate_result(path, _synthetic_gate(gate))
+        paths[gate] = path
+    frozen_gate_path = bundle / "frozen_gate_results.json"
+    write_frozen_gate_artifact(
+        paths, frozen_gate_path, source_revision=revision
+    )
+    if frozen_gate_bytes is not None:
+        frozen_gate_path.write_bytes(frozen_gate_bytes)
+    card_path = bundle / "card" / "recommended_card.json"
+    card_path.parent.mkdir()
+    card_path.write_bytes(card_bytes)
+    if replace_gate is not None:
+        changed = _synthetic_gate(replace_gate)
+        changed["registration"] = "changed synthetic registration"
+        write_gate_result(paths[replace_gate], changed)
+    if omit_file is not None:
+        (bundle / omit_file).unlink()
+
+    descriptor = {
+        "schema_version": 1,
+        "run_kind": "synthetic-oracle",
+        "source_revision": revision,
+        "invocation": {},
+        "snapshot": {
+            "snapshot_id": "synthetic",
+            "manifest_path": "input.txt",
+            "manifest_sha256": sha256_file(source),
+        },
+        "store": {},
+        "inputs": [{"path": "input.txt", "sha256": sha256_file(source)}],
+        "runtime": {},
+    }
+    outputs = sorted(
+        path.relative_to(bundle).as_posix()
+        for path in bundle.rglob("*")
+        if (
+            path.is_file()
+            and path.relative_to(bundle).as_posix() != omit_manifest_output
+        )
+    )
+    write_run_manifest(bundle, descriptor, outputs)
+    return bundle, repo_root
+
+
+def test_reader_rejects_required_output_not_declared_by_manifest(tmp_path):
+    """Kills mutation: read conventional paths without requiring manifest membership."""
+    bundle, repo_root = synthetic_oracle_bundle(
+        tmp_path, omit_manifest_output="d3/d3_gate.json"
+    )
+
+    with pytest.raises(FrozenOutputOracleError, match="d3/d3_gate.json"):
+        load_frozen_output(bundle, repo_root=repo_root)
+
+
+def test_staged_reader_loads_manifestless_complete_objects(tmp_path):
+    """Kills mutation: require provenance verification in the staged reader."""
+    bundle, _ = synthetic_oracle_bundle(tmp_path)
+    frozen = json.loads(
+        (bundle / "frozen_gate_results.json").read_text(encoding="utf-8")
+    )
+    card = json.loads(
+        (bundle / "card" / "recommended_card.json").read_text(encoding="utf-8")
+    )
+    (bundle / "manifest.json").unlink()
+
+    output = load_staged_frozen_output(bundle)
+
+    assert output == FrozenOutput(gates=frozen["gates"], card=card)
+
+
+def test_staged_reader_rejects_missing_required_file(tmp_path):
+    """Kills mutation: skip required-file checks without a run manifest."""
+    bundle, _ = synthetic_oracle_bundle(
+        tmp_path, omit_file="d3/d3_gate.json"
+    )
+    (bundle / "manifest.json").unlink()
+
+    with pytest.raises(FrozenOutputOracleError, match="d3/d3_gate.json"):
+        load_staged_frozen_output(bundle)
+
+
+def test_reader_rejects_card_json_that_is_not_an_object(tmp_path):
+    """Kills mutation: accept a JSON array as complete card machine output."""
+    bundle, repo_root = synthetic_oracle_bundle(tmp_path, card_bytes=b"[]\n")
+
+    with pytest.raises(FrozenOutputOracleError, match="JSON object"):
+        load_frozen_output(bundle, repo_root=repo_root)
+
+
+def test_reader_translates_invalid_frozen_gate_artifact_error(tmp_path):
+    """Kills mutation: leak gate-artifact ValueError outside the oracle API."""
+    bundle, repo_root = synthetic_oracle_bundle(
+        tmp_path, frozen_gate_bytes=b"[]\n"
+    )
+
+    with pytest.raises(FrozenOutputOracleError, match="invalid frozen gate artifact"):
+        load_frozen_output(bundle, repo_root=repo_root)
+
+
+def test_reader_rejects_gate_disagreeing_with_frozen_aggregate(tmp_path):
+    """Kills mutation: trust the aggregate without cross-checking individual gates."""
+    bundle, repo_root = synthetic_oracle_bundle(tmp_path, replace_gate="d3")
+
+    with pytest.raises(FrozenOutputOracleError, match="d3/d3_gate.json"):
+        load_frozen_output(bundle, repo_root=repo_root)

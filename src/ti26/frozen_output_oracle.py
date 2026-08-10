@@ -134,16 +134,69 @@ def _load_json_object(path: Path) -> dict[str, object]:
     return value
 
 
+def _staged_root(staging: Path) -> Path:
+    try:
+        if staging.is_symlink() or not staging.is_dir():
+            raise FrozenOutputOracleError(
+                "staged output must be a directory, not a symlink"
+            )
+        return staging.resolve(strict=True)
+    except OSError as exc:
+        raise FrozenOutputOracleError(f"invalid staged output: {staging}") from exc
+
+
+def _required_staged_files(staging: Path) -> tuple[Path, dict[str, Path]]:
+    root = _staged_root(staging)
+    paths: dict[str, Path] = {}
+    required = {*_GATE_OUTPUTS.values(), _FROZEN_GATES_OUTPUT, _CARD_OUTPUT}
+    for relative in sorted(required):
+        path = root
+        for part in PurePosixPath(relative).parts:
+            path /= part
+            if path.is_symlink():
+                raise FrozenOutputOracleError(
+                    f"staged oracle path must not use a symlink: {relative}"
+                )
+        if not path.is_file():
+            raise FrozenOutputOracleError(
+                f"staged oracle requires a regular file: {relative}"
+            )
+        paths[relative] = path
+    return root, paths
+
+
+def load_staged_frozen_output(staging: Path) -> FrozenOutput:
+    """Validate internal output agreement without asserting provenance."""
+    _, paths = _required_staged_files(staging)
+    try:
+        artifact = load_frozen_gate_artifact(paths[_FROZEN_GATES_OUTPUT])
+    except ValueError as exc:
+        raise FrozenOutputOracleError(
+            f"invalid frozen gate artifact: {paths[_FROZEN_GATES_OUTPUT]}"
+        ) from exc
+    gates = artifact["gates"]
+    for gate, output in _GATE_OUTPUTS.items():
+        if _load_json_object(paths[output]) != gates[gate]:
+            raise FrozenOutputOracleError(
+                f"frozen gate artifact disagrees with {output}"
+            )
+    return FrozenOutput(
+        gates=gates,
+        card=_load_json_object(paths[_CARD_OUTPUT]),
+    )
+
+
 def load_frozen_output(bundle: Path, *, repo_root: Path) -> FrozenOutput:
     try:
-        verify_run_bundle_at_source_revision(bundle, repo_root=repo_root)
-        artifact = load_frozen_gate_artifact(bundle / _FROZEN_GATES_OUTPUT)
+        manifest = verify_run_bundle_at_source_revision(bundle, repo_root=repo_root)
     except ValueError as exc:
         raise FrozenOutputOracleError(f"invalid oracle bundle: {bundle}") from exc
-    return FrozenOutput(
-        gates=artifact["gates"],
-        card=_load_json_object(bundle / _CARD_OUTPUT),
-    )
+    declared = {entry["path"] for entry in manifest["outputs"]}
+    required = {*_GATE_OUTPUTS.values(), _FROZEN_GATES_OUTPUT, _CARD_OUTPUT}
+    missing = sorted(required - declared)
+    if missing:
+        raise FrozenOutputOracleError(f"bundle lacks oracle output(s): {missing}")
+    return load_staged_frozen_output(bundle)
 
 
 def load_current_baseline(*, repo_root: Path) -> FrozenOutput:
