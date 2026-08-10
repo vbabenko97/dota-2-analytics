@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -203,3 +204,73 @@ def load_current_baseline(*, repo_root: Path) -> FrozenOutput:
     return load_frozen_output(
         registered_baseline_bundle(repo_root=repo_root), repo_root=repo_root
     )
+
+
+def assignment_slots_by_team_id(card: dict[str, object]) -> dict[str, str]:
+    assignments = card.get("assignments")
+    team_ids = card.get("team_ids")
+    if not isinstance(assignments, dict) or not isinstance(team_ids, dict):
+        raise FrozenOutputOracleError(
+            "card requires assignments and configured team_ids objects"
+        )
+    if set(assignments) != set(team_ids):
+        raise FrozenOutputOracleError("card assignment and team_id names disagree")
+    slots: dict[str, str] = {}
+    for name, category in assignments.items():
+        team_id = team_ids[name]
+        if (
+            not isinstance(team_id, str)
+            or not team_id
+            or not isinstance(category, str)
+            or not category
+        ):
+            raise FrozenOutputOracleError("card assignment identity is invalid")
+        if team_id in slots:
+            raise FrozenOutputOracleError(f"duplicate card team_id: {team_id}")
+        slots[team_id] = category
+    return slots
+
+
+def _card_without_assignments(card: dict[str, object]) -> dict[str, object]:
+    return {
+        key: value
+        for key, value in card.items()
+        if key not in {"assignments", "team_ids"}
+    }
+
+
+def assert_matches_frozen_output(
+    baseline: FrozenOutput, candidate: FrozenOutput
+) -> None:
+    for gate in ("d2", "d3", "d3b"):
+        if candidate.gates.get(gate) != baseline.gates.get(gate):
+            raise FrozenOutputOracleError(f"frozen gate output changed: {gate}")
+    baseline_slots = assignment_slots_by_team_id(baseline.card)
+    candidate_slots = assignment_slots_by_team_id(candidate.card)
+    if _card_without_assignments(candidate.card) != _card_without_assignments(
+        baseline.card
+    ):
+        raise FrozenOutputOracleError("frozen card non-assignment JSON changed")
+    if candidate_slots != baseline_slots:
+        raise FrozenOutputOracleError(
+            "frozen card assignment changed by configured team_id"
+        )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Compare a full release bundle with the frozen output baseline"
+    )
+    parser.add_argument("--candidate", required=True)
+    parser.add_argument("--repo-root", default=".")
+    args = parser.parse_args(argv)
+    repo_root = Path(args.repo_root).resolve()
+    baseline = load_current_baseline(repo_root=repo_root)
+    candidate = load_frozen_output(Path(args.candidate), repo_root=repo_root)
+    assert_matches_frozen_output(baseline, candidate)
+    print("frozen output oracle: match")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

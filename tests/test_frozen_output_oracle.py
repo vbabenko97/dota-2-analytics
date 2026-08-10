@@ -1,5 +1,7 @@
 import json
 import subprocess
+from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -11,6 +13,7 @@ from ti26.frozen_output_oracle import (
     BASELINE_RUN_KIND,
     FrozenOutput,
     FrozenOutputOracleError,
+    assert_matches_frozen_output,
     load_current_baseline,
     load_frozen_output,
     load_staged_frozen_output,
@@ -265,3 +268,114 @@ def test_reader_rejects_gate_disagreeing_with_frozen_aggregate(tmp_path):
 
     with pytest.raises(FrozenOutputOracleError, match="d3/d3_gate.json"):
         load_frozen_output(bundle, repo_root=repo_root)
+
+
+def replace_gate_member_without_known_measurement(
+    output: FrozenOutput, gate: str
+) -> FrozenOutput:
+    gates = deepcopy(output.gates)
+    registration = gates[gate]["registration"]
+    assert isinstance(registration, str)
+    gates[gate]["registration"] = f"{registration} [oracle test mutation]"
+    return replace(output, gates=gates)
+
+
+def replace_non_assignment_card_member_without_known_measurement(
+    output: FrozenOutput,
+) -> FrozenOutput:
+    card = deepcopy(output.card)
+    note = card["note"]
+    assert isinstance(note, str)
+    card["note"] = f"{note} [oracle test mutation]"
+    return replace(output, card=card)
+
+
+def rename_one_card_display_name_without_changing_team_id(
+    output: FrozenOutput,
+) -> FrozenOutput:
+    card = deepcopy(output.card)
+    assignments = card["assignments"]
+    team_ids = card["team_ids"]
+    assert isinstance(assignments, dict) and isinstance(team_ids, dict)
+    name = next(iter(assignments))
+    renamed = f"{name} [oracle test rename]"
+    while renamed in assignments:
+        renamed = f"{renamed}_"
+    card["assignments"] = {
+        renamed if key == name else key: value
+        for key, value in assignments.items()
+    }
+    card["team_ids"] = {
+        renamed if key == name else key: value
+        for key, value in team_ids.items()
+    }
+    return replace(output, card=card)
+
+
+def move_one_assignment_to_another_existing_category(
+    output: FrozenOutput,
+) -> FrozenOutput:
+    card = deepcopy(output.card)
+    assignments = card["assignments"]
+    assert isinstance(assignments, dict)
+    name = next(iter(assignments))
+    current_category = assignments[name]
+    alternate_category = next(
+        category
+        for category in assignments.values()
+        if category != current_category
+    )
+    assignments[name] = alternate_category
+    return replace(output, card=card)
+
+
+def test_comparator_rejects_change_anywhere_in_complete_gate_result():
+    """Kills mutation: compare only gate verdicts and ignore other result members."""
+    baseline = load_current_baseline(repo_root=Path.cwd())
+    candidate = replace_gate_member_without_known_measurement(baseline, "d2")
+
+    with pytest.raises(FrozenOutputOracleError, match="d2"):
+        assert_matches_frozen_output(baseline, candidate)
+
+
+def test_comparator_rejects_changed_non_assignment_card_member():
+    """Kills mutation: compare assignments but ignore other card JSON members."""
+    baseline = load_current_baseline(repo_root=Path.cwd())
+    candidate = replace_non_assignment_card_member_without_known_measurement(
+        baseline
+    )
+
+    with pytest.raises(FrozenOutputOracleError, match="non-assignment"):
+        assert_matches_frozen_output(baseline, candidate)
+
+
+def test_comparator_keys_assignments_by_stable_team_id_not_display_name():
+    """Kills mutation: compare assignment dictionaries by display-name keys."""
+    baseline = load_current_baseline(repo_root=Path.cwd())
+    renamed = rename_one_card_display_name_without_changing_team_id(baseline)
+
+    assert_matches_frozen_output(baseline, renamed)
+
+
+def test_comparator_rejects_category_change_for_same_stable_team_id():
+    """Kills mutation: compare only stable-ID membership and ignore its category."""
+    baseline = load_current_baseline(repo_root=Path.cwd())
+    changed = move_one_assignment_to_another_existing_category(baseline)
+
+    with pytest.raises(FrozenOutputOracleError, match="team_id"):
+        assert_matches_frozen_output(baseline, changed)
+
+
+def test_oracle_cli_invokes_complete_comparator(monkeypatch, tmp_path):
+    """Kills mutation: return CLI success without calling the output comparator."""
+    baseline = load_current_baseline(repo_root=Path.cwd())
+    changed = replace_non_assignment_card_member_without_known_measurement(
+        baseline
+    )
+    monkeypatch.setattr(oracle, "load_current_baseline", lambda **_: baseline)
+    monkeypatch.setattr(oracle, "load_frozen_output", lambda *_, **__: changed)
+
+    with pytest.raises(FrozenOutputOracleError, match="non-assignment"):
+        oracle.main(
+            ["--candidate", str(tmp_path / "candidate"), "--repo-root", "."]
+        )
