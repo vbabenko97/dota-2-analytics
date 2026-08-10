@@ -158,8 +158,11 @@ holds no team names at all, so a name-based check is not evidence of anything.
 **Known real roster change, recorded 2026-08-10: LGD fields Topson as a standin
 for the banned TaiLung** — see [the standin note](2026-08-10-lgd-standin-topson.md).
 This check cannot see it unless LGD plays official maps with the standin before
-the snapshot. Do not edit the configured roster or add an alias for it; the
-closing report carries it as a limitation instead.
+the snapshot. Do not edit the configured roster or add an alias for it. Under
+the current pipeline the closing report carries it as a limitation; if the
+hardening slice's release preflight is live and roster evidence is imported by
+lock day, it is instead a preflight failure that stops the release — resolving
+that stop is an owner decision recorded in the standin note, not an edit.
 
 ## 5. Display names against the owner's list
 
@@ -191,9 +194,16 @@ outside `explorer_query` and outside this repository, same class as step 3.
 reverse of the arrival order this step anticipated. All eight matchups are
 archived in [the schedule archive](2026-08-10-ti2026-schedule-fetched.md);
 neither Valve page labels the groups, and the accepted input cannot represent
-Round 1 without them (`load_group_draw` requires `groups:` always). Until a
-groups publication exists, this sits on the stop condition below. Re-check both
-pages on the day; do not derive groups from the broadcast time blocks.
+Round 1 without them (`load_group_draw` requires `groups:` always). Re-check
+both pages on the day; do not derive groups from the broadcast time blocks.
+
+**Recorded owner policy (2026-08-10) for this state: hard stop.** If the groups
+are still unpublished at regeneration time, do not run step 6 unconditioned —
+that would knowingly discard a published Round 1 — and do not modify
+`load_group_draw` to accept Round 1 alone, which is a predictive-behavior
+change requiring its own reviewed amendment. Stop and put the decision to the
+owner. The expected resolution is the groups publishing before lock day, since
+Rounds 2–4 cannot run without them.
 
 **If neither has been published:** run step 6 unchanged, then confirm the card
 averaged over draws rather than silently taking one:

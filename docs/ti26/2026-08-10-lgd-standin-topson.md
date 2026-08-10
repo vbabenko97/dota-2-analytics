@@ -39,23 +39,31 @@ the now-banned player. No check in the current pipeline can see this: runbook
 step 4's staleness check reads the store, and the store holds match rows, not
 announcements.
 
-So on lock day this is a known model limitation to carry, not a data error to
-fix silently. Three handling notes for the operator:
+What that means operationally depends on which pipeline runs on lock day:
+
+- **Under the current pipeline** (pre-hardening), nothing stops the release:
+  the card ships with the stale-roster LGD marginal, and the closing report
+  must carry that in its could-not-be-verified / limitations section.
+- **Once plan 3 of
+  [the hardening index](../superpowers/plans/2026-08-09-pre-ti-release-hardening-index.md)
+  is implemented and exact-roster evidence is imported, this is a preflight
+  FAILURE, not a report footnote.** An owner-captured exact-five LGD roster
+  containing Topson will not equal the snapshot roster containing TaiLung, and
+  preflight halts the release before any store, bundle, or registry write.
+  That stop is the designed behavior. Getting past it requires a recorded
+  owner decision among: retain the stop and do not publish that release;
+  explicitly reauthorize a pre-hardening fallback path; authorize a predictive
+  cold-start change for the standin roster; or defer plan 3 enforcement until
+  after the TI 2026 card. Quietly capturing roster evidence that names
+  TaiLung's account because it already exists would falsify the evidence, not
+  resolve the mismatch.
+
+Handling notes for the operator either way:
 
 1. **Field is unchanged.** LGD still participates; step 3's field confirmation
    is unaffected by a player substitution.
 2. **Do not edit the configured roster or add an alias** for this. A standin
    with no played maps has no rating to inherit, and inventing continuity would
-   fabricate evidence. If LGD does play with Topson before the snapshot, step 4
-   will surface the new account set through the store, which is the only path
-   this pipeline accepts.
-3. **The closing report must carry this** in its could-not-be-verified /
-   limitations section: the LGD marginal is a forecast for a roster that will
-   not be the one fielded.
-
-This is exactly the roster-evidence-vs-snapshot mismatch the pre-TI hardening
-slice is designed to stop on (release preflight, plan 3 of
-[the hardening index](../superpowers/plans/2026-08-09-pre-ti-release-hardening-index.md)):
-once evidence import exists, an owner-captured exact-five roster that differs
-from the frozen model's effective snapshot roster halts the release before any
-write, and shipping proceeds only by owner decision.
+   fabricate evidence. If LGD does play official maps with Topson before the
+   snapshot, step 4 will surface the new account set through the store, which
+   is the only path the current pipeline accepts.

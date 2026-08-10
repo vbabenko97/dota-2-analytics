@@ -69,6 +69,29 @@ Before the near-lock release, the owner must separately capture and register cur
 
 No plan may invent a URL authority, timestamp, roster account, participant, draw, rule, or source-availability claim from prose or memory.
 
+**Recorded owner policy (2026-08-10) — Round 1 published without groups:** this
+state is a hard release stop. Plan 2's release adapter already fails closed on a
+published Round-1 tip without a published groups tip; that behavior is the
+policy, not a gap to engineer around. No unconditioned forecast is issued while
+knowingly discarding published Round-1 matchups, and Round-1-only conditioning
+(for example, sampling group assignments consistent with the known pairs) is a
+predictive-behavior change outside this slice's authority — it requires its own
+reviewed amendment before anyone implements it. As of 2026-08-10 the project is
+in exactly this state (see `docs/ti26/2026-08-10-ti2026-schedule-fetched.md`);
+the resolution everyone should expect is the groups publishing before lock day,
+since Rounds 2–4 cannot run without them.
+
+**Recorded owner constraint (2026-08-10) — LGD roster standin:** external
+reporting has Topson replacing the banned TaiLung
+(`docs/ti26/2026-08-10-lgd-standin-topson.md`). Once Plan 3 is implemented and
+exact-roster evidence is imported, an evidence-versus-snapshot roster mismatch
+for LGD is a preflight failure that stops the release before any write — not a
+closing-report limitation. Shipping despite it requires a recorded owner
+decision (retain the stop and not publish, reauthorize a fallback, authorize a
+cold-start predictive change, or defer Plan 3 enforcement); silently keeping the
+banned player's roster because his account already exists is not an option any
+plan authorizes.
+
 ## Frozen-behavior boundary
 
 The isolated oracle replay is the required falsifier for accidental predictive change. Later plans may change only evidence, validation, orchestration, provenance, recovery, documentation, and CI behavior.
@@ -79,7 +102,13 @@ In particular:
 - do not feed newly captured roster evidence into the predictor in this slice;
 - if evidence roster accounts differ from the latest validated snapshot accounts used by the current card path, preflight stops before writes;
 - do not weaken, rerun for a better result, or reinterpret a registered gate;
-- keep diagnostics non-authoritative.
+- keep diagnostics non-authoritative;
+- live event evidence never gates or alters the frozen replay: the replay executes
+  the baseline manifest's recorded predictive arguments, and Plan 3's
+  `--frozen-replay` diagnostic route in `cli_release` (required by Plan 1's
+  registered cross-plan obligation) performs no evidence loading, no release
+  preflight, and no registry interaction, so a new roster or draw tip cannot
+  block or change the regression verdict.
 
 ## Slice completion contract
 
