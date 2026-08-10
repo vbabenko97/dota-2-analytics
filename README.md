@@ -83,6 +83,17 @@ the digest of every config file consulted.
 .venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/<run-id>
 ```
 
+Use live-tree verification for a bundle expected to describe the current checkout. To verify a committed historical bundle without requiring today’s config bytes to match, read each declared input from its recorded local Git commit:
+
+```bash
+.venv/bin/python -m ti26.cli_provenance verify-run \
+  --bundle reports/runs/frozen-output-oracle-baseline/* \
+  --repo-root . \
+  --at-source-revision
+```
+
+Historical mode proves declared input blobs and present output bytes match the manifest. It does not prove the generating process executed that commit or bind undeclared dependencies and runtime files.
+
 ## Getting started
 
 `uv run` is not used here. Call the interpreter directly.

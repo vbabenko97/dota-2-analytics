@@ -17,7 +17,12 @@ from ti26.data.snapshot import (
     sha256_file,
     write_manifest,
 )
-from ti26.provenance import canonical_json_bytes, logical_store_digest, verify_run_bundle
+from ti26.provenance import (
+    canonical_json_bytes,
+    logical_store_digest,
+    verify_run_bundle,
+    verify_run_bundle_at_source_revision,
+)
 
 
 def _print_json(value: object) -> None:
@@ -168,14 +173,18 @@ def main(argv: list[str] | None = None) -> int:
     verify_run = commands.add_parser("verify-run")
     verify_run.add_argument("--bundle", required=True)
     verify_run.add_argument("--repo-root", default=None)
-    verify_run.add_argument(
+    verification_mode = verify_run.add_mutually_exclusive_group()
+    verification_mode.add_argument(
         "--against-revision",
         default=None,
         help=(
-            "require the bundle to name this source revision; pass "
-            "$(git rev-parse HEAD) to check that it still describes this tree, "
-            "and omit it when verifying a historical bundle"
+            "require the manifest to name the supplied revision while checking live inputs"
         ),
+    )
+    verification_mode.add_argument(
+        "--at-source-revision",
+        action="store_true",
+        help="read declared inputs as local Git blobs at manifest.source_revision",
     )
     manifest = commands.add_parser("snapshot-manifest")
     manifest.add_argument("--raw", required=True)
@@ -207,13 +216,19 @@ def main(argv: list[str] | None = None) -> int:
         print(written)
     else:
         repo_root = Path(args.repo_root) if args.repo_root is not None else None
-        _print_json(
-            verify_run_bundle(
+        if args.at_source_revision:
+            if repo_root is None:
+                repo_root = Path.cwd()
+            verified = verify_run_bundle_at_source_revision(
+                Path(args.bundle), repo_root=repo_root
+            )
+        else:
+            verified = verify_run_bundle(
                 Path(args.bundle),
                 repo_root=repo_root,
                 against_revision=args.against_revision,
             )
-        )
+        _print_json(verified)
     return 0
 
 

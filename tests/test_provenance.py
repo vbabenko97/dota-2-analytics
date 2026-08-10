@@ -526,6 +526,28 @@ def test_historical_verifier_rejects_changed_output(tmp_path):
         verify_run_bundle_at_source_revision(bundle, repo_root=repo)
 
 
+def test_verify_run_cli_at_source_revision_uses_committed_blobs(
+    tmp_path, capsys
+):
+    """Kills mutation: parse --at-source-revision but call the live verifier."""
+    repo, bundle, source, revision = _historical_bundle(tmp_path)
+    source.write_text("seed: live-only CLI edit\n", encoding="utf-8")
+
+    exit_code = provenance_main(
+        [
+            "verify-run",
+            "--bundle",
+            str(bundle),
+            "--repo-root",
+            str(repo),
+            "--at-source-revision",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out)["source_revision"] == revision
+
+
 def _legacy_manifest(raw, sid, entries):
     """Write a pre-provenance manifest: no per-chunk query and no digest."""
     (raw / sid).mkdir(parents=True, exist_ok=True)
