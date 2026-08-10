@@ -94,6 +94,17 @@ Use live-tree verification for a bundle expected to describe the current checkou
 
 Historical mode proves declared input blobs and present output bytes match the manifest. It does not prove the generating process executed that commit or bind undeclared dependencies and runtime files.
 
+After a non-predictive change, run the frozen regression from a clean committed checkout into an absent path outside the repository:
+
+```bash
+git rev-parse HEAD | xargs .venv/bin/python -m ti26.frozen_output_oracle \
+  --replay-root /private/tmp/ti26-frozen-output-oracle-replay \
+  --repo-root . \
+  --source-revision
+```
+
+The command reuses the baseline manifest's snapshot and predictive arguments, live-verifies the temporary candidate, compares complete frozen output, and removes the temporary root on success. It publishes no registered release bundle or registry entry. Existing `cli_release` still rebuilds its ignored `data/processed/release-{snapshot_id}.sqlite` derived store. Failure preserves the isolated candidate root for diagnosis. Normal release does not call this command.
+
 ## Getting started
 
 `uv run` is not used here. Call the interpreter directly.

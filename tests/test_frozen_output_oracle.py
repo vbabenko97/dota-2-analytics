@@ -11,6 +11,8 @@ from ti26.data.snapshot import sha256_file
 from ti26.frozen_output_oracle import (
     BASELINE_ROOT,
     BASELINE_RUN_KIND,
+    CANDIDATE_RUN_KIND,
+    FrozenBaselineInvocation,
     FrozenOutput,
     FrozenOutputOracleError,
     assert_matches_frozen_output,
@@ -19,6 +21,7 @@ from ti26.frozen_output_oracle import (
     load_staged_frozen_output,
     registered_baseline_bundle,
     registered_baseline_invocation,
+    replay_current_frozen_output,
 )
 from ti26.gate_artifacts import (
     gate_result_payload,
@@ -379,3 +382,148 @@ def test_oracle_cli_invokes_complete_comparator(monkeypatch, tmp_path):
         oracle.main(
             ["--candidate", str(tmp_path / "candidate"), "--repo-root", "."]
         )
+
+
+def test_isolated_replay_uses_registered_args_and_live_verifies_before_compare(
+    tmp_path, monkeypatch
+):
+    """Kills mutation: compare the candidate before live manifest verification."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    runs_root = tmp_path / "candidate-root"
+    revision = "a" * 40
+    invocation = FrozenBaselineInvocation(
+        snapshot_id="synthetic",
+        release_args=("--snapshot", "synthetic"),
+    )
+    baseline = FrozenOutput(gates={}, card={})
+    candidate = FrozenOutput(gates={}, card={})
+    events: list[object] = []
+    monkeypatch.setattr(oracle, "_clean_head_revision", lambda _: revision)
+    monkeypatch.setattr(
+        oracle,
+        "registered_baseline_invocation",
+        lambda **_: invocation,
+    )
+
+    def fake_release(root, argv):
+        events.append(("release", tuple(argv)))
+        (runs_root / "runtime-derived").mkdir(parents=True)
+        return 0
+
+    monkeypatch.setattr(oracle, "_run_release", fake_release)
+    monkeypatch.setattr(
+        oracle,
+        "verify_run_bundle",
+        lambda *_, **__: events.append("live-verify") or {},
+    )
+    monkeypatch.setattr(
+        oracle,
+        "load_current_baseline",
+        lambda **_: events.append("baseline") or baseline,
+    )
+    monkeypatch.setattr(
+        oracle,
+        "load_frozen_output",
+        lambda *_, **__: events.append("candidate") or candidate,
+    )
+    monkeypatch.setattr(
+        oracle,
+        "assert_matches_frozen_output",
+        lambda *args: events.append("compare"),
+    )
+
+    replay_current_frozen_output(
+        repo_root=repo_root,
+        runs_root=runs_root,
+        source_revision=revision,
+    )
+
+    release = events[0]
+    assert release[0] == "release"
+    assert release[1] == (
+        *invocation.release_args,
+        "--runs", str(runs_root),
+        "--run-kind", CANDIDATE_RUN_KIND,
+        "--source-revision", revision,
+    )
+    assert events[1:] == ["live-verify", "baseline", "candidate", "compare"]
+    assert not runs_root.exists()
+
+
+def test_isolated_replay_failure_preserves_its_temp_bundle(
+    tmp_path, monkeypatch
+):
+    """Kills mutation: delete the replay root in a finally block after failure."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    runs_root = tmp_path / "candidate-root"
+    revision = "a" * 40
+    monkeypatch.setattr(oracle, "_clean_head_revision", lambda _: revision)
+    monkeypatch.setattr(
+        oracle,
+        "registered_baseline_invocation",
+        lambda **_: FrozenBaselineInvocation(
+            snapshot_id="synthetic",
+            release_args=("--snapshot", "synthetic"),
+        ),
+    )
+
+    def fake_release(root, argv):
+        (runs_root / "runtime-derived").mkdir(parents=True)
+        return 0
+
+    monkeypatch.setattr(oracle, "_run_release", fake_release)
+    monkeypatch.setattr(oracle, "verify_run_bundle", lambda *_, **__: {})
+    monkeypatch.setattr(
+        oracle, "load_current_baseline", lambda **_: FrozenOutput({}, {})
+    )
+    monkeypatch.setattr(
+        oracle, "load_frozen_output", lambda *_, **__: FrozenOutput({}, {})
+    )
+
+    def fail_comparison(*_):
+        raise FrozenOutputOracleError("drift")
+
+    monkeypatch.setattr(
+        oracle, "assert_matches_frozen_output", fail_comparison
+    )
+
+    with pytest.raises(FrozenOutputOracleError, match="drift"):
+        replay_current_frozen_output(
+            repo_root=repo_root,
+            runs_root=runs_root,
+            source_revision=revision,
+        )
+
+    assert runs_root.is_dir()
+    assert not (repo_root / "reports" / "forecast_registry").exists()
+
+
+def test_replay_cli_routes_to_isolated_helper(tmp_path, monkeypatch, capsys):
+    """Kills mutation: parse replay flags but return without invoking the helper."""
+    revision = "a" * 40
+    calls = []
+    monkeypatch.setattr(
+        oracle,
+        "replay_current_frozen_output",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    exit_code = oracle.main(
+        [
+            "--replay-root", str(tmp_path / "candidate-root"),
+            "--source-revision", revision,
+            "--repo-root", str(tmp_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls == [
+        {
+            "repo_root": tmp_path.resolve(),
+            "runs_root": tmp_path / "candidate-root",
+            "source_revision": revision,
+        }
+    ]
+    assert capsys.readouterr().out == "frozen output replay: match\n"

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from ti26.gate_artifacts import load_frozen_gate_artifact
-from ti26.provenance import verify_run_bundle_at_source_revision
+from ti26.provenance import verify_run_bundle, verify_run_bundle_at_source_revision
 
 BASELINE_ROOT = Path("reports/runs/frozen-output-oracle-baseline")
 BASELINE_RUN_KIND = "ti2026-frozen-output-oracle-baseline"
@@ -257,14 +260,120 @@ def assert_matches_frozen_output(
         )
 
 
+CANDIDATE_RUN_KIND = "ti2026-frozen-output-oracle-candidate"
+
+
+def _clean_head_revision(repo_root: Path) -> str:
+    status = subprocess.run(
+        [
+            "git", "-C", str(repo_root), "status", "--porcelain=v1",
+            "--untracked-files=all",
+        ],
+        check=False,
+        capture_output=True,
+    )
+    if status.returncode != 0 or status.stdout:
+        raise FrozenOutputOracleError("frozen replay requires a clean Git checkout")
+    head = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=False,
+        capture_output=True,
+    )
+    if head.returncode != 0:
+        raise FrozenOutputOracleError("cannot resolve replay source revision")
+    return head.stdout.decode("ascii").strip()
+
+
+def _run_release(repo_root: Path, argv: tuple[str, ...]) -> int:
+    return subprocess.run(
+        [sys.executable, "-m", "ti26.cli_release", *argv],
+        cwd=repo_root,
+        check=False,
+    ).returncode
+
+
+def _sole_generated_bundle(runs_root: Path) -> Path:
+    try:
+        children = sorted(runs_root.iterdir())
+    except OSError as exc:
+        raise FrozenOutputOracleError(
+            f"cannot read isolated replay root: {runs_root}"
+        ) from exc
+    if (
+        len(children) != 1
+        or children[0].is_symlink()
+        or not children[0].is_dir()
+    ):
+        raise FrozenOutputOracleError(
+            "isolated replay must produce exactly one child bundle"
+        )
+    return children[0]
+
+
+def replay_current_frozen_output(
+    *, repo_root: Path, runs_root: Path, source_revision: str
+) -> None:
+    try:
+        repository = repo_root.resolve(strict=True)
+    except OSError as exc:
+        raise FrozenOutputOracleError("invalid replay repository root") from exc
+    if not runs_root.is_absolute():
+        raise FrozenOutputOracleError("isolated replay root must be an absolute path")
+    candidate_root = runs_root.resolve(strict=False)
+    if candidate_root == repository or repository in candidate_root.parents:
+        raise FrozenOutputOracleError("isolated replay root must be outside repository")
+    if candidate_root.exists() or candidate_root.is_symlink():
+        raise FrozenOutputOracleError("isolated replay root must not already exist")
+    if _clean_head_revision(repository) != source_revision:
+        raise FrozenOutputOracleError(
+            "replay source revision must equal the clean current HEAD"
+        )
+    invocation = registered_baseline_invocation(repo_root=repository)
+    argv = (
+        *invocation.release_args,
+        "--runs", str(candidate_root),
+        "--run-kind", CANDIDATE_RUN_KIND,
+        "--source-revision", source_revision,
+    )
+    if _run_release(repository, argv) != 0:
+        raise FrozenOutputOracleError("isolated cli_release replay failed")
+    candidate_bundle = _sole_generated_bundle(candidate_root)
+    verify_run_bundle(
+        candidate_bundle,
+        repo_root=repository,
+        against_revision=source_revision,
+    )
+    baseline = load_current_baseline(repo_root=repository)
+    candidate = load_frozen_output(candidate_bundle, repo_root=repository)
+    assert_matches_frozen_output(baseline, candidate)
+    shutil.rmtree(candidate_root)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Compare a full release bundle with the frozen output baseline"
     )
-    parser.add_argument("--candidate", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--candidate")
+    mode.add_argument("--replay-root")
+    parser.add_argument("--source-revision")
     parser.add_argument("--repo-root", default=".")
     args = parser.parse_args(argv)
     repo_root = Path(args.repo_root).resolve()
+
+    if args.replay_root is not None:
+        if args.source_revision is None:
+            parser.error("--replay-root requires --source-revision")
+        replay_current_frozen_output(
+            repo_root=repo_root,
+            runs_root=Path(args.replay_root),
+            source_revision=args.source_revision,
+        )
+        print("frozen output replay: match")
+        return 0
+    if args.source_revision is not None:
+        parser.error("--source-revision is valid only with --replay-root")
+
     baseline = load_current_baseline(repo_root=repo_root)
     candidate = load_frozen_output(Path(args.candidate), repo_root=repo_root)
     assert_matches_frozen_output(baseline, candidate)
