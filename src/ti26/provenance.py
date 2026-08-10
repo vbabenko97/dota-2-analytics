@@ -3,6 +3,7 @@
 import hashlib
 import json
 import sqlite3
+import subprocess
 from pathlib import Path, PurePosixPath
 
 from ti26.data.store import SCHEMA, STORE_COLUMNS
@@ -165,23 +166,7 @@ def write_run_manifest(
     return manifest_path
 
 
-def verify_run_bundle(
-    bundle: Path, repo_root: Path | None = None, against_revision: str | None = None
-) -> dict[str, object]:
-    """Fail closed on malformed paths, changed files, or unbound reports.
-
-    Every check here is INTERNAL: it establishes that a bundle still describes
-    the bytes it was built from. It cannot establish that the current source
-    tree still produces those bytes, and for a while it did not occur to anyone
-    that those are different questions -- a rating-model defect was corrected,
-    every published number moved, and this function went on exiting 0 on a
-    bundle no longer reproducible from HEAD.
-
-    Pass `against_revision` to close that gap: the bundle is then also required
-    to name that revision as the source it was generated from. Callers that are
-    verifying a HISTORICAL bundle should leave it unset, because an old bundle
-    naming an old revision is correct rather than stale.
-    """
+def _load_run_manifest(bundle: Path) -> tuple[Path, dict[str, object], str]:
     root = _bundle_root(bundle)
     manifest_path = root / "manifest.json"
     try:
@@ -199,22 +184,140 @@ def verify_run_bundle(
     expected_run_id = run_id(descriptor)
     if manifest["run_id"] != expected_run_id:
         raise RunManifestError("run manifest run_id does not match descriptor")
-    try:
-        input_root = (repo_root or Path.cwd()).resolve(strict=True)
-    except OSError as exc:
-        raise RunManifestError("invalid repository root") from exc
-    _digest_entries(input_root, descriptor["inputs"], "input", verify=True)
+    return root, manifest, expected_run_id
+
+
+def _verify_run_outputs(
+    root: Path, manifest: dict[str, object], expected_run_id: str
+) -> None:
     outputs = _digest_entries(root, manifest["outputs"], "output", verify=True)
     for output in outputs:
         if output["path"].endswith(".md"):
             first_line = (root / output["path"]).read_text(encoding="utf-8").split("\n", 1)[0]
             if first_line != f"<!-- ti26-run: {expected_run_id} manifest.json -->":
-                raise RunManifestError(f"report run reference mismatch: {output['path']}")
+                raise RunManifestError(
+                    f"report run reference mismatch: {output['path']}"
+                )
+
+
+def verify_run_bundle(
+    bundle: Path, repo_root: Path | None = None, against_revision: str | None = None
+) -> dict[str, object]:
+    """Fail closed on malformed paths, changed files, or unbound reports.
+
+    Every check here is INTERNAL: it establishes that a bundle still describes
+    the bytes it was built from. It cannot establish that the current source
+    tree still produces those bytes, and for a while it did not occur to anyone
+    that those are different questions -- a rating-model defect was corrected,
+    every published number moved, and this function went on exiting 0 on a
+    bundle no longer reproducible from HEAD.
+
+    Pass `against_revision` to close that gap: the bundle is then also required
+    to name that revision as the source it was generated from. Callers that are
+    verifying a HISTORICAL bundle should leave it unset, because an old bundle
+    naming an old revision is correct rather than stale.
+    """
+    root, manifest, expected_run_id = _load_run_manifest(bundle)
+    try:
+        input_root = (repo_root or Path.cwd()).resolve(strict=True)
+    except OSError as exc:
+        raise RunManifestError("invalid repository root") from exc
+    _digest_entries(input_root, manifest["inputs"], "input", verify=True)
+    _verify_run_outputs(root, manifest, expected_run_id)
     if against_revision is not None and manifest["source_revision"] != against_revision:
         raise RunManifestError(
             f"run manifest names source revision {manifest['source_revision']}, "
             f"not {against_revision}; the bundle does not describe this tree"
         )
+    return manifest
+
+
+def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        check=False,
+        capture_output=True,
+    )
+
+
+def _historical_input_entries(entries: object) -> list[dict[str, str]]:
+    if not isinstance(entries, list):
+        raise RunManifestError("input must be a list")
+    result: list[dict[str, str]] = []
+    paths: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
+            raise RunManifestError("input entry must contain path and sha256")
+        path_text = entry["path"]
+        if not isinstance(path_text, str) or not path_text or "\\" in path_text:
+            raise RunManifestError("input path must be a non-empty POSIX-relative path")
+        relative = PurePosixPath(path_text)
+        if (
+            not relative.parts
+            or relative.is_absolute()
+            or ".." in relative.parts
+            or "." in relative.parts
+            or relative.as_posix() != path_text
+        ):
+            raise RunManifestError("input path must be a non-empty POSIX-relative path")
+        digest = entry["sha256"]
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+        ):
+            raise RunManifestError(f"input has an invalid sha256: {path_text}")
+        if path_text in paths:
+            raise RunManifestError(f"input has a duplicate path: {path_text}")
+        paths.add(path_text)
+        result.append({"path": path_text, "sha256": digest})
+    return result
+
+
+def _git_blob(repo_root: Path, revision: str, path: str) -> bytes:
+    listing = _git(repo_root, "ls-tree", "-z", revision, "--", path)
+    records = [record for record in listing.stdout.split(b"\0") if record]
+    if listing.returncode != 0 or not records:
+        raise RunManifestError(f"input absent at source_revision: {path}")
+    try:
+        header, raw_path = records[0].split(b"\t", 1)
+        mode, kind, _ = header.split(b" ", 2)
+        listed_path = raw_path.decode("utf-8")
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise RunManifestError(f"invalid Git tree entry for input: {path}") from exc
+    if len(records) != 1 or listed_path != path:
+        raise RunManifestError(f"input absent at source_revision: {path}")
+    if kind != b"blob" or mode not in {b"100644", b"100755"}:
+        raise RunManifestError(
+            f"input is not a regular blob at source_revision: {path}"
+        )
+    object_name = f"{revision}:{path}"
+    blob = _git(repo_root, "cat-file", "blob", object_name)
+    if blob.returncode != 0:
+        raise RunManifestError(f"cannot read input blob at source_revision: {path}")
+    return blob.stdout
+
+
+def verify_run_bundle_at_source_revision(
+    bundle: Path, *, repo_root: Path
+) -> dict[str, object]:
+    """Verify declared inputs as Git blobs at the manifest's source commit."""
+    root, manifest, expected_run_id = _load_run_manifest(bundle)
+    try:
+        repository = repo_root.resolve(strict=True)
+    except OSError as exc:
+        raise RunManifestError("invalid repository root") from exc
+    revision = manifest["source_revision"]
+    commit_type = _git(repository, "cat-file", "-t", revision)
+    if commit_type.returncode != 0 or commit_type.stdout != b"commit\n":
+        raise RunManifestError(
+            f"source_revision is not a local Git commit: {revision}"
+        )
+    for entry in _historical_input_entries(manifest["inputs"]):
+        blob = _git_blob(repository, revision, entry["path"])
+        if hashlib.sha256(blob).hexdigest() != entry["sha256"]:
+            raise RunManifestError(f"input sha256 mismatch: {entry['path']}")
+    _verify_run_outputs(root, manifest, expected_run_id)
     return manifest
 
 

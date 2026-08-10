@@ -1,7 +1,9 @@
 import hashlib
 import json
 import re
+import subprocess
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -24,6 +26,7 @@ from ti26.provenance import (
     logical_store_digest,
     render_report_prefix,
     verify_run_bundle,
+    verify_run_bundle_at_source_revision,
     write_run_manifest,
 )
 
@@ -385,6 +388,142 @@ def test_verify_run_bundle_rejects_a_symlinked_output(tmp_path):
 
     with pytest.raises(RunManifestError, match="symlink"):
         write_run_manifest(bundle, descriptor, ["report.md"])
+
+
+def _git_text(repo: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+    )
+    return completed.stdout.decode("utf-8").strip()
+
+
+def _historical_bundle(
+    tmp_path: Path,
+    *,
+    revision_kind: str = "commit",
+    declared_path: str = "input.yaml",
+    wrong_input_digest: bool = False,
+) -> tuple[Path, Path, Path, str]:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_text(repo, "init", "--quiet")
+    _git_text(repo, "config", "user.name", "Oracle Test")
+    _git_text(repo, "config", "user.email", "oracle@example.invalid")
+    source = repo / "input.yaml"
+    source.write_text("seed: synthetic\n", encoding="utf-8")
+    tree = repo / "tree"
+    tree.mkdir()
+    (tree / "nested.yaml").write_text("nested: synthetic\n", encoding="utf-8")
+    (repo / "linked.yaml").symlink_to("input.yaml")
+    _git_text(
+        repo, "add", "input.yaml", "tree/nested.yaml", "linked.yaml"
+    )
+    _git_text(repo, "commit", "--quiet", "-m", "synthetic input")
+    commit = _git_text(repo, "rev-parse", "HEAD")
+    if revision_kind == "commit":
+        source_revision = commit
+    elif revision_kind == "blob":
+        source_revision = _git_text(repo, "rev-parse", "HEAD:input.yaml")
+    elif revision_kind == "tag":
+        _git_text(repo, "tag", "-a", "synthetic-tag", "-m", "synthetic tag")
+        source_revision = _git_text(repo, "rev-parse", "synthetic-tag")
+    elif revision_kind == "missing":
+        source_revision = "f" * 40
+    else:
+        raise AssertionError(f"unsupported synthetic revision kind: {revision_kind}")
+
+    digest = sha256_file(source)
+    if wrong_input_digest:
+        digest = hashlib.sha256(b"different synthetic input").hexdigest()
+    descriptor = {
+        "schema_version": 1,
+        "run_kind": "synthetic-historical-verification",
+        "source_revision": source_revision,
+        "invocation": {},
+        "snapshot": {
+            "snapshot_id": "synthetic",
+            "manifest_path": declared_path,
+            "manifest_sha256": digest,
+        },
+        "store": {},
+        "inputs": [{"path": declared_path, "sha256": digest}],
+        "runtime": {},
+    }
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    report = bundle / "report.md"
+    report.write_text(f"{render_report_prefix(descriptor)}\nsynthetic report\n")
+    write_run_manifest(bundle, descriptor, ["report.md"])
+    return repo, bundle, source, source_revision
+
+
+def test_historical_source_revision_uses_git_blob_not_live_worktree(tmp_path):
+    """Kills mutation: hash the live input path instead of the committed Git blob."""
+    repo, bundle, source, revision = _historical_bundle(tmp_path)
+    source.write_text("seed: changed only in worktree\n", encoding="utf-8")
+
+    verified = verify_run_bundle_at_source_revision(bundle, repo_root=repo)
+
+    assert verified["source_revision"] == revision
+    with pytest.raises(RunManifestError, match="input.yaml"):
+        verify_run_bundle(bundle, repo_root=repo)
+
+
+@pytest.mark.parametrize(
+    "revision_kind", ["missing", "blob", "tag"], ids=["missing", "blob", "tag"]
+)
+def test_historical_verifier_rejects_missing_or_non_commit_revision(
+    tmp_path, revision_kind
+):
+    """Kills mutation: accept a 40-hex source revision without resolving a commit."""
+    repo, bundle, _, _ = _historical_bundle(
+        tmp_path, revision_kind=revision_kind
+    )
+
+    with pytest.raises(RunManifestError, match="local Git commit"):
+        verify_run_bundle_at_source_revision(bundle, repo_root=repo)
+
+
+@pytest.mark.parametrize(
+    ("declared_path", "message"),
+    [
+        ("absent.yaml", "absent"),
+        ("tree", "not a regular blob"),
+        ("linked.yaml", "not a regular blob"),
+    ],
+    ids=["missing", "tree", "symlink"],
+)
+def test_historical_verifier_rejects_missing_or_non_blob_input(
+    tmp_path, declared_path, message
+):
+    """Kills mutation: accept an absent path or Git tree as declared file bytes."""
+    repo, bundle, _, _ = _historical_bundle(
+        tmp_path, declared_path=declared_path
+    )
+
+    with pytest.raises(RunManifestError, match=message):
+        verify_run_bundle_at_source_revision(bundle, repo_root=repo)
+
+
+def test_historical_verifier_rejects_git_blob_digest_mismatch(tmp_path):
+    """Kills mutation: read the committed blob but skip its manifest digest check."""
+    repo, bundle, _, _ = _historical_bundle(tmp_path, wrong_input_digest=True)
+
+    with pytest.raises(RunManifestError, match="sha256 mismatch: input.yaml"):
+        verify_run_bundle_at_source_revision(bundle, repo_root=repo)
+
+
+def test_historical_verifier_rejects_changed_output(tmp_path):
+    """Kills mutation: omit shared output digest validation in historical mode."""
+    repo, bundle, _, _ = _historical_bundle(tmp_path)
+    report = bundle / "report.md"
+    first_line = report.read_text(encoding="utf-8").splitlines()[0]
+    report.write_text(f"{first_line}\nchanged output\n", encoding="utf-8")
+
+    with pytest.raises(RunManifestError, match="report.md"):
+        verify_run_bundle_at_source_revision(bundle, repo_root=repo)
 
 
 def _legacy_manifest(raw, sid, entries):
