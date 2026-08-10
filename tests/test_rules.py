@@ -1,12 +1,14 @@
 import pytest
 import yaml
 
+from ti26.evidence import extract_ti2026_rules, reconcile_rules_facts
 from ti26.optimize import solve_card
 from ti26.rules import (
     category_for_terminal_record,
     derive_category_capacities,
     derive_record_capacities,
     load_rules,
+    shipping_rules_facts,
 )
 from ti26.tiebreak import TIEBREAK_ORDER
 from ti26.types import Category, TeamState
@@ -239,6 +241,29 @@ def test_every_rule_carries_a_provenance_tag_and_none_claims_official():
     assert rules.provenance
     assert set(rules.provenance.values()) <= allowed
     assert "official" not in set(rules.provenance.values())
+
+
+def test_shipping_rules_facts_reconciles_with_the_rendered_group_stage_page():
+    """Kills mutation: omit max_distance_when_loser_eliminated from shipping_rules_facts.
+
+    `shipping_rules_facts` never calls `load_rules` and exposes no
+    model-facing behavior -- it only projects `config/ti2026_rules.yaml`
+    into the same normalized vocabulary `extract_ti2026_rules` derives from
+    the rendered Valve page, so the two must reconcile to nothing.
+    """
+    rendered = (
+        "Number of Matches Won\nNumber of Matches Lost\n"
+        "Total Number of Matches Won by Opponents Played\nPercentage of Games Won\n"
+        "Average Percentage of Games Won by Opponents Played\n"
+        "Average Game Duration (Shorter is Better)\nCoin Toss\n"
+        "Round 2\nTeams are only matched against other members of their initial group\n"
+        "Round 3\nTeams are only matched against other members of their initial group\n"
+        "Round 4\nTeams are only matched against members of the other group\n"
+        "Round 5\nFor matches where the loser is eliminated, maximize the distance in ranking between the teams\n"
+        "Elimination Round\nStarting with the best 3-2 team, they will choose any of the five 2-3 teams as their opponent.\n"
+    )
+    extracted = extract_ti2026_rules(rendered)
+    assert reconcile_rules_facts(shipping_rules_facts(RULES_PATH), extracted) == []
 
 
 def test_team_state_properties():

@@ -129,3 +129,49 @@ def load_rules(path: str) -> Rules:
             records, fmt["advance_at_wins"], fmt["eliminate_at_losses"]
         ),
     )
+
+
+def shipping_rules_facts(path: str) -> dict[str, object]:
+    """Project the shipping rules configuration into the normalized facts vocabulary.
+
+    Reads `path` with `yaml.safe_load` only; never calls `load_rules`, never
+    mutates the YAML, and exposes no model-facing behavior. The derived
+    `elimination_selection_order` names the existing sequential 3-2 chooser
+    invariant already exercised by
+    `tests/test_elimination.py::test_choosers_act_in_ranking_order`; this
+    function adds no second policy switch and does not edit elimination
+    behavior.
+    """
+    with open(path) as fh:
+        raw = yaml.safe_load(fh)
+    rounds = raw["rounds"]
+    return {
+        "tiebreak_order": list(raw["tiebreak_order"]),
+        "rounds": {
+            "within_group": list(rounds["within_group"]),
+            "cross_group": list(rounds["cross_group"]),
+            "max_distance_when_loser_eliminated": list(
+                rounds["max_distance_when_loser_eliminated"]
+            ),
+        },
+        "elimination_selection_order": "best_3_2_sequential_choice",
+    }
+
+
+def shipping_rules_format_facts(path: str) -> dict[str, object]:
+    """Project the shipping format configuration into the published-format facts vocabulary.
+
+    Reads `path` with `yaml.safe_load` only; never calls `load_rules`, never
+    mutates the YAML, and exposes no model-facing behavior.
+    """
+    with open(path) as fh:
+        raw = yaml.safe_load(fh)
+    fmt = raw["format"]
+    return {
+        "format": {
+            "n_teams": fmt["n_teams"],
+            "total_rounds": fmt["total_rounds"],
+            "advance_at_wins": fmt["advance_at_wins"],
+            "eliminate_at_losses": fmt["eliminate_at_losses"],
+        }
+    }

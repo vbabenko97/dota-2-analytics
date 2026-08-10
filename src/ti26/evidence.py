@@ -1223,3 +1223,309 @@ def select_current_evidence(
         )
 
     return CurrentEvidence(selected=tip, rejected=rejected)
+
+
+RULES_EXTRACTED_SCHEMA = "ti26.rules-extracted.v1"
+RULES_FORMAT_EXTRACTED_SCHEMA = "ti26.rules-format-extracted.v1"
+
+_RULES_FACT_KEYS = frozenset({"tiebreak_order", "rounds", "elimination_selection_order"})
+_RULES_FORMAT_FACT_KEYS = frozenset({"format"})
+_FACT_ENTRY_KEYS = frozenset({"value", "span_sha256"})
+
+_TIEBREAK_FRAGMENTS: tuple[tuple[str, str], ...] = (
+    ("Number of Matches Won", "series_wins"),
+    ("Number of Matches Lost", "series_losses"),
+    ("Total Number of Matches Won by Opponents Played", "opponent_series_wins"),
+    ("Percentage of Games Won", "game_win_pct"),
+    ("Average Percentage of Games Won by Opponents Played", "opponent_game_win_pct"),
+    ("Average Game Duration (Shorter is Better)", "avg_duration"),
+    ("Coin Toss", "coin_toss"),
+)
+_ROUND_MARKERS: tuple[tuple[str, int], ...] = (
+    ("Round 2", 2),
+    ("Round 3", 3),
+    ("Round 4", 4),
+    ("Round 5", 5),
+)
+_WITHIN_GROUP_SENTENCE = "Teams are only matched against other members of their initial group"
+_CROSS_GROUP_SENTENCE = "Teams are only matched against members of the other group"
+_MAX_DISTANCE_SENTENCE = (
+    "For matches where the loser is eliminated, maximize the distance in ranking between the teams"
+)
+_ELIMINATION_MARKER = "Elimination Round"
+_ELIMINATION_SENTENCE = (
+    "Starting with the best 3-2 team, they will choose any of the five 2-3 teams as their opponent."
+)
+_FORMAT_LABELS: tuple[tuple[str, str], ...] = (
+    ("Number of Teams: ", "n_teams"),
+    ("Total Rounds: ", "total_rounds"),
+    ("Advance at Wins: ", "advance_at_wins"),
+    ("Eliminate at Losses: ", "eliminate_at_losses"),
+)
+
+
+def _line_spans(rendered: str) -> list[tuple[str, int, int]]:
+    """Split `rendered` into `(line_text, start, end)` triples with character offsets.
+
+    `end` excludes the line's own trailing newline, so `rendered[start:end]`
+    reproduces the line exactly. Matching whole lines -- rather than raw
+    substrings -- is what keeps a short required fragment (e.g. "Number of
+    Matches Won") from colliding with a longer line that merely contains it
+    (e.g. "Total Number of Matches Won by Opponents Played").
+    """
+    spans: list[tuple[str, int, int]] = []
+    pos = 0
+    for line in rendered.split("\n"):
+        spans.append((line, pos, pos + len(line)))
+        pos += len(line) + 1
+    return spans
+
+
+def _find_line(
+    lines: list[tuple[str, int, int]],
+    matches,
+    cursor: int,
+    label: str,
+    want: str,
+) -> int:
+    """Return the index of the first line at or after `cursor` for which `matches` holds.
+
+    Raises `EvidenceError` naming `label` and `want`, distinguishing a
+    fragment that is wholly absent from one that exists only before `cursor`
+    (out of order).
+    """
+    for i in range(cursor, len(lines)):
+        if matches(lines[i][0]):
+            return i
+    if any(matches(line) for line, _, _ in lines[:cursor]):
+        raise EvidenceError(f"required {label} fragment is out of order: {want!r}")
+    raise EvidenceError(f"required {label} fragment is missing: {want!r}")
+
+
+def _require_unique_line(lines: list[tuple[str, int, int]], matches, label: str, want: str) -> None:
+    """Raise unless exactly one line in `lines` satisfies `matches`."""
+    if sum(1 for line, _, _ in lines if matches(line)) != 1:
+        raise EvidenceError(f"required {label} fragment is ambiguous or duplicated: {want!r}")
+
+
+def extract_ti2026_rules(rendered: str) -> dict[str, object]:
+    """Extract the narrow, span-bound TI 2026 group-stage rules vocabulary.
+
+    Uses exact required whole-line fragments from the captured rendering and
+    raises `EvidenceError` if one is absent, ambiguously duplicated, or out
+    of order. Every fact's `span_sha256` digests the exact supporting UTF-8
+    substring, never the entire page. Extracts only tiebreak order,
+    within/cross-group round constraints, the loser-elimination distance
+    rule, and the sequential 3-2 elimination chooser -- no model assumption
+    such as `elimination_choice_policy`, duration fields, or capacities.
+    """
+    if not isinstance(rendered, str) or not rendered:
+        raise EvidenceError("rendered rules text must be a non-empty string")
+    lines = _line_spans(rendered)
+
+    cursor = 0
+    tiebreak_start: int | None = None
+    order: list[str] = []
+    for fragment, name in _TIEBREAK_FRAGMENTS:
+        matches = lambda line, fragment=fragment: line == fragment
+        _require_unique_line(lines, matches, "tiebreak_order", fragment)
+        idx = _find_line(lines, matches, cursor, "tiebreak_order", fragment)
+        if tiebreak_start is None:
+            tiebreak_start = lines[idx][1]
+        cursor = idx + 1
+        order.append(name)
+    tiebreak_span = rendered[tiebreak_start : lines[cursor - 1][2]]
+
+    rounds_start: int | None = None
+    within_group: list[int] = []
+    cross_group: list[int] = []
+    max_distance: list[int] = []
+    for marker, number in _ROUND_MARKERS:
+        matches = lambda line, marker=marker: line == marker
+        _require_unique_line(lines, matches, "rounds", marker)
+        idx = _find_line(lines, matches, cursor, "rounds", marker)
+        if rounds_start is None:
+            rounds_start = lines[idx][1]
+        cursor = idx + 1
+        if number in (2, 3):
+            sentence, bucket = _WITHIN_GROUP_SENTENCE, within_group
+        elif number == 4:
+            sentence, bucket = _CROSS_GROUP_SENTENCE, cross_group
+        else:
+            sentence, bucket = _MAX_DISTANCE_SENTENCE, max_distance
+        sentence_matches = lambda line, sentence=sentence: line == sentence
+        idx = _find_line(lines, sentence_matches, cursor, "rounds", sentence)
+        cursor = idx + 1
+        bucket.append(number)
+    rounds_span = rendered[rounds_start : lines[cursor - 1][2]]
+
+    elimination_matches = lambda line: line == _ELIMINATION_MARKER
+    _require_unique_line(lines, elimination_matches, "elimination_selection_order", _ELIMINATION_MARKER)
+    elimination_idx = _find_line(
+        lines, elimination_matches, cursor, "elimination_selection_order", _ELIMINATION_MARKER
+    )
+    elimination_start = lines[elimination_idx][1]
+    cursor = elimination_idx + 1
+    sentence_matches = lambda line: line == _ELIMINATION_SENTENCE
+    sentence_idx = _find_line(
+        lines, sentence_matches, cursor, "elimination_selection_order", _ELIMINATION_SENTENCE
+    )
+    elimination_span = rendered[elimination_start : lines[sentence_idx][2]]
+
+    return {
+        "schema": RULES_EXTRACTED_SCHEMA,
+        "facts": {
+            "tiebreak_order": {
+                "value": order,
+                "span_sha256": hashlib.sha256(tiebreak_span.encode("utf-8")).hexdigest(),
+            },
+            "rounds": {
+                "value": {
+                    "within_group": within_group,
+                    "cross_group": cross_group,
+                    "max_distance_when_loser_eliminated": max_distance,
+                },
+                "span_sha256": hashlib.sha256(rounds_span.encode("utf-8")).hexdigest(),
+            },
+            "elimination_selection_order": {
+                "value": "best_3_2_sequential_choice",
+                "span_sha256": hashlib.sha256(elimination_span.encode("utf-8")).hexdigest(),
+            },
+        },
+    }
+
+
+def _parse_trailing_int(text: str, label: str) -> int:
+    """Return the leading run of digits in `text`, or raise `EvidenceError`."""
+    digits = ""
+    for char in text:
+        if char.isdigit():
+            digits += char
+        elif digits:
+            break
+    if not digits:
+        raise EvidenceError(f"required format fragment has no numeric value: {label!r}")
+    return int(digits)
+
+
+def extract_ti2026_published_format(rendered: str) -> dict[str, object]:
+    """Extract the narrow, span-bound TI 2026 published-format vocabulary.
+
+    Owns its own exact required labeled line-prefix fragments -- distinct
+    from `extract_ti2026_rules`'s tiebreak/round/elimination fragments -- and
+    raises `EvidenceError` if one is absent, ambiguously duplicated, or out
+    of order. The single `format` fact's `span_sha256` digests the exact
+    supporting UTF-8 substring, never the entire page.
+    """
+    if not isinstance(rendered, str) or not rendered:
+        raise EvidenceError("rendered published-format text must be a non-empty string")
+    lines = _line_spans(rendered)
+
+    cursor = 0
+    span_start: int | None = None
+    value: dict[str, int] = {}
+    for prefix, key in _FORMAT_LABELS:
+        matches = lambda line, prefix=prefix: line.startswith(prefix)
+        _require_unique_line(lines, matches, "format", prefix)
+        idx = _find_line(lines, matches, cursor, "format", prefix)
+        if span_start is None:
+            span_start = lines[idx][1]
+        line_text, _, line_end = lines[idx]
+        value[key] = _parse_trailing_int(line_text[len(prefix) :], prefix)
+        cursor = idx + 1
+
+    span = rendered[span_start:line_end]
+    return {
+        "schema": RULES_FORMAT_EXTRACTED_SCHEMA,
+        "facts": {
+            "format": {
+                "value": value,
+                "span_sha256": hashlib.sha256(span.encode("utf-8")).hexdigest(),
+            }
+        },
+    }
+
+
+def _reconcile_value(path: str, expected: object, observed: object) -> None:
+    """Recursively compare `expected` against `observed`, raising on first divergence.
+
+    A dict pair with matching key sets recurses key by key so the raised
+    path names the exact diverging field; anything else -- including a dict
+    pair whose key sets differ -- is compared by canonical JSON bytes at the
+    current path.
+    """
+    if (
+        isinstance(expected, dict)
+        and isinstance(observed, dict)
+        and set(expected) == set(observed)
+    ):
+        for key in sorted(expected):
+            _reconcile_value(f"{path}.{key}", expected[key], observed[key])
+        return
+    if canonical_evidence_json_bytes(expected) != canonical_evidence_json_bytes(observed):
+        raise ReconciliationError(
+            f"{path} mismatch: expected={canonical_evidence_json_bytes(expected).decode('utf-8')} "
+            f"observed={canonical_evidence_json_bytes(observed).decode('utf-8')}"
+        )
+
+
+def reconcile_rules_facts(configured: dict[str, object], extracted: dict[str, object]) -> list[str]:
+    """Compare shipping-configured rules facts against a validated extracted object.
+
+    Requires `extracted`'s exact schema and exact fact vocabulary -- matching
+    `configured`'s keys -- with a valid lower-case span digest on every fact,
+    then performs recursive exact equality between `configured` and each
+    fact's `value`. Returns `[]` only on equality; raises
+    `ReconciliationError` with a deterministic dotted field path and
+    canonical expected/observed JSON on the first mismatch. Neither this nor
+    its caller changes configuration values or evidence.
+    """
+    if not isinstance(configured, dict) or set(configured) != _RULES_FACT_KEYS:
+        raise EvidenceError("configured rules facts have unsupported or missing keys")
+    if not isinstance(extracted, dict) or set(extracted) != {"schema", "facts"}:
+        raise EvidenceError("extracted rules object has unsupported or missing keys")
+    if extracted["schema"] != RULES_EXTRACTED_SCHEMA:
+        raise EvidenceError(f"extracted rules schema must be {RULES_EXTRACTED_SCHEMA!r}")
+    facts = extracted["facts"]
+    if not isinstance(facts, dict) or set(facts) != _RULES_FACT_KEYS:
+        raise EvidenceError("extracted rules facts do not match the configured fact vocabulary")
+    for key, entry in facts.items():
+        if not isinstance(entry, dict) or set(entry) != _FACT_ENTRY_KEYS:
+            raise EvidenceError(f"extracted rules fact {key!r} has unsupported or missing keys")
+        if not _is_sha256(entry["span_sha256"]):
+            raise EvidenceError(f"extracted rules fact {key!r} has an invalid span_sha256")
+    for key in sorted(configured):
+        _reconcile_value(key, configured[key], facts[key]["value"])
+    return []
+
+
+def reconcile_rules_format_facts(
+    configured: dict[str, object], extracted: dict[str, object]
+) -> list[str]:
+    """Compare shipping-configured published-format facts against a validated extracted object.
+
+    Mirrors `reconcile_rules_facts` for the distinct `rules-format` subject:
+    exact schema, the exact single `format` fact key, a valid span digest,
+    then recursive exact equality with deterministic dotted field paths.
+    Returns `[]` only on equality; performs no I/O and changes nothing.
+    """
+    if not isinstance(configured, dict) or set(configured) != _RULES_FORMAT_FACT_KEYS:
+        raise EvidenceError("configured published-format facts have unsupported or missing keys")
+    if not isinstance(extracted, dict) or set(extracted) != {"schema", "facts"}:
+        raise EvidenceError("extracted published-format object has unsupported or missing keys")
+    if extracted["schema"] != RULES_FORMAT_EXTRACTED_SCHEMA:
+        raise EvidenceError(
+            f"extracted published-format schema must be {RULES_FORMAT_EXTRACTED_SCHEMA!r}"
+        )
+    facts = extracted["facts"]
+    if not isinstance(facts, dict) or set(facts) != _RULES_FORMAT_FACT_KEYS:
+        raise EvidenceError(
+            "extracted published-format facts do not match the configured fact vocabulary"
+        )
+    entry = facts["format"]
+    if not isinstance(entry, dict) or set(entry) != _FACT_ENTRY_KEYS:
+        raise EvidenceError("extracted published-format fact has unsupported or missing keys")
+    if not _is_sha256(entry["span_sha256"]):
+        raise EvidenceError("extracted published-format fact has an invalid span_sha256")
+    _reconcile_value("format", configured["format"], entry["value"])
+    return []

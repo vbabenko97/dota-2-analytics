@@ -11,10 +11,14 @@ from ti26.evidence import (
     canonical_evidence_json_bytes,
     evidence_id_for_manifest,
     evidence_is_admissible,
+    extract_ti2026_published_format,
+    extract_ti2026_rules,
     load_source_registry,
     reconcile_draw,
     reconcile_participants,
     reconcile_rosters,
+    reconcile_rules_facts,
+    reconcile_rules_format_facts,
     select_current_evidence,
     validate_evidence_manifest,
     validate_kind_payload,
@@ -591,3 +595,93 @@ def test_negative_descendant_is_not_graph_applicable_before_observation(tmp_path
     negative = _negative_record_observed_later(tmp_path, ancestor, available="2026-01-01T00:00:01Z", observed="2026-01-01T00:00:03Z")
     selected = select_current_evidence([ancestor, negative], "rules", ancestor.subject_key, "2026-01-01T00:00:02Z")
     assert selected.selected.evidence_id == ancestor.evidence_id
+
+
+def test_rules_extractor_binds_each_fact_to_its_exact_rendered_span():
+    """Kills mutation: emit normalized rules facts without a supporting text-span digest."""
+    rendered = (
+        "Number of Matches Won\nNumber of Matches Lost\n"
+        "Total Number of Matches Won by Opponents Played\nPercentage of Games Won\n"
+        "Average Percentage of Games Won by Opponents Played\n"
+        "Average Game Duration (Shorter is Better)\nCoin Toss\n"
+        "Round 2\nTeams are only matched against other members of their initial group\n"
+        "Round 3\nTeams are only matched against other members of their initial group\n"
+        "Round 4\nTeams are only matched against members of the other group\n"
+        "Round 5\nFor matches where the loser is eliminated, maximize the distance in ranking between the teams\n"
+        "Elimination Round\nStarting with the best 3-2 team, they will choose any of the five 2-3 teams as their opponent.\n"
+    )
+    extracted = extract_ti2026_rules(rendered)
+    assert extracted["schema"] == "ti26.rules-extracted.v1"
+    assert all(value["span_sha256"] for value in extracted["facts"].values())
+
+
+def test_reconcile_rules_facts_reports_the_field_that_diverges():
+    """Kills mutation: compare only provenance tags and ignore factual values."""
+    expected = {
+        "tiebreak_order": ["series_wins"],
+        "rounds": {"within_group": [2], "cross_group": [4], "max_distance_when_loser_eliminated": [5]},
+        "elimination_selection_order": "best_3_2_sequential_choice",
+    }
+    observed = {
+        "schema": "ti26.rules-extracted.v1",
+        "facts": {
+            "tiebreak_order": {"value": ["series_losses"], "span_sha256": "a" * 64},
+            "rounds": {"value": expected["rounds"], "span_sha256": "b" * 64},
+            "elimination_selection_order": {
+                "value": expected["elimination_selection_order"],
+                "span_sha256": "c" * 64,
+            },
+        },
+    }
+    with pytest.raises(ReconciliationError, match="tiebreak_order"):
+        reconcile_rules_facts(expected, observed)
+
+
+def test_rules_format_extractor_requires_its_supporting_span():
+    """Kills mutation: derive published-format facts from the group-stage extractor."""
+    rendered = (
+        "Format\n"
+        "Number of Teams: 16\n"
+        "Total Rounds: 5\n"
+        "Advance at Wins: 4\n"
+        "Eliminate at Losses: 4\n"
+    )
+    extracted = extract_ti2026_published_format(rendered)
+    assert extracted["schema"] == "ti26.rules-format-extracted.v1"
+    assert extracted["facts"]["format"]["span_sha256"]
+    assert extracted["facts"]["format"]["value"] == {
+        "n_teams": 16,
+        "total_rounds": 5,
+        "advance_at_wins": 4,
+        "eliminate_at_losses": 4,
+    }
+    with pytest.raises(EvidenceError, match="format"):
+        extract_ti2026_published_format("Some unrelated published text with no format fragment.\n")
+
+
+def test_reconcile_rules_format_facts_reports_each_field():
+    """Kills mutation: compare only a format schema or one scalar."""
+    expected = {
+        "format": {
+            "n_teams": 16,
+            "total_rounds": 5,
+            "advance_at_wins": 4,
+            "eliminate_at_losses": 4,
+        }
+    }
+    observed = {
+        "schema": "ti26.rules-format-extracted.v1",
+        "facts": {
+            "format": {
+                "value": {
+                    "n_teams": 16,
+                    "total_rounds": 5,
+                    "advance_at_wins": 4,
+                    "eliminate_at_losses": 5,
+                },
+                "span_sha256": "d" * 64,
+            }
+        },
+    }
+    with pytest.raises(ReconciliationError, match=r"format\.eliminate_at_losses"):
+        reconcile_rules_format_facts(expected, observed)
