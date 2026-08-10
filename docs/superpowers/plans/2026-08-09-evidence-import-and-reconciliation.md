@@ -511,6 +511,7 @@ def test_absent_evidence_expires_after_supported_through(tmp_path):
                 "authoritative_source_keys_checked": [
                     "valve-ti-group-stage-rules"
                 ],
+                "diagnostic_reason": None,
             }
         ),
         verify_payloads=False,
@@ -545,6 +546,7 @@ def test_negative_evidence_binds_one_capture_for_every_checked_authority(tmp_pat
             "valve-ti-group-stage-rules",
             "valve-ti-series-page",
         ],
+        "diagnostic_reason": None,
     }
     payload["evidence_id"] = evidence_id_for_manifest(payload)
     with pytest.raises(EvidenceError, match="every checked authority"):
