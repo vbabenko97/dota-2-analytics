@@ -909,6 +909,54 @@ def validate_record_sources(record: EvidenceManifest, registry: EvidenceSourceRe
             )
 
 
+_EVIDENCE_KIND_DIRS = ("rules", "participants", "rosters", "draws")
+
+
+def load_evidence_catalog(
+    root: Path, registry: EvidenceSourceRegistry
+) -> tuple[EvidenceManifest, ...]:
+    """Load, verify, and source-validate every existing immutable evidence record.
+
+    Importer preflight: `root` may not yet exist (a brand-new evidence tree),
+    in which case the catalog is empty. Every present `<kind>/<evidence_id>/`
+    entry is lstat-validated at each component -- root, kind directory, record
+    directory, and `manifest.json` -- rejecting a symlink anywhere; loaded
+    with full payload verification; and checked with `validate_record_sources`
+    against `registry`. It performs no selection and writes nothing.
+    """
+    if root.is_symlink():
+        raise EvidenceError(f"evidence root must not be a symlink: {root}")
+    if not root.exists():
+        return ()
+    if not root.is_dir():
+        raise EvidenceError(f"evidence root must be a directory: {root}")
+    records: list[EvidenceManifest] = []
+    for kind in _EVIDENCE_KIND_DIRS:
+        kind_dir = root / kind
+        if kind_dir.is_symlink():
+            raise EvidenceError(f"evidence kind directory must not be a symlink: {kind_dir}")
+        if not kind_dir.exists():
+            continue
+        if not kind_dir.is_dir():
+            raise EvidenceError(f"evidence kind directory must be a directory: {kind_dir}")
+        for child in sorted(kind_dir.iterdir()):
+            if child.is_symlink():
+                raise EvidenceError(f"evidence record directory must not be a symlink: {child}")
+            if not child.is_dir():
+                raise EvidenceError(f"evidence record entry must be a directory: {child}")
+            manifest_path = child / "manifest.json"
+            if manifest_path.is_symlink() or not manifest_path.is_file():
+                raise EvidenceError(f"evidence record is incomplete: {child}")
+            try:
+                payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise EvidenceError(f"evidence record manifest is unreadable: {child}") from exc
+            record = validate_evidence_manifest(child, payload, verify_payloads=True)
+            validate_record_sources(record, registry)
+            records.append(record)
+    return tuple(records)
+
+
 class EvidenceExistsError(FileExistsError):
     """An evidence destination already exists and is not a verified-identical retry."""
 
