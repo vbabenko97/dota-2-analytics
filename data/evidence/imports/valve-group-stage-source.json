@@ -1,0 +1,18 @@
+{
+  "source_url_key": "valve-ti-group-stage-rules",
+  "capture_method": "owner-supplied-rendered-text",
+  "available_at_utc": "2026-08-10T17:58:35Z",
+  "published_at_utc": null,
+  "retrieved_at_utc": "2026-08-10T17:58:53Z",
+  "assertion": "present",
+  "observed_at_utc": "2026-08-10T17:58:35Z",
+  "supported_through_utc": "2026-08-10T17:58:35Z",
+  "authoritative_source_keys_checked": [],
+  "attestation": {
+    "fact_payload_sha256": "6e2b9c7d3eec0b97fd699e7ffae69733a29b13cf8b28b882694216742eb2a8d2",
+    "capture_sha256s": [
+      "b554d6f8aac9d9608cca22bde886eafe164681afd4889228d26cff937d626ebe"
+    ]
+  },
+  "construction": "contemporaneous"
+}
