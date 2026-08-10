@@ -4,7 +4,10 @@ This module owns the immutable evidence-manifest schema: canonical JSON
 encoding, the content-addressed `evidence_id`, safe on-disk paths, and the
 pure validator that turns a JSON object into a trusted `EvidenceManifest`.
 It performs no I/O beyond reading the bytes a manifest already declares, and
-it never imports a network-capable module.
+it never imports a network-capable module. Its release-evidence adapter
+(`load_release_evidence`/`reconcile_release_evidence`) additionally reads the
+existing shipping YAML inputs through `ti26.rules`, `ti26.teams`, and
+`ti26.groups` -- still offline, still no predictive action.
 """
 
 import hashlib
@@ -13,6 +16,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+
+from ti26.groups import load_group_draw
+from ti26.rules import shipping_rules_facts, shipping_rules_format_facts
+from ti26.teams import load_teams
 
 _CHUNK_SIZE = 1024 * 1024
 
@@ -1577,3 +1584,302 @@ def reconcile_rules_format_facts(
         raise EvidenceError("extracted published-format fact has an invalid span_sha256")
     _reconcile_value("format", configured["format"], entry["value"])
     return []
+
+
+RELEASE_SUBJECTS = {
+    "rules": "rules:ti2026:valve:group-stage",
+    "published_format": "rules:ti2026:valve:published-format",
+    "participants": "participants:ti2026:event-authority:field",
+    "rosters": "rosters:ti2026:event-authority:registered-lineups",
+    "groups": "draws:ti2026:event-authority:groups",
+    "round_one": "draws:ti2026:event-authority:round-one",
+}
+
+_RELEASE_KIND_BY_SUBJECT_NAME = {
+    "rules": "rules",
+    "published_format": "rules",
+    "participants": "participants",
+    "rosters": "rosters",
+    "groups": "draws",
+    "round_one": "draws",
+}
+
+_RELEASE_ROOT_ENTRIES = frozenset({"source-registry.json", "imports", *_EVIDENCE_KIND_DIRS})
+
+
+@dataclass(frozen=True)
+class EvidenceCatalog:
+    """Every fully verified, source-registered evidence record under `root`."""
+
+    root: Path
+    registry_path: Path
+    records: tuple[EvidenceManifest, ...]
+
+
+@dataclass(frozen=True)
+class ReleaseEvidence:
+    """The one typed reconciliation result Plan 3's release wiring consumes.
+
+    `selected` maps each `RELEASE_SUBJECTS` name to its `CurrentEvidence`.
+    `input_paths` is every manifest and payload path -- selected, superseded
+    ancestor, or competing tip -- inspected to validate the six selected
+    lineages, plus the source registry; it excludes only records unavailable
+    after `cutoff_utc`.
+    """
+
+    selected: dict[str, CurrentEvidence]
+    input_paths: tuple[Path, ...]
+    participant_ids: frozenset[int]
+    roster_accounts: dict[int, tuple[int, ...]]
+    rules_facts: dict[str, object]
+    draw_states: dict[str, str]
+    groups: dict[int, str] | None
+    round_one: tuple[tuple[int, int], ...] | None
+
+
+def load_release_evidence(root: Path) -> EvidenceCatalog:
+    """Load, fully verify, and source-validate every evidence record for release use.
+
+    At the evidence-root level, only `source-registry.json`, the optional
+    owner-input staging directory `imports/` (never scanned for records),
+    and the registered kind directories may exist; any other entry fails
+    closed. Inside each kind directory every child must be a non-symlink
+    lowercase-64-hex directory containing `manifest.json`; a directory
+    missing it is incomplete and fails closed rather than being silently
+    skipped. Every manifest is validated with full payload verification and
+    checked against the registry loaded from `root/source-registry.json`
+    before the catalog is returned.
+    """
+    if root.is_symlink():
+        raise EvidenceError(f"evidence root must not be a symlink: {root}")
+    if not root.is_dir():
+        raise EvidenceError(f"evidence root must be a directory: {root}")
+    for child in sorted(root.iterdir()):
+        if child.name not in _RELEASE_ROOT_ENTRIES:
+            raise EvidenceError(f"evidence root has an unexpected entry: {child}")
+    imports_dir = root / "imports"
+    if imports_dir.exists() and (imports_dir.is_symlink() or not imports_dir.is_dir()):
+        raise EvidenceError(f"evidence imports staging path must be a directory: {imports_dir}")
+
+    records: list[EvidenceManifest] = []
+    seen_ids: set[str] = set()
+    for kind in _EVIDENCE_KIND_DIRS:
+        kind_dir = root / kind
+        if kind_dir.is_symlink():
+            raise EvidenceError(f"evidence kind directory must not be a symlink: {kind_dir}")
+        if not kind_dir.exists():
+            continue
+        if not kind_dir.is_dir():
+            raise EvidenceError(f"evidence kind directory must be a directory: {kind_dir}")
+        for child in sorted(kind_dir.iterdir()):
+            if child.is_symlink() or not child.is_dir() or not _is_sha256(child.name):
+                raise EvidenceError(f"evidence record entry is incomplete or unexpected: {child}")
+            manifest_path = child / "manifest.json"
+            if manifest_path.is_symlink() or not manifest_path.is_file():
+                raise EvidenceError(f"evidence record is incomplete: {child}")
+            try:
+                payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise EvidenceError(f"evidence record manifest is unreadable: {child}") from exc
+            record = validate_evidence_manifest(child, payload, verify_payloads=True)
+            if record.evidence_id in seen_ids:
+                raise EvidenceError(
+                    f"evidence catalog has a duplicate evidence id: {record.evidence_id}"
+                )
+            seen_ids.add(record.evidence_id)
+            records.append(record)
+
+    registry_path = root / "source-registry.json"
+    registry = load_source_registry(registry_path)
+    for record in records:
+        validate_record_sources(record, registry)
+
+    ordered = tuple(sorted(records, key=lambda record: (record.kind, record.subject_key, record.evidence_id)))
+    return EvidenceCatalog(root=root, registry_path=registry_path, records=ordered)
+
+
+def _record_input_paths(record: EvidenceManifest) -> tuple[Path, ...]:
+    """Return `record`'s manifest path plus every declared payload path."""
+    paths = [record.root / "manifest.json"]
+    for digest in record.payloads:
+        _, path = safe_relative_file(record.root, digest.path, "payload")
+        paths.append(path)
+    return tuple(paths)
+
+
+def _applicable_lineage_paths(
+    records: tuple[EvidenceManifest, ...], kind: str, subject_key: str, cutoff_utc: str
+) -> tuple[Path, ...]:
+    """Manifest+payload paths for every `(kind, subject_key)` record applicable at cutoff.
+
+    "Applicable" is the same graph-applicability boundary
+    (`_graph_applicability`) `select_current_evidence` uses to build its
+    maximal-tip set, so this covers the selected tip, every superseded
+    ancestor, and any competing tip inspected while validating that
+    selection -- not only the record ultimately selected. A record
+    unavailable after the cutoff is excluded, since it was never traversed
+    for graph validation either.
+    """
+    cutoff = parse_utc(cutoff_utc, "cutoff_utc")
+    paths: list[Path] = []
+    for record in records:
+        if (
+            record.kind == kind
+            and record.subject_key == subject_key
+            and _graph_applicability(record) <= cutoff
+        ):
+            paths.extend(_record_input_paths(record))
+    return tuple(paths)
+
+
+def _read_json_payload(record: EvidenceManifest, path: str) -> object:
+    """Read and parse one declared JSON payload of an already-verified record."""
+    _, file_path = safe_relative_file(record.root, path, "payload")
+    return json.loads(file_path.read_text(encoding="utf-8"))
+
+
+def reconcile_release_evidence(
+    catalog: EvidenceCatalog,
+    *,
+    cutoff_utc: str,
+    rules_path: Path,
+    teams_path: Path,
+    groups_path: Path | None,
+) -> ReleaseEvidence:
+    """Select and reconcile the complete current release-evidence picture at `cutoff_utc`.
+
+    Selects the unique current tip for every `RELEASE_SUBJECTS` entry with
+    `allow_reconstructed_unknown=False`, so a diagnostic-only tip blocks
+    release selection even when one exists. Rules, published format,
+    participants, and rosters each require a `present` current tip: rules
+    and published format are reconciled against `shipping_rules_facts` and
+    `shipping_rules_format_facts` respectively; participant ids must equal
+    `load_teams(teams_path)`'s ids; roster keys must exactly cover that same
+    authoritative participant set. Groups and Round 1 are selected and
+    compared independently: with no `groups_path`, both must currently be
+    unpublished; with one, `load_group_draw` supplies the local groups and
+    optional Round-1 pairing, translated from configured names to configured
+    numeric team ids, and each is compared against its own published or
+    unpublished evidence tip -- a state disagreement between the local input
+    and the evidence fails closed rather than being inferred.
+    """
+    selected: dict[str, CurrentEvidence] = {}
+    input_paths: set[Path] = {catalog.registry_path}
+
+    def select(name: str) -> CurrentEvidence:
+        subject_key = RELEASE_SUBJECTS[name]
+        kind = _RELEASE_KIND_BY_SUBJECT_NAME[name]
+        current = select_current_evidence(
+            catalog.records, kind, subject_key, cutoff_utc, allow_reconstructed_unknown=False
+        )
+        selected[name] = current
+        input_paths.update(_applicable_lineage_paths(catalog.records, kind, subject_key, cutoff_utc))
+        return current
+
+    rules_current = select("rules")
+    format_current = select("published_format")
+    participants_current = select("participants")
+    rosters_current = select("rosters")
+    groups_current = select("groups")
+    round_one_current = select("round_one")
+
+    configured_rules = shipping_rules_facts(str(rules_path))
+    extracted = _read_json_payload(rules_current.selected, "extracted.json")
+    reconcile_rules_facts(configured_rules, extracted)
+
+    configured_format = shipping_rules_format_facts(str(rules_path))
+    format_extracted = _read_json_payload(format_current.selected, "format-extracted.json")
+    reconcile_rules_format_facts(configured_format, format_extracted)
+
+    configured_teams = load_teams(teams_path)
+    configured_ids = {team.team_id for team in configured_teams}
+    participants_payload = _read_json_payload(participants_current.selected, "participants.json")
+    participant_ids = frozenset(
+        entry["team_id"] for entry in participants_payload["participants"]
+    )
+    reconcile_participants(configured_ids, set(participant_ids))
+
+    rosters_payload = _read_json_payload(rosters_current.selected, "rosters.json")
+    roster_accounts = {
+        entry["team_id"]: tuple(entry["account_ids"]) for entry in rosters_payload["rosters"]
+    }
+    if set(roster_accounts) != participant_ids:
+        missing = sorted(participant_ids - set(roster_accounts))
+        unexpected = sorted(set(roster_accounts) - participant_ids)
+        raise ReconciliationError(
+            "rosters.team_id coverage mismatch against the authoritative participant set: "
+            f"missing={missing} unexpected={unexpected}"
+        )
+
+    groups_state = (
+        "published" if groups_current.selected.observation.assertion == "present" else "unpublished"
+    )
+    round_one_state = (
+        "published"
+        if round_one_current.selected.observation.assertion == "present"
+        else "unpublished"
+    )
+    draw_states = {"groups": groups_state, "round_one": round_one_state}
+
+    observed_groups = _read_json_payload(groups_current.selected, "draw.json")["value"]
+    observed_round_one = _read_json_payload(round_one_current.selected, "draw.json")["value"]
+
+    id_by_name = {team.name: team.team_id for team in configured_teams}
+    if groups_path is None:
+        if groups_state != "unpublished" or round_one_state != "unpublished":
+            raise ReconciliationError(
+                "no local draw input was supplied, but current evidence reports a "
+                "published draw component"
+            )
+        expected_groups: dict[str, list[int]] | None = None
+        expected_round_one: list[list[int]] | None = None
+        groups: dict[int, str] | None = None
+        round_one: tuple[tuple[int, int], ...] | None = None
+    else:
+        if groups_state != "published":
+            raise ReconciliationError(
+                "a local groups input was supplied, but current evidence reports "
+                "groups unpublished"
+            )
+        local_groups, local_round_one = load_group_draw(
+            groups_path, [team.name for team in configured_teams]
+        )
+        expected_groups = {}
+        for name, label in local_groups.items():
+            expected_groups.setdefault(label, []).append(id_by_name[name])
+        for members in expected_groups.values():
+            members.sort()
+        groups = {id_by_name[name]: label for name, label in local_groups.items()}
+
+        if local_round_one is None:
+            if round_one_state != "unpublished":
+                raise ReconciliationError(
+                    "local round-one input is absent, but current evidence reports "
+                    "round one published"
+                )
+            expected_round_one = None
+            round_one = None
+        else:
+            if round_one_state != "published":
+                raise ReconciliationError(
+                    "a local round-one input was supplied, but current evidence reports "
+                    "round one unpublished"
+                )
+            expected_round_one = [[id_by_name[a], id_by_name[b]] for a, b in local_round_one]
+            round_one = tuple((id_by_name[a], id_by_name[b]) for a, b in local_round_one)
+
+    reconcile_draw(
+        {"groups": expected_groups, "round_one": expected_round_one},
+        {"groups": observed_groups, "round_one": observed_round_one},
+    )
+
+    return ReleaseEvidence(
+        selected=selected,
+        input_paths=tuple(sorted(input_paths, key=lambda path: path.as_posix())),
+        participant_ids=participant_ids,
+        roster_accounts=roster_accounts,
+        rules_facts=configured_rules,
+        draw_states=draw_states,
+        groups=groups,
+        round_one=round_one,
+    )

@@ -3,19 +3,24 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from ti26.evidence import (
+    RELEASE_SUBJECTS,
     EvidenceError,
     EvidenceExistsError,  # noqa: F401 -- imported per Step 2's RED-import assertion
+    EvidenceManifest,
     ReconciliationError,
     canonical_evidence_json_bytes,
     evidence_id_for_manifest,
     evidence_is_admissible,
     extract_ti2026_published_format,
     extract_ti2026_rules,
+    load_release_evidence,
     load_source_registry,
     reconcile_draw,
     reconcile_participants,
+    reconcile_release_evidence,
     reconcile_rosters,
     reconcile_rules_facts,
     reconcile_rules_format_facts,
@@ -685,3 +690,478 @@ def test_reconcile_rules_format_facts_reports_each_field():
     }
     with pytest.raises(ReconciliationError, match=r"format\.eliminate_at_losses"):
         reconcile_rules_format_facts(expected, observed)
+
+
+# --- Task 7: release-evidence catalog and reconciliation fixtures -----------
+#
+# Every fixture below writes through `write_evidence_record` (in the style of
+# `_current_fork` in `tests/test_cli_evidence_import.py`), so no test here
+# hand-authors a trusted manifest; `load_release_evidence` does the real
+# verification. All four teams and their ids are a synthetic fixture field,
+# never a real TI 2026 participant.
+
+_RELEASE_SOURCE_KEY = "owner-capture"
+_RELEASE_AVAILABLE = "2026-01-01T00:00:00Z"
+_RELEASE_OBSERVED = "2026-01-01T00:00:01Z"
+_RELEASE_CUTOFF = "2026-01-01T00:00:01Z"
+_RELEASE_KIND_BY_NAME = {
+    "rules": "rules",
+    "published_format": "rules",
+    "participants": "participants",
+    "rosters": "rosters",
+    "groups": "draws",
+    "round_one": "draws",
+}
+_TEAM_NAMES = {101: "Alpha", 102: "Beta", 103: "Gamma", 104: "Delta"}
+_RULES_FACTS_VALUE = {
+    "tiebreak_order": [
+        "series_wins",
+        "series_losses",
+        "opponent_series_wins",
+        "game_win_pct",
+        "opponent_game_win_pct",
+        "avg_duration",
+        "coin_toss",
+    ],
+    "rounds": {
+        "within_group": [2, 3],
+        "cross_group": [4],
+        "max_distance_when_loser_eliminated": [5],
+    },
+    "elimination_selection_order": "best_3_2_sequential_choice",
+}
+_FORMAT_FACTS_VALUE = {"n_teams": 4, "total_rounds": 5, "advance_at_wins": 4, "eliminate_at_losses": 4}
+_DEFAULT_GROUPS_VALUE = {"A": [101, 102], "B": [103, 104]}
+_DEFAULT_ROUND_ONE_VALUE = [[101, 102], [103, 104]]
+
+
+def _release_registry_value() -> dict[str, object]:
+    return {
+        "schema": "ti26.evidence-source-registry.v1",
+        "effective_at_utc": "2025-12-31T00:00:00Z",
+        "sources": [
+            {
+                "source_url_key": _RELEASE_SOURCE_KEY,
+                "authorizations": [
+                    {
+                        "event_id": "ti2026",
+                        "kind": _RELEASE_KIND_BY_NAME[name],
+                        "subject_key": subject_key,
+                    }
+                    for name, subject_key in RELEASE_SUBJECTS.items()
+                ],
+            }
+        ],
+    }
+
+
+def _release_registry_bytes() -> bytes:
+    return canonical_evidence_json_bytes(_release_registry_value()) + b"\n"
+
+
+def _write_release_record(
+    root: Path,
+    *,
+    kind: str,
+    subject_key: str,
+    assertion: str,
+    normalized_path: str,
+    normalized_value: dict[str, object],
+    capture_path: str,
+    capture_bytes: bytes,
+    construction: str = "contemporaneous",
+    supersedes: tuple[str, ...] = (),
+    available_at_utc: str = _RELEASE_AVAILABLE,
+    observed_at_utc: str = _RELEASE_OBSERVED,
+) -> EvidenceManifest:
+    """Build and write one manifest-valid release-evidence record.
+
+    Every declared digest is derived from the actual bytes handed to
+    `write_evidence_record`, per the plan's test-helper convention. `assertion`
+    picks the observation shape: `"present"` binds a positive attestation to
+    `normalized_path`; `"absent"` checks (and captures) exactly the one
+    registered authority, `_RELEASE_SOURCE_KEY`, and carries no attestation.
+    """
+    registry_bytes = _release_registry_bytes()
+    normalized_bytes = canonical_evidence_json_bytes(normalized_value) + b"\n"
+    payloads = [
+        {"path": "authority-registry.json", "sha256": _sha(registry_bytes)},
+        {"path": capture_path, "sha256": _sha(capture_bytes)},
+        {"path": normalized_path, "sha256": _sha(normalized_bytes)},
+    ]
+    payload_bytes = {
+        "authority-registry.json": registry_bytes,
+        capture_path: capture_bytes,
+        normalized_path: normalized_bytes,
+    }
+    captures = [{"source_url_key": _RELEASE_SOURCE_KEY, "path": capture_path}]
+    if assertion == "present":
+        observation = {
+            "assertion": "present",
+            "observed_at_utc": observed_at_utc,
+            "supported_through_utc": observed_at_utc,
+            "captures": captures,
+            "authoritative_source_keys_checked": [],
+            "diagnostic_reason": None,
+        }
+        attestation = {
+            "fact_payload_sha256": _sha(normalized_bytes),
+            "capture_sha256s": [_sha(capture_bytes)],
+        }
+    else:
+        observation = {
+            "assertion": "absent",
+            "observed_at_utc": observed_at_utc,
+            "supported_through_utc": observed_at_utc,
+            "captures": captures,
+            "authoritative_source_keys_checked": [_RELEASE_SOURCE_KEY],
+            "diagnostic_reason": None,
+        }
+        attestation = None
+
+    manifest = {
+        "schema": "ti26.evidence-manifest.v1",
+        "evidence_id": "",
+        "kind": kind,
+        "event_id": "ti2026",
+        "subject_key": subject_key,
+        "source": {
+            "source_url_key": _RELEASE_SOURCE_KEY,
+            "capture_method": "owner-supplied-capture",
+            "available_at_utc": available_at_utc,
+            "published_at_utc": None,
+            "retrieved_at_utc": observed_at_utc,
+        },
+        "observation": observation,
+        "attestation": attestation,
+        "authority_registry": {
+            "schema": "ti26.evidence-authority-binding.v1",
+            "path": "authority-registry.json",
+            "sha256": _sha(registry_bytes),
+            "effective_at_utc": "2025-12-31T00:00:00Z",
+        },
+        "construction": construction,
+        "payloads": payloads,
+        "supersedes": list(supersedes),
+        "producer_revision": "a" * 40,
+    }
+    manifest["evidence_id"] = evidence_id_for_manifest(manifest)
+    record_path = write_evidence_record(root, manifest, payload_bytes)
+    return validate_evidence_manifest(record_path, manifest, verify_payloads=True)
+
+
+def _extracted_rules_value() -> dict[str, object]:
+    return {
+        "schema": "ti26.rules-extracted.v1",
+        "facts": {
+            key: {"value": value, "span_sha256": _sha(f"span:{key}".encode())}
+            for key, value in _RULES_FACTS_VALUE.items()
+        },
+    }
+
+
+def _extracted_format_value(value: dict[str, int]) -> dict[str, object]:
+    return {
+        "schema": "ti26.rules-format-extracted.v1",
+        "facts": {"format": {"value": value, "span_sha256": _sha(b"span:format")}},
+    }
+
+
+def _roster_accounts_for(team_id: int) -> list[int]:
+    base = (team_id - 101) * 5 + 1
+    return list(range(base, base + 5))
+
+
+def _release_catalog(
+    tmp_path: Path,
+    *,
+    omit_subject: str | None = None,
+    groups_state: str = "unpublished",
+    round_one_state: str = "unpublished",
+    evidence_round_one: list[list[int]] | None = None,
+    roster_construction: str = "contemporaneous",
+    team_ids: list[int] | None = None,
+    roster_team_ids: list[int] | None = None,
+    format_facts: dict[str, int] | None = None,
+    rules_ancestor: bool = False,
+):
+    """Write a complete, manifest-valid synthetic release catalog under `tmp_path/"evidence"`.
+
+    Defaults to the single-team field `{101: Alpha}` with both draw
+    components unpublished. `groups_state`/`round_one_state` of
+    `"published"` switch the default field to the four-team fixture
+    (`101..104`, two even groups) that `load_group_draw` requires.
+    `omit_subject` skips writing exactly the named `RELEASE_SUBJECTS` value,
+    simulating evidence that was never captured.
+    """
+    root = tmp_path / "evidence"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "source-registry.json").write_bytes(_release_registry_bytes())
+
+    uses_four_teams = groups_state == "published" or round_one_state == "published"
+    default_team_ids = [101, 102, 103, 104] if uses_four_teams else [101]
+    resolved_team_ids = team_ids if team_ids is not None else default_team_ids
+    resolved_roster_ids = roster_team_ids if roster_team_ids is not None else resolved_team_ids
+
+    def omitted(name: str) -> bool:
+        return RELEASE_SUBJECTS[name] == omit_subject
+
+    if not omitted("rules"):
+        supersedes: tuple[str, ...] = ()
+        if rules_ancestor:
+            ancestor = _write_release_record(
+                root,
+                kind="rules",
+                subject_key=RELEASE_SUBJECTS["rules"],
+                assertion="present",
+                normalized_path="extracted.json",
+                normalized_value=_extracted_rules_value(),
+                capture_path="rendered.txt",
+                capture_bytes=b"Group Stage Rules (ancestor)\n",
+                available_at_utc="2025-12-31T00:00:00Z",
+                observed_at_utc="2025-12-31T00:00:01Z",
+            )
+            supersedes = (ancestor.evidence_id,)
+        _write_release_record(
+            root,
+            kind="rules",
+            subject_key=RELEASE_SUBJECTS["rules"],
+            assertion="present",
+            normalized_path="extracted.json",
+            normalized_value=_extracted_rules_value(),
+            capture_path="rendered.txt",
+            capture_bytes=b"Group Stage Rules (current)\n",
+            supersedes=supersedes,
+        )
+
+    if not omitted("published_format"):
+        _write_release_record(
+            root,
+            kind="rules",
+            subject_key=RELEASE_SUBJECTS["published_format"],
+            assertion="present",
+            normalized_path="format-extracted.json",
+            normalized_value=_extracted_format_value(format_facts or _FORMAT_FACTS_VALUE),
+            capture_path="format-rendered.txt",
+            capture_bytes=b"Format\n",
+        )
+
+    if not omitted("participants"):
+        participants_value = {
+            "schema": "ti26.participants.v1",
+            "participants": [
+                {"team_id": team_id, "display_name": _TEAM_NAMES[team_id]}
+                for team_id in sorted(resolved_team_ids)
+            ],
+        }
+        _write_release_record(
+            root,
+            kind="participants",
+            subject_key=RELEASE_SUBJECTS["participants"],
+            assertion="present",
+            normalized_path="participants.json",
+            normalized_value=participants_value,
+            capture_path="source.bin",
+            capture_bytes=b"participants capture",
+        )
+
+    if not omitted("rosters"):
+        rosters_value = {
+            "schema": "ti26.rosters.v1",
+            "rosters": [
+                {"team_id": team_id, "account_ids": _roster_accounts_for(team_id)}
+                for team_id in sorted(resolved_roster_ids)
+            ],
+        }
+        _write_release_record(
+            root,
+            kind="rosters",
+            subject_key=RELEASE_SUBJECTS["rosters"],
+            assertion="present",
+            normalized_path="rosters.json",
+            normalized_value=rosters_value,
+            capture_path="source.bin",
+            capture_bytes=b"rosters capture",
+            construction=roster_construction,
+        )
+
+    if not omitted("groups"):
+        groups_value = _DEFAULT_GROUPS_VALUE if groups_state == "published" else None
+        _write_release_record(
+            root,
+            kind="draws",
+            subject_key=RELEASE_SUBJECTS["groups"],
+            assertion="present" if groups_state == "published" else "absent",
+            normalized_path="draw.json",
+            normalized_value={
+                "schema": "ti26.draw-fact.v1",
+                "component": "groups",
+                "publication_state": groups_state,
+                "value": groups_value,
+            },
+            capture_path="captures/owner-capture.bin",
+            capture_bytes=b"groups capture",
+        )
+
+    if not omitted("round_one"):
+        if round_one_state == "published":
+            round_one_value = evidence_round_one if evidence_round_one is not None else _DEFAULT_ROUND_ONE_VALUE
+        else:
+            round_one_value = None
+        _write_release_record(
+            root,
+            kind="draws",
+            subject_key=RELEASE_SUBJECTS["round_one"],
+            assertion="present" if round_one_state == "published" else "absent",
+            normalized_path="draw.json",
+            normalized_value={
+                "schema": "ti26.draw-fact.v1",
+                "component": "round_one",
+                "publication_state": round_one_state,
+                "value": round_one_value,
+            },
+            capture_path="captures/owner-capture.bin",
+            capture_bytes=b"round one capture",
+        )
+
+    return load_release_evidence(root)
+
+
+def _rules_yaml(tmp_path: Path, *, format_value: dict[str, int]) -> Path:
+    value = {
+        "tiebreak_order": _RULES_FACTS_VALUE["tiebreak_order"],
+        "rounds": _RULES_FACTS_VALUE["rounds"],
+        "format": format_value,
+    }
+    path = tmp_path / "rules.yaml"
+    path.write_text(yaml.safe_dump(value), encoding="utf-8")
+    return path
+
+
+def _teams_yaml(tmp_path: Path, team_ids: list[int]) -> Path:
+    value = {
+        "teams": [
+            {"name": _TEAM_NAMES[team_id], "team_id": team_id} for team_id in sorted(team_ids)
+        ]
+    }
+    path = tmp_path / "teams.yaml"
+    path.write_text(yaml.safe_dump(value), encoding="utf-8")
+    return path
+
+
+def _release_inputs(
+    tmp_path: Path,
+    *,
+    groups_path: Path | None = None,
+    team_ids: list[int] | None = None,
+    format_value: dict[str, int] | None = None,
+) -> dict[str, object]:
+    """Build the keyword arguments `reconcile_release_evidence` expects.
+
+    Defaults to the single-team field, matching `_release_catalog`'s own
+    default; a supplied `groups_path` switches the default field to the
+    four-team fixture so `load_group_draw` sees a configured name for every
+    member of its groups YAML.
+    """
+    resolved_team_ids = team_ids
+    if resolved_team_ids is None:
+        resolved_team_ids = [101, 102, 103, 104] if groups_path is not None else [101]
+    return {
+        "cutoff_utc": _RELEASE_CUTOFF,
+        "rules_path": _rules_yaml(tmp_path, format_value=format_value or _FORMAT_FACTS_VALUE),
+        "teams_path": _teams_yaml(tmp_path, resolved_team_ids),
+        "groups_path": groups_path,
+    }
+
+
+def _draw_yaml(tmp_path: Path, *, round_one: list[list[str]] | None = None) -> Path:
+    """Write an existing-format draw YAML for the default four-team fixture field.
+
+    Group A: Alpha, Beta. Group B: Gamma, Delta. `round_one`, when given,
+    overrides only the pairs it names by group; any group not mentioned
+    keeps its default in-group pairing, so the result always satisfies
+    `load_group_draw`'s full-coverage requirement.
+    """
+    label_of = {"Alpha": "A", "Beta": "A", "Gamma": "B", "Delta": "B"}
+    pairs = {"A": ["Alpha", "Beta"], "B": ["Gamma", "Delta"]}
+    if round_one is not None:
+        for pair in round_one:
+            pairs[label_of[pair[0]]] = list(pair)
+    value = {
+        "groups": {"A": ["Alpha", "Beta"], "B": ["Gamma", "Delta"]},
+        "round_one": [pairs["A"], pairs["B"]],
+    }
+    path = tmp_path / "draw.yaml"
+    path.write_text(yaml.safe_dump(value), encoding="utf-8")
+    return path
+
+
+def test_release_loader_rejects_an_incomplete_record_directory(tmp_path):
+    """Kills mutation: skip an evidence directory merely because manifest.json is absent."""
+    incomplete = tmp_path / "evidence" / "rosters" / ("a" * 64)
+    incomplete.mkdir(parents=True)
+    (incomplete / "rosters.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(EvidenceError, match="incomplete"):
+        load_release_evidence(tmp_path / "evidence")
+
+
+def test_release_reconciliation_requires_current_rules_field_rosters_and_both_draw_components(tmp_path):
+    """Kills mutation: treat a missing Round-1 observation as unpublished evidence."""
+    catalog = _release_catalog(tmp_path, omit_subject="draws:ti2026:event-authority:round-one")
+    with pytest.raises(ReconciliationError, match="round.one"):
+        reconcile_release_evidence(catalog, **_release_inputs(tmp_path))
+
+
+def test_release_reconciliation_binds_negative_draw_captures_and_exact_rosters(tmp_path):
+    """Kills mutation: return only positive evidence paths or compare rosters by organisation ID."""
+    catalog = _release_catalog(tmp_path, groups_state="unpublished", round_one_state="unpublished")
+    result = reconcile_release_evidence(catalog, **_release_inputs(tmp_path, groups_path=None))
+    assert result.roster_accounts == {101: (1, 2, 3, 4, 5)}
+    assert result.draw_states == {"groups": "unpublished", "round_one": "unpublished"}
+    assert any("captures" in path.parts for path in result.input_paths)
+
+
+def test_release_reconciliation_compares_published_groups_and_round_one_independently(tmp_path):
+    """Kills mutation: accept matching groups as proof that supplied Round 1 also matches."""
+    draw_path = _draw_yaml(tmp_path, round_one=[["Alpha", "Beta"]])
+    catalog = _release_catalog(
+        tmp_path, groups_state="published", round_one_state="published", evidence_round_one=[[101, 999]]
+    )
+    with pytest.raises(ReconciliationError, match="round_one"):
+        reconcile_release_evidence(catalog, **_release_inputs(tmp_path, groups_path=draw_path))
+
+
+def test_release_reconciliation_rejects_reconstructed_unknown_even_if_a_tip_exists(tmp_path):
+    """Kills mutation: opt release selection into diagnostic reconstructed-unknown evidence."""
+    catalog = _release_catalog(tmp_path, roster_construction="reconstructed_unknown")
+    with pytest.raises(ReconciliationError, match="reconstructed_unknown"):
+        reconcile_release_evidence(catalog, **_release_inputs(tmp_path))
+
+
+def test_release_reconciliation_reconciles_published_format_facts(tmp_path):
+    """Kills mutation: gate the format subject on existence without reconciling its facts against shipping config."""
+    mismatched = dict(_FORMAT_FACTS_VALUE)
+    mismatched["eliminate_at_losses"] = _FORMAT_FACTS_VALUE["eliminate_at_losses"] + 1
+    catalog = _release_catalog(tmp_path, format_facts=mismatched)
+    with pytest.raises(ReconciliationError, match="format"):
+        reconcile_release_evidence(catalog, **_release_inputs(tmp_path))
+
+
+def test_release_inputs_bind_applicable_lineage(tmp_path):
+    """Kills mutation: bind only the selected tip while using unbound ancestors or competing tips for graph selection."""
+    catalog = _release_catalog(tmp_path, rules_ancestor=True)
+    rules_records = [
+        record for record in catalog.records if record.subject_key == RELEASE_SUBJECTS["rules"]
+    ]
+    assert len(rules_records) == 2
+    ancestor = next(record for record in rules_records if record.supersedes == ())
+    result = reconcile_release_evidence(catalog, **_release_inputs(tmp_path))
+    assert (ancestor.root / "manifest.json") in result.input_paths
+    assert (ancestor.root / "rendered.txt") in result.input_paths
+
+
+def test_release_reconciliation_rejects_roster_coverage_gap(tmp_path):
+    """Kills mutation: omit authoritative participant coverage from release reconciliation."""
+    catalog = _release_catalog(tmp_path, team_ids=[101, 102], roster_team_ids=[101])
+    with pytest.raises(ReconciliationError, match="coverage"):
+        reconcile_release_evidence(catalog, **_release_inputs(tmp_path, team_ids=[101, 102]))
