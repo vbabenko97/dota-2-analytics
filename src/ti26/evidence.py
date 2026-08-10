@@ -9,6 +9,7 @@ it never imports a network-capable module.
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -1073,3 +1074,152 @@ def write_evidence_record(
     written_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     validate_evidence_manifest(record, written_manifest, verify_payloads=True)
     return record
+
+
+@dataclass(frozen=True)
+class CurrentEvidence:
+    """The unique current evidence tip for one `(kind, subject_key)` at a cutoff.
+
+    `rejected` maps every other matching evidence id to a stable reason:
+    `superseded_by:<evidence-id>`, `available_after_cutoff`,
+    `negative_observation_expired`, or `reconstructed_unknown`.
+    """
+
+    selected: EvidenceManifest
+    rejected: dict[str, str]
+
+
+def _graph_applicability(record: EvidenceManifest) -> datetime:
+    """Return the timestamp at which `record` becomes eligible to compete as a tip.
+
+    `available_at_utc` for a present record; otherwise
+    `max(available_at_utc, observed_at_utc)`, so a negative observation cannot
+    supersede an ancestor before the negative observation was actually made.
+    """
+    if record.observation.assertion == "present":
+        return record.source.available_at_utc
+    return max(record.source.available_at_utc, record.observation.observed_at_utc)
+
+
+def _detect_supersession_cycle(
+    records: tuple[EvidenceManifest, ...], by_id: dict[str, EvidenceManifest]
+) -> None:
+    """Raise if any `supersedes` chain in `records` revisits a node on its own path."""
+    _WHITE, _GREY, _BLACK = 0, 1, 2
+    colors: dict[str, int] = {record.evidence_id: _WHITE for record in records}
+
+    def visit(evidence_id: str) -> None:
+        colors[evidence_id] = _GREY
+        for predecessor_id in by_id[evidence_id].supersedes:
+            if colors[predecessor_id] == _GREY:
+                raise ReconciliationError(
+                    f"evidence graph has a supersession cycle at {predecessor_id}"
+                )
+            if colors[predecessor_id] == _WHITE:
+                visit(predecessor_id)
+        colors[evidence_id] = _BLACK
+
+    for record in records:
+        if colors[record.evidence_id] == _WHITE:
+            visit(record.evidence_id)
+
+
+def select_current_evidence(
+    records: Iterable[EvidenceManifest],
+    kind: str,
+    subject_key: str,
+    cutoff_utc: str,
+    *,
+    allow_reconstructed_unknown: bool = False,
+) -> CurrentEvidence:
+    """Select the unique current evidence tip for `(kind, subject_key)` at `cutoff_utc`.
+
+    Validates the complete supplied graph first -- unique identifiers, every
+    predecessor exists, predecessor kind/subject match the descendant, no
+    self edge, and no cycle -- before filtering to matching records. Among
+    matching records whose graph-applicability timestamp
+    (`_graph_applicability`) is no later than the cutoff, a temporally
+    applicable descendant always removes its ancestor from the maximal-tip
+    set, regardless of the descendant's own assertion freshness or
+    construction. Exactly one maximal tip must remain; only then is it
+    checked with `evidence_is_admissible`, so an expired negative or
+    `reconstructed_unknown` tip is a hard error that never revives an
+    earlier ancestor.
+    """
+    materialized = tuple(records)
+    cutoff = parse_utc(cutoff_utc, "cutoff_utc")
+
+    by_id: dict[str, EvidenceManifest] = {}
+    for record in materialized:
+        if record.evidence_id in by_id:
+            raise ReconciliationError(
+                f"evidence graph has a duplicate evidence id: {record.evidence_id}"
+            )
+        by_id[record.evidence_id] = record
+
+    for record in materialized:
+        for predecessor_id in record.supersedes:
+            if predecessor_id == record.evidence_id:
+                raise ReconciliationError(f"evidence {record.evidence_id} supersedes itself")
+            predecessor = by_id.get(predecessor_id)
+            if predecessor is None:
+                raise ReconciliationError(
+                    f"evidence {record.evidence_id} supersedes a missing predecessor: "
+                    f"{predecessor_id}"
+                )
+            if predecessor.kind != record.kind or predecessor.subject_key != record.subject_key:
+                raise ReconciliationError(
+                    f"evidence {record.evidence_id} has a cross-subject supersession of "
+                    f"{predecessor_id}"
+                )
+
+    _detect_supersession_cycle(materialized, by_id)
+
+    matching = tuple(
+        record
+        for record in materialized
+        if record.kind == kind and record.subject_key == subject_key
+    )
+
+    rejected: dict[str, str] = {}
+    applicable: list[EvidenceManifest] = []
+    for record in matching:
+        if _graph_applicability(record) <= cutoff:
+            applicable.append(record)
+        else:
+            rejected[record.evidence_id] = "available_after_cutoff"
+
+    superseded_by: dict[str, str] = {
+        predecessor_id: record.evidence_id
+        for record in applicable
+        for predecessor_id in record.supersedes
+    }
+    tips = [record for record in applicable if record.evidence_id not in superseded_by]
+    for record in applicable:
+        if record.evidence_id in superseded_by:
+            rejected[record.evidence_id] = f"superseded_by:{superseded_by[record.evidence_id]}"
+
+    if not tips:
+        raise ReconciliationError(
+            f"no current evidence tip exists for {kind}:{subject_key} at {cutoff_utc}"
+        )
+    if len(tips) > 1:
+        tip_ids = sorted(tip.evidence_id for tip in tips)
+        raise ReconciliationError(
+            f"evidence graph for {kind}:{subject_key} has incomparable current tips: {tip_ids}"
+        )
+
+    tip = tips[0]
+    if not evidence_is_admissible(
+        tip, cutoff_utc, allow_reconstructed_unknown=allow_reconstructed_unknown
+    ):
+        if tip.construction == "reconstructed_unknown" and not allow_reconstructed_unknown:
+            raise ReconciliationError(
+                f"current evidence tip is inadmissible (reconstructed_unknown): {tip.evidence_id}"
+            )
+        raise ReconciliationError(
+            "current evidence tip is inadmissible (negative_observation_expired): "
+            f"{tip.evidence_id}"
+        )
+
+    return CurrentEvidence(selected=tip, rejected=rejected)

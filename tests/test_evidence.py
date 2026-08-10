@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from ti26.evidence import (
     reconcile_draw,
     reconcile_participants,
     reconcile_rosters,
+    select_current_evidence,
     validate_evidence_manifest,
     validate_kind_payload,
     validate_record_sources,
@@ -203,6 +205,74 @@ def _negative_record_with_payload_bytes(
     payload["evidence_id"] = ""
     payload["evidence_id"] = evidence_id_for_manifest(payload)
     return payload, payload_bytes
+
+
+def _record(
+    tmp_path,
+    marker,
+    available,
+    supersedes=(),
+    subject="rules:ti2026:valve:group-stage",
+    *,
+    assertion="present",
+    construction="contemporaneous",
+):
+    payload = _manifest()
+    payload.update({"evidence_id": "", "subject_key": subject, "supersedes": list(supersedes)})
+    payload["source"]["capture_method"] = f"synthetic-{marker}"
+    payload["source"]["available_at_utc"] = available
+    payload["source"]["retrieved_at_utc"] = available
+    payload["observation"]["assertion"] = assertion
+    payload["observation"]["observed_at_utc"] = available
+    payload["observation"]["supported_through_utc"] = available
+    payload["construction"] = construction
+    if assertion == "absent":
+        payload["attestation"] = None
+        payload["observation"]["authoritative_source_keys_checked"] = ["valve-ti-group-stage-rules"]
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    return validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
+
+
+def _cyclic_records(tmp_path):
+    """Build two internally consistent records, then corrupt their supersedes edges into a cycle.
+
+    Honest content-addressed publication cannot produce this: `supersedes` is
+    part of the content digest, so a real publisher cannot retarget an
+    existing record's predecessors without changing its own identity. This
+    models a corrupt manifest handed directly to the pure selector, which
+    must still fail closed.
+    """
+    first = _record(tmp_path, "cycle-first", "2026-01-01T00:00:00Z")
+    second = _record(tmp_path, "cycle-second", "2026-01-01T00:00:01Z", (first.evidence_id,))
+    corrupted_first = dataclasses.replace(first, supersedes=(second.evidence_id,))
+    return [corrupted_first, second]
+
+
+def _negative_record_observed_later(tmp_path, ancestor, *, available, observed):
+    """Build an absent-observation record whose observation trails its availability.
+
+    Unlike `_record`, `available_at_utc` and `observed_at_utc` differ, so its
+    graph-applicability timestamp (`max` of the two) can fall after a cutoff
+    even though the source itself became available earlier.
+    """
+    payload = _manifest()
+    payload.update(
+        {
+            "evidence_id": "",
+            "subject_key": ancestor.subject_key,
+            "supersedes": [ancestor.evidence_id],
+        }
+    )
+    payload["source"]["capture_method"] = "synthetic-negative-observed-later"
+    payload["source"]["available_at_utc"] = available
+    payload["source"]["retrieved_at_utc"] = observed
+    payload["observation"]["assertion"] = "absent"
+    payload["observation"]["observed_at_utc"] = observed
+    payload["observation"]["supported_through_utc"] = observed
+    payload["observation"]["authoritative_source_keys_checked"] = ["valve-ti-group-stage-rules"]
+    payload["attestation"] = None
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    return validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
 
 
 def test_evidence_json_encoding_matches_run_provenance_encoding():
@@ -466,3 +536,58 @@ def test_reconstructed_unknown_is_diagnostic_only_by_default(tmp_path):
         "2026-01-01T00:00:00Z",
         allow_reconstructed_unknown=True,
     ) is True
+
+
+def test_current_selection_rejects_an_available_fork(tmp_path):
+    """Kills mutation: choose an arbitrary current tip when incomparable tips exist."""
+    records = [_record(tmp_path, "first", "2026-01-01T00:00:00Z"), _record(tmp_path, "second", "2026-01-01T00:00:00Z")]
+    with pytest.raises(ReconciliationError, match="incomparable"):
+        select_current_evidence(records, "rules", "rules:ti2026:valve:group-stage", "2026-01-01T00:00:00Z")
+
+
+def test_current_selection_rejects_a_cycle(tmp_path):
+    """Kills mutation: traverse supersedes edges without cycle detection."""
+    records = _cyclic_records(tmp_path)
+    with pytest.raises(ReconciliationError, match="cycle"):
+        select_current_evidence(records, "rules", "rules:ti2026:valve:group-stage", "2026-01-01T00:00:00Z")
+
+
+def test_current_selection_keeps_a_later_descendant_out_of_an_earlier_cutoff(tmp_path):
+    """Kills mutation: let a post-cutoff supersession rewrite earlier knowledge."""
+    ancestor = _record(tmp_path, "ancestor", "2026-01-01T00:00:00Z")
+    descendant = _record(tmp_path, "descendant", "2026-01-01T00:00:02Z", (ancestor.evidence_id,))
+    selected = select_current_evidence([ancestor, descendant], "rules", ancestor.subject_key, "2026-01-01T00:00:01Z")
+    assert selected.selected.evidence_id == ancestor.evidence_id
+    assert selected.rejected[descendant.evidence_id] == "available_after_cutoff"
+
+
+def test_current_selection_rejects_cross_subject_supersession(tmp_path):
+    """Kills mutation: follow a supersedes edge without enforcing subject identity."""
+    first = _record(tmp_path, "first", "2026-01-01T00:00:00Z")
+    second = _record(tmp_path, "second", "2026-01-01T00:00:01Z", (first.evidence_id,), "rules:ti2026:owner:other-slot")
+    with pytest.raises(ReconciliationError, match="cross-subject"):
+        select_current_evidence([first, second], "rules", first.subject_key, "2026-01-01T00:00:02Z")
+
+
+def test_expired_negative_descendant_blocks_its_ancestor(tmp_path):
+    """Kills mutation: revive an ancestor after its temporally applicable negative descendant expires."""
+    ancestor = _record(tmp_path, "ancestor", "2026-01-01T00:00:00Z")
+    negative = _record(tmp_path, "negative", "2026-01-01T00:00:01Z", (ancestor.evidence_id,), assertion="absent")
+    with pytest.raises(ReconciliationError, match="negative_observation_expired"):
+        select_current_evidence([ancestor, negative], "rules", ancestor.subject_key, "2026-01-01T00:00:02Z")
+
+
+def test_reconstructed_unknown_descendant_blocks_its_ancestor(tmp_path):
+    """Kills mutation: revive an ancestor when the current descendant is reconstructed-unknown."""
+    ancestor = _record(tmp_path, "ancestor", "2026-01-01T00:00:00Z")
+    unknown = _record(tmp_path, "unknown", "2026-01-01T00:00:01Z", (ancestor.evidence_id,), construction="reconstructed_unknown")
+    with pytest.raises(ReconciliationError, match="reconstructed_unknown"):
+        select_current_evidence([ancestor, unknown], "rules", ancestor.subject_key, "2026-01-01T00:00:02Z")
+
+
+def test_negative_descendant_is_not_graph_applicable_before_observation(tmp_path):
+    """Kills mutation: let negative availability supersede an ancestor before observation time."""
+    ancestor = _record(tmp_path, "ancestor", "2026-01-01T00:00:00Z")
+    negative = _negative_record_observed_later(tmp_path, ancestor, available="2026-01-01T00:00:01Z", observed="2026-01-01T00:00:03Z")
+    selected = select_current_evidence([ancestor, negative], "rules", ancestor.subject_key, "2026-01-01T00:00:02Z")
+    assert selected.selected.evidence_id == ancestor.evidence_id
