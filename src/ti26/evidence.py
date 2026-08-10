@@ -527,3 +527,358 @@ def validate_evidence_manifest(
         supersedes=supersedes,
         producer_revision=producer_revision,
     )
+
+
+class ReconciliationError(ValueError):
+    """A pure fact comparison between expected and observed evidence disagrees."""
+
+
+PARTICIPANTS_SCHEMA = "ti26.participants.v1"
+ROSTERS_SCHEMA = "ti26.rosters.v1"
+DRAW_FACT_SCHEMA = "ti26.draw-fact.v1"
+SOURCE_REGISTRY_SCHEMA = "ti26.evidence-source-registry.v1"
+
+_PARTICIPANTS_KEYS = frozenset({"schema", "participants"})
+_PARTICIPANT_ENTRY_KEYS = frozenset({"team_id", "display_name"})
+_ROSTERS_KEYS = frozenset({"schema", "rosters"})
+_ROSTER_ENTRY_KEYS = frozenset({"team_id", "account_ids"})
+_ROSTER_ACCOUNT_COUNT = 5
+_DRAW_KEYS = frozenset({"schema", "component", "publication_state", "value"})
+_DRAW_COMPONENTS = ("groups", "round_one")
+_PUBLICATION_STATES = ("published", "unpublished")
+
+_SOURCE_REGISTRY_KEYS = frozenset({"schema", "effective_at_utc", "sources"})
+_SOURCE_REGISTRY_ENTRY_KEYS = frozenset({"source_url_key", "authorizations"})
+_SOURCE_AUTHORIZATION_KEYS = frozenset({"event_id", "kind", "subject_key"})
+_EVIDENCE_KINDS = frozenset({"rules", "participants", "rosters", "draws"})
+_SAFE_KEY_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-")
+
+
+def _require_positive_int(value: object, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise EvidenceError(f"{label} must be a positive integer")
+    return value
+
+
+def _require_safe_source_key(value: object, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value[0] == "-"
+        or value[-1] == "-"
+        or any(char not in _SAFE_KEY_CHARS for char in value)
+    ):
+        raise EvidenceError(f"{label} must be a safe lowercase hyphenated key")
+    return value
+
+
+def _validate_participants_payload(payload: object, assertion: str) -> dict[str, object]:
+    if assertion != "present":
+        raise EvidenceError("a participants payload requires a present observation")
+    if not isinstance(payload, dict) or set(payload) != _PARTICIPANTS_KEYS:
+        raise EvidenceError("participants payload has unsupported or missing keys")
+    if payload["schema"] != PARTICIPANTS_SCHEMA:
+        raise EvidenceError(f"participants payload schema must be {PARTICIPANTS_SCHEMA!r}")
+    entries = payload["participants"]
+    if not isinstance(entries, list) or not entries:
+        raise EvidenceError("participants must be a non-empty list")
+    team_ids: list[int] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != _PARTICIPANT_ENTRY_KEYS:
+            raise EvidenceError("participant entry has unsupported or missing keys")
+        team_ids.append(_require_positive_int(entry["team_id"], "participant.team_id"))
+        _require_nonempty_str(entry["display_name"], "participant.display_name")
+    if len(set(team_ids)) != len(team_ids):
+        raise EvidenceError("participants must not repeat a team_id")
+    if team_ids != sorted(team_ids):
+        raise EvidenceError("participants must be in canonical ascending team_id order")
+    return payload
+
+
+def _validate_rosters_payload(payload: object, assertion: str) -> dict[str, object]:
+    if assertion != "present":
+        raise EvidenceError("a rosters payload requires a present observation")
+    if not isinstance(payload, dict) or set(payload) != _ROSTERS_KEYS:
+        raise EvidenceError("rosters payload has unsupported or missing keys")
+    if payload["schema"] != ROSTERS_SCHEMA:
+        raise EvidenceError(f"rosters payload schema must be {ROSTERS_SCHEMA!r}")
+    entries = payload["rosters"]
+    if not isinstance(entries, list) or not entries:
+        raise EvidenceError("rosters must be a non-empty list")
+    team_ids: list[int] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != _ROSTER_ENTRY_KEYS:
+            raise EvidenceError("roster entry has unsupported or missing keys")
+        team_id = _require_positive_int(entry["team_id"], "roster.team_id")
+        team_ids.append(team_id)
+        account_ids = entry["account_ids"]
+        if not isinstance(account_ids, list) or len(account_ids) != _ROSTER_ACCOUNT_COUNT:
+            raise EvidenceError(f"roster {team_id} must declare exactly five account ids")
+        parsed_accounts = [
+            _require_positive_int(value, "roster.account_ids") for value in account_ids
+        ]
+        if len(set(parsed_accounts)) != len(parsed_accounts):
+            raise EvidenceError(f"roster {team_id} must not repeat an account id")
+        if parsed_accounts != sorted(parsed_accounts):
+            raise EvidenceError(
+                f"roster {team_id} must list account ids in canonical ascending order"
+            )
+    if len(set(team_ids)) != len(team_ids):
+        raise EvidenceError("rosters must not repeat a team_id")
+    if team_ids != sorted(team_ids):
+        raise EvidenceError("rosters must be in canonical ascending team_id order")
+    return payload
+
+
+def _validate_draw_groups_value(value: object) -> None:
+    if not isinstance(value, dict) or not value:
+        raise EvidenceError("a published groups value must be a non-empty mapping")
+    seen_members: set[int] = set()
+    for label, members in value.items():
+        if not isinstance(label, str) or not label:
+            raise EvidenceError("a group label must be a non-empty string")
+        if not isinstance(members, list) or not members:
+            raise EvidenceError(f"group {label!r} must list at least one member")
+        parsed_members = [_require_positive_int(member, "group member") for member in members]
+        if len(set(parsed_members)) != len(parsed_members):
+            raise EvidenceError(f"group {label!r} must not repeat a member")
+        if seen_members & set(parsed_members):
+            raise EvidenceError("published groups must cover each participant exactly once")
+        seen_members |= set(parsed_members)
+
+
+def _validate_draw_round_one_value(value: object) -> None:
+    if not isinstance(value, list) or not value:
+        raise EvidenceError("a published Round 1 value must be a non-empty list of pairs")
+    seen_members: set[int] = set()
+    seen_pairs: set[tuple[int, int]] = set()
+    for pair in value:
+        if not isinstance(pair, list) or len(pair) != 2:
+            raise EvidenceError("a Round 1 pair must have exactly two members")
+        parsed_pair = [_require_positive_int(member, "round_one member") for member in pair]
+        first, second = parsed_pair
+        if first == second:
+            raise EvidenceError("a Round 1 pair must not pair a team against itself")
+        canonical_pair = tuple(sorted((first, second)))
+        if canonical_pair in seen_pairs:
+            raise EvidenceError("Round 1 must not repeat a pair in duplicate or reversed form")
+        seen_pairs.add(canonical_pair)
+        if seen_members & {first, second}:
+            raise EvidenceError("Round 1 must cover each participant exactly once")
+        seen_members |= {first, second}
+
+
+def _validate_draw_payload(payload: object, assertion: str) -> dict[str, object]:
+    if not isinstance(payload, dict) or set(payload) != _DRAW_KEYS:
+        raise EvidenceError("draw payload has unsupported or missing keys")
+    if payload["schema"] != DRAW_FACT_SCHEMA:
+        raise EvidenceError(f"draw payload schema must be {DRAW_FACT_SCHEMA!r}")
+    component = payload["component"]
+    if component not in _DRAW_COMPONENTS:
+        raise EvidenceError("draw payload component must be exactly groups or round_one")
+    publication_state = payload["publication_state"]
+    if publication_state not in _PUBLICATION_STATES:
+        raise EvidenceError(
+            "draw payload publication_state must be exactly published or unpublished"
+        )
+    value = payload["value"]
+    if publication_state == "unpublished":
+        if value is not None or assertion != "absent":
+            raise EvidenceError(
+                "an unpublished draw component must have a null value and an absent observation"
+            )
+        return payload
+    if value is None or assertion != "present":
+        raise EvidenceError(
+            "a published draw component must have a value and a present observation"
+        )
+    if component == "groups":
+        _validate_draw_groups_value(value)
+    else:
+        _validate_draw_round_one_value(value)
+    return payload
+
+
+def validate_kind_payload(kind: str, payload: object, *, assertion: str) -> dict[str, object]:
+    """Validate one generic Plan 3 fact payload against its exact schema.
+
+    Pure shape validation: no I/O, no selection, no network call, and no
+    predictive action. Supports the generic `participants`, `rosters`, and
+    `draws` kinds; `rules` extraction has its own narrow contract in Task 5.
+    """
+    if assertion not in _ASSERTIONS:
+        raise EvidenceError("assertion must be exactly present or absent")
+    if kind == "participants":
+        return _validate_participants_payload(payload, assertion)
+    if kind == "rosters":
+        return _validate_rosters_payload(payload, assertion)
+    if kind == "draws":
+        return _validate_draw_payload(payload, assertion)
+    raise EvidenceError(f"validate_kind_payload does not support kind: {kind!r}")
+
+
+def reconcile_participants(expected: set[int], observed: set[int]) -> None:
+    """Compare participant identity by exact team_id set membership only."""
+    if expected != observed:
+        missing = sorted(expected - observed)
+        unexpected = sorted(observed - expected)
+        raise ReconciliationError(
+            f"participants.team_id mismatch: missing={missing} unexpected={unexpected}"
+        )
+
+
+def reconcile_rosters(expected: dict[int, list[int]], observed: dict[int, list[int]]) -> None:
+    """Compare roster identity by exact team_id and its sorted five-account set."""
+    expected_ids = set(expected)
+    observed_ids = set(observed)
+    if expected_ids != observed_ids:
+        missing = sorted(expected_ids - observed_ids)
+        unexpected = sorted(observed_ids - expected_ids)
+        raise ReconciliationError(
+            f"rosters.team_id mismatch: missing={missing} unexpected={unexpected}"
+        )
+    for team_id in sorted(expected_ids):
+        expected_accounts = sorted(expected[team_id])
+        observed_accounts = sorted(observed[team_id])
+        if expected_accounts != observed_accounts:
+            raise ReconciliationError(
+                f"rosters.{team_id}.account_ids mismatch: "
+                f"expected={expected_accounts} observed={observed_accounts}"
+            )
+
+
+def reconcile_draw(expected: dict[str, object], observed: dict[str, object]) -> None:
+    """Compare the combined groups/round_one draw facts independently, by canonical JSON."""
+    if canonical_evidence_json_bytes(expected.get("groups")) != canonical_evidence_json_bytes(
+        observed.get("groups")
+    ):
+        raise ReconciliationError("draw.groups mismatch between expected and observed facts")
+    if canonical_evidence_json_bytes(
+        expected.get("round_one")
+    ) != canonical_evidence_json_bytes(observed.get("round_one")):
+        raise ReconciliationError("draw.round_one mismatch between expected and observed facts")
+
+
+@dataclass(frozen=True)
+class EvidenceSourceAuthorization:
+    event_id: str
+    kind: str
+    subject_key: str
+
+
+@dataclass(frozen=True)
+class EvidenceSourceRegistryEntry:
+    source_url_key: str
+    authorizations: tuple[EvidenceSourceAuthorization, ...]
+
+
+@dataclass(frozen=True)
+class EvidenceSourceRegistry:
+    schema: str
+    effective_at_utc: datetime
+    entries: tuple[EvidenceSourceRegistryEntry, ...]
+
+
+def _parse_source_registry(payload: object) -> EvidenceSourceRegistry:
+    if not isinstance(payload, dict) or set(payload) != _SOURCE_REGISTRY_KEYS:
+        raise EvidenceError("source registry has unsupported or missing keys")
+    schema = payload["schema"]
+    if schema != SOURCE_REGISTRY_SCHEMA:
+        raise EvidenceError(f"source registry schema must be {SOURCE_REGISTRY_SCHEMA!r}")
+    effective_at_utc = parse_utc(payload["effective_at_utc"], "source registry effective_at_utc")
+    sources_raw = payload["sources"]
+    if not isinstance(sources_raw, list) or not sources_raw:
+        raise EvidenceError("source registry sources must be a non-empty list")
+    seen_keys: set[str] = set()
+    entries: list[EvidenceSourceRegistryEntry] = []
+    for entry in sources_raw:
+        if not isinstance(entry, dict) or set(entry) != _SOURCE_REGISTRY_ENTRY_KEYS:
+            raise EvidenceError("source registry entry has unsupported or missing keys")
+        source_url_key = _require_safe_source_key(entry["source_url_key"], "source_url_key")
+        if source_url_key in seen_keys:
+            raise EvidenceError(
+                f"source registry has a duplicate source_url_key: {source_url_key}"
+            )
+        seen_keys.add(source_url_key)
+        authorizations_raw = entry["authorizations"]
+        if not isinstance(authorizations_raw, list) or not authorizations_raw:
+            raise EvidenceError(
+                f"source registry entry must declare at least one authorization: {source_url_key}"
+            )
+        authorizations: list[EvidenceSourceAuthorization] = []
+        seen_pairs: set[tuple[str, str, str]] = set()
+        for auth in authorizations_raw:
+            if not isinstance(auth, dict) or set(auth) != _SOURCE_AUTHORIZATION_KEYS:
+                raise EvidenceError(
+                    "source registry authorization has unsupported or missing keys"
+                )
+            event_id = _require_nonempty_str(auth["event_id"], "authorization.event_id")
+            kind = auth["kind"]
+            if kind not in _EVIDENCE_KINDS:
+                raise EvidenceError(
+                    f"source registry authorization has an unknown kind: {kind!r}"
+                )
+            subject_key = _require_nonempty_str(auth["subject_key"], "authorization.subject_key")
+            pair = (event_id, kind, subject_key)
+            if pair in seen_pairs:
+                raise EvidenceError(
+                    f"source registry has a duplicate authorization for {source_url_key}: {pair}"
+                )
+            seen_pairs.add(pair)
+            authorizations.append(
+                EvidenceSourceAuthorization(event_id=event_id, kind=kind, subject_key=subject_key)
+            )
+        entries.append(
+            EvidenceSourceRegistryEntry(
+                source_url_key=source_url_key, authorizations=tuple(authorizations)
+            )
+        )
+    return EvidenceSourceRegistry(
+        schema=schema, effective_at_utc=effective_at_utc, entries=tuple(entries)
+    )
+
+
+def load_source_registry(path: Path) -> EvidenceSourceRegistry:
+    """Load and validate the exact owner-reviewed stable source-key registry."""
+    if path.is_symlink() or not path.is_file():
+        raise EvidenceError(f"source registry must be a regular file: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EvidenceError(f"source registry is not valid JSON: {path}") from exc
+    return _parse_source_registry(payload)
+
+
+def authoritative_source_keys_for(
+    registry: EvidenceSourceRegistry, kind: str, subject_key: str
+) -> tuple[str, ...]:
+    """Return the complete sorted authority set for one exact (kind, subject) pair."""
+    keys = {
+        entry.source_url_key
+        for entry in registry.entries
+        for authorization in entry.authorizations
+        if authorization.kind == kind and authorization.subject_key == subject_key
+    }
+    return tuple(sorted(keys))
+
+
+def validate_record_sources(record: EvidenceManifest, registry: EvidenceSourceRegistry) -> None:
+    """Require the record's primary source, and every checked authority, to be registered.
+
+    A negative observation's checked set must equal -- not merely be a subset
+    of -- the registry-derived complete authority set for the exact
+    `(kind, subject_key)` pair; the owner cannot select a subset.
+    """
+    authorized = authoritative_source_keys_for(registry, record.kind, record.subject_key)
+    if record.source.source_url_key not in authorized:
+        raise EvidenceError(
+            f"source {record.source.source_url_key!r} is not registered for "
+            f"{record.kind}:{record.subject_key}"
+        )
+    if record.observation.assertion == "absent":
+        checked = set(record.observation.authoritative_source_keys_checked)
+        if checked != set(authorized):
+            raise EvidenceError(
+                "a negative observation must check the complete authority set for "
+                f"{record.kind}:{record.subject_key}"
+            )

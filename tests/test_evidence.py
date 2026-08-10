@@ -2,9 +2,16 @@ import pytest
 
 from ti26.evidence import (
     EvidenceError,
+    ReconciliationError,
     canonical_evidence_json_bytes,
     evidence_id_for_manifest,
+    load_source_registry,
+    reconcile_draw,
+    reconcile_participants,
+    reconcile_rosters,
     validate_evidence_manifest,
+    validate_kind_payload,
+    validate_record_sources,
 )
 from ti26.provenance import canonical_json_bytes
 
@@ -93,6 +100,69 @@ def _manifest(*, observation: dict[str, object] | None = None) -> dict[str, obje
     return payload
 
 
+def _source_registry(
+    tmp_path,
+    *,
+    subject_key: str = "rules:ti2026:valve:group-stage",
+    additional_authority: str | None = None,
+):
+    """Write and load a synthetic source registry authorizing the primary key.
+
+    `additional_authority`, when given, is authorized for the same subject so
+    a test can prove a negative observation must check every registered
+    authority, not a subset.
+    """
+    sources = [
+        {
+            "source_url_key": "valve-ti-group-stage-rules",
+            "authorizations": [
+                {"event_id": "ti2026", "kind": "rules", "subject_key": subject_key}
+            ],
+        }
+    ]
+    if additional_authority is not None:
+        sources.append(
+            {
+                "source_url_key": additional_authority,
+                "authorizations": [
+                    {"event_id": "ti2026", "kind": "rules", "subject_key": subject_key}
+                ],
+            }
+        )
+    value = {
+        "schema": "ti26.evidence-source-registry.v1",
+        "effective_at_utc": "2025-12-31T00:00:00Z",
+        "sources": sources,
+    }
+    path = tmp_path / "source-registry.json"
+    path.write_bytes(canonical_evidence_json_bytes(value) + b"\n")
+    return load_source_registry(path)
+
+
+def _negative_manifest(*, checked: list[str]) -> dict[str, object]:
+    """Build a manifest-valid absent-observation payload checking exactly `checked`."""
+    payload = _manifest()
+    payloads = [{"path": "authority-registry.json", "sha256": _sha(_bound_registry())}]
+    captures = []
+    for key in checked:
+        path = "rendered.txt" if key == "valve-ti-group-stage-rules" else f"captures/{key}.bin"
+        payloads.append({"path": path, "sha256": _sha(f"synthetic-{key}".encode())})
+        captures.append({"source_url_key": key, "path": path})
+    payload["payloads"] = payloads
+    payload["attestation"] = None
+    payload["observation"] = {
+        "assertion": "absent",
+        "observed_at_utc": "2026-01-01T00:00:01Z",
+        "supported_through_utc": "2026-01-01T00:00:01Z",
+        "captures": captures,
+        "authoritative_source_keys_checked": list(checked),
+        "diagnostic_reason": None,
+    }
+    payload["evidence_id"] = ""
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    return payload
+
+
 def test_evidence_json_encoding_matches_run_provenance_encoding():
     """Kills mutation: use a different canonical JSON separator in evidence IDs."""
     value = {"z": [2, 1], "a": "text"}
@@ -139,3 +209,88 @@ def test_validate_evidence_manifest_rejects_changed_bound_registry_bytes(tmp_pat
     (record / "authority-registry.json").write_bytes(_bound_registry() + b" ")
     with pytest.raises(EvidenceError, match="authority.registry"):
         validate_evidence_manifest(record, _manifest(), verify_payloads=True)
+
+
+def test_roster_payload_requires_one_exact_five_account_set_per_team():
+    """Kills mutation: accept a roster evidence entry with fewer than five unique accounts."""
+    with pytest.raises(EvidenceError, match="five"):
+        validate_kind_payload(
+            "rosters",
+            {
+                "schema": "ti26.rosters.v1",
+                "rosters": [{"team_id": 101, "account_ids": [1, 2, 3, 4]}],
+            },
+            assertion="present",
+        )
+
+
+def test_draw_unpublished_requires_negative_observation_and_forbids_a_value():
+    """Kills mutation: represent unpublished groups with a value or positive observation."""
+    with pytest.raises(EvidenceError, match="unpublished"):
+        validate_kind_payload(
+            "draws",
+            {
+                "schema": "ti26.draw-fact.v1",
+                "component": "groups",
+                "publication_state": "unpublished",
+                "value": {"a": [101]},
+            },
+            assertion="present",
+        )
+
+
+def test_draw_payload_represents_only_one_publication_component():
+    """Kills mutation: combine groups and Round 1 under one publication state."""
+    with pytest.raises(EvidenceError, match="unsupported or missing"):
+        validate_kind_payload(
+            "draws",
+            {
+                "schema": "ti26.draw-fact.v1",
+                "component": "groups",
+                "publication_state": "published",
+                "value": {"a": [101]},
+                "round_one": [[101, 102]],
+            },
+            assertion="present",
+        )
+
+
+def test_participant_reconciler_reports_missing_and_unexpected_team_keys():
+    """Kills mutation: reconcile participant facts by display name and ignore field membership."""
+    with pytest.raises(ReconciliationError, match="team_id"):
+        reconcile_participants({101}, {102})
+
+
+def test_roster_reconciler_does_not_accept_an_organisation_name_as_identity():
+    """Kills mutation: reconcile roster evidence by display name rather than exact account ids."""
+    with pytest.raises(ReconciliationError, match="account_ids"):
+        reconcile_rosters({101: [1, 2, 3, 4, 5]}, {101: [1, 2, 3, 4, 6]})
+
+
+def test_draw_reconciler_compares_groups_and_round_one_independently():
+    """Kills mutation: treat matching group membership as proof of matching Round 1 pairings."""
+    with pytest.raises(ReconciliationError, match="round_one"):
+        reconcile_draw(
+            {"groups": {"a": [101, 102]}, "round_one": [[101, 102]]},
+            {"groups": {"a": [101, 102]}, "round_one": [[102, 101]]},
+        )
+
+
+def test_source_registry_rejects_an_unregistered_authority(tmp_path):
+    """Kills mutation: accept a source key that is not registered for the evidence subject."""
+    registry = _source_registry(tmp_path, subject_key="rules:ti2026:owner:other-slot")
+    record = validate_evidence_manifest(tmp_path, _manifest(), verify_payloads=False)
+    with pytest.raises(EvidenceError, match="not registered"):
+        validate_record_sources(record, registry)
+
+
+def test_negative_observation_cannot_omit_a_registered_authority(tmp_path):
+    """Kills mutation: allow an owner to check only a subset of exact-pair authorities."""
+    registry = _source_registry(tmp_path, additional_authority="valve-ti-series-page")
+    record = validate_evidence_manifest(
+        tmp_path,
+        _negative_manifest(checked=["valve-ti-group-stage-rules"]),
+        verify_payloads=False,
+    )
+    with pytest.raises(EvidenceError, match="complete authority set"):
+        validate_record_sources(record, registry)
