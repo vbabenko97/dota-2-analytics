@@ -290,6 +290,39 @@ def test_is_active_uses_configured_thresholds():
     assert rules.is_active(TeamState(team_id="d", initial_group="B", series_wins=3, series_losses=2)) is True
 
 
+def predictive_config_projection(parsed: object) -> object:
+    """Return the complete parsed configuration, provenance included.
+
+    Parsing already drops YAML comments, so the projection is the whole
+    mapping and nothing else. A field whitelist here would let an unlisted
+    predictive value change unnoticed under a comment-only audit, which is
+    the failure this comparison exists to catch.
+    """
+    return parsed
+
+
+def test_rules_config_comments_do_not_restate_empirical_measurements():
+    """Kills mutation: reintroduce a hand-written measured quantity into shipping rules comments."""
+    text = Path(RULES_PATH).read_text(encoding="utf-8")
+    comments = "\n".join(line for line in text.splitlines() if line.lstrip().startswith("#"))
+    prohibited = (
+        "Fitted in",
+        "MARGINAL",
+        "rating-gap coefficient",
+        "Signal-to-noise",
+        "marginals by",
+        "standard error",
+    )
+    assert not [fragment for fragment in prohibited if fragment in comments]
+    before = yaml.safe_load(
+        Path("tests/fixtures/ti2026_rules_predictive_pre_comment_audit.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    after = yaml.safe_load(text)
+    assert predictive_config_projection(after) == predictive_config_projection(before)
+
+
 def test_morning_rules_transcript_has_a_superseded_banner_and_preserves_its_body():
     """Kills mutation: silently replace the earlier owner transcript instead of retaining superseded evidence."""
     text = Path("docs/ti26/2026-08-08-published-format-rules.md").read_text(encoding="utf-8")

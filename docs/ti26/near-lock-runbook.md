@@ -108,15 +108,37 @@ body. Render it:
 https://www.dota2.com/esports/ti15/tirules
 ```
 
-Diff `The International: Group Stage Rules` through `The International: Seeding`
-against [the 2026-08-08 archive](2026-08-08-ti2026-rules-fetched.md).
+Save the rendered text byte-exactly to a local capture file, and write the
+owner source metadata beside it: the registered `source_url_key`, the capture
+method, and observation times taken from the capture operation itself. Do not
+infer a time from prose and do not invent a publication time the page does not
+supply.
 
-**STOP — owner decision required** if anything differs. Every value tagged
-`valve_rules_page_2026_08_08` in `config/ti2026_rules.yaml` derives from that
-archive, and a changed rule invalidates the bundle rather than merely dating it.
+Dry-run the import first. It writes nothing and prints the capture and
+normalized-fact digests:
 
-Re-archive the fetched text with the new date whether or not it changed, so the
-next run diffs against the most recent read rather than the first one.
+```
+.venv/bin/python -m ti26.cli_evidence_import rules --dry-run \
+  --root data/evidence \
+  --event-id ti2026 \
+  --subject-key rules:ti2026:valve:group-stage \
+  --source-registry data/evidence/source-registry.json \
+  --capture valve-ti-group-stage-rules=<capture path> \
+  --source <source metadata path>
+```
+
+**STOP — owner attestation required.** The owner approves those exact printed
+digests and writes them into the metadata's `attestation` before the real
+import runs. Commit the capture and metadata, leaving a clean checkout, then
+run the same command without `--dry-run`. The importer resolves the clean
+`HEAD` itself and records it; there is no revision argument to supply, and
+supplying one is not possible by design.
+
+**STOP — owner decision required** if the import or the reconciliation fails.
+A rules change surfaces as a reconciliation failure against
+`config/ti2026_rules.yaml`, and it invalidates the bundle rather than merely
+dating it. Do not re-run the import with different arguments, edit the capture,
+or adjust the configuration to make it reconcile.
 
 ## 4. Roster staleness, confirmed by account set
 

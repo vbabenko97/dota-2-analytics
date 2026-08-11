@@ -61,10 +61,12 @@ elimination_round:
   choice_policy: rational
 
 duration_model:
-  # Derived duration-fit outputs are bound by the release bundle that generated
-  # them. This configuration stores the chosen model inputs; it does not restate
-  # measurements.
-  log_mean: 7.579288849767151
+  # Fitted in D2 from real map durations (reports/duration_fit.json).
+  # log_sigma is the MARGINAL sd of log-duration -- what DurationResolver
+  # actually samples from, since it draws with no gap term of its own. The
+  # fit's rating-gap coefficient was not material (see the D2 gate report)
+  # and is not applied here; see spec XII / task-8 known limitations.
+  log_mean: 7.579288849767151      # exp(7.579...) ~ 1953s ~ 32.6 min
   log_sigma: 0.2805980274352356
   fitted_from_n_maps: 41082
 
@@ -188,11 +190,14 @@ provenance:
   # distance preference, and counting them makes the rule look better than the
   # evidence supports.
   #
-  # The historical pairing diagnostic is manifest-bound producer output.
-  # This provenance label records its qualitative status, not a measurement.
+  # `ti26.cli_schedule_sensitivity` then measured what being wrong costs, and
+  # the answer is nothing. Signal-to-noise 1.08: discarding the ranking-distance
+  # criterion ENTIRELY moves category marginals less than re-running the same
+  # rule under a different simulation seed does, and changes no assignment.
+  # So the rule is wrong and immaterial, which is why it is still here.
   base_pairing_preference: refuted_immaterial
-  # The historical pairing diagnostic is manifest-bound producer output.
-  # This provenance label records its qualitative status, not a measurement.
+  # Same measurement, same conclusion: forcing minimisation everywhere moves
+  # marginals by 0.00101 against a single-marginal standard error of 0.001.
   max_distance_when_loser_eliminated_preference: refuted_immaterial
   # Round 4's 0-3 group also eliminates its loser, but the published rule
   # names Round 5 only. Applying max-distance at R4 would be an inference
