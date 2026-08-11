@@ -823,7 +823,28 @@ The first real capture falsified the original contract, and this section replace
 
 **Subject.** The subject is renamed from `rules:ti2026:valve:published-format` to the source-neutral `rules:ti2026:event-format:group-stage`. The old key asserted Valve authorship in the subject namespace, which would make a non-Valve capture structurally valid while semantically false. A record's field-level support, not its subject key, names which source establishes each fact.
 
-**Source keys.** The subject accepts multiple bound captures under separately registered, honestly named source keys — for example `valve-ti2026-announcement-2026-02-11`, `valve-ti2026-invitations-2026-05-25`, `valve-ti2026-rules-page`, `liquipedia-ti2026-format`, `compendium-ui-ti2026`. Each must be registered and owner-approved before use, exactly as `valve-ti-group-stage-rules` was. Liquipedia may serve as corroborating or secondary evidence under its own key; it is never relabeled as Valve.
+**Source keys.** The subject accepts multiple bound captures under separately registered, honestly named source keys — for example `valve-ti2026-announcement-2026-02-11`, `valve-ti2026-invitations-2026-05-25`, `valve-ti2026-rules-page`, `liquipedia-ti2026-format`, `compendium-ui-ti2026`. Each must be registered and owner-approved before use, exactly as `valve-ti-group-stage-rules` was.
+
+`event-format` is the logical namespace of an observable fact slot. It is not a claim that every source in it carries equal authority. The registered authority policy for this subject:
+
+- Valve sources may provide primary support for any field.
+- Compendium UI evidence may support prediction-shape facts, labelled by its actual capture quality rather than promoted to a publisher claim.
+- Liquipedia may corroborate a field under its own source key.
+- **Liquipedia may never override a conflicting Valve fact.** A conflict between current Valve evidence and current community evidence fails closed and is an owner decision, not a precedence rule the importer resolves.
+- Absence of a fact from Liquipedia does not prove its absence from Valve, and the converse also does not hold.
+
+**Per-source time provenance is required (this is the blocking part).** A field-level `source_url_key` names which capture supports a fact; it does not tell current-at-cutoff selection *when that fact set became available*. The manifest's singular `source` object carries one `available_at_utc`, `published_at_utc`, `retrieved_at_utc`, `capture_method`, and `construction`, and a format record assembled from a February announcement, a May announcement, and a compendium capture has no single honest value for any of them. Attaching one timestamp to a multi-source fact set would be a false record, so this subject adopts **Option A: one composite record carrying per-source metadata.**
+
+The manifest gains one exact top-level key, `sources`: a canonical map keyed by `source_url_key`, each entry carrying `capture_path`, `capture_sha256`, `capture_method`, `published_at_utc`, `available_at_utc`, `retrieved_at_utc`, and `construction`. Every fact's `source_url_key` must name an entry in that map, and every entry must be referenced by at least one fact — no unused captures, no unsupported facts. Two record-level values are then **derived, never supplied**:
+
+- `available_at_utc` is the **latest** `available_at_utc` among the sources required by the record's mandatory fields. A record is not current at a cutoff earlier than its last required source.
+- `construction` is the **weakest** class among those same sources. One `reconstructed_unknown` source makes the whole record `reconstructed_unknown`.
+
+The singular `source` object is retained and must equal the entry that governs the derived availability, with ties broken by sorted `source_url_key`, so existing single-source consumers keep working unchanged.
+
+**Migration consequence, stated rather than hidden.** Making `sources` a required key changes the manifest's exact top-level key set, so the one committed record (`data/evidence/rules/b46dd664…`) no longer validates and must be re-imported: a new content-addressed `evidence_id`, a supersession edge from the old record, and a fresh owner attestation of the new digests. The cheaper alternative is to make `sources` optional, absent meaning single-source — no migration, no re-attestation, but an exact-key contract that is no longer exact. The recommendation is the required key and the one-time migration, because an optional key is precisely the sort of quiet weakening this slice exists to prevent; the owner may rule the other way, and the reviewer should decide before implementation begins.
+
+Option B — one ordinary record per source plus a manifest-bound composition artifact — was considered and not chosen. Under Plan 2's model each `(kind, subject)` resolves to exactly one current tip, so several non-superseding records under one subject are a fork and are rejected; Option B would therefore need either one subject per source or a composition record that owns no captures of its own, both of which add more contract than Option A's single key.
 
 **Schema.** `ti26.rules-format-extracted.v1` is replaced by `ti26.rules-format-extracted.v2`, which carries per-field support instead of one coarse `facts.format` object:
 
@@ -847,7 +868,7 @@ No value in that example is an input. Every value must be parsed from an exact s
 
 **Excluded from the direct projection.** `advance_at_wins` and `eliminate_at_losses` are removed from the published-format vocabulary. No 2026 format source states them; the archived transcript already records them as implied by the compendium's `4-0`/`4-1`/`1-4`/`0-4` prediction categories. They remain unchanged in `config/ti2026_rules.yaml` and are not reinterpreted — only their claimed provenance class changes, from "published format" to compendium-derived. `total_rounds` stays in the direct projection: it is directly stated by Valve's own 2026-05-25 announcement, which describes a five-round Swiss bracket followed by five elimination matches, so it needs an exact span from that capture rather than an invented labeled line.
 
-**Retained candidate capture.** An owner-supplied paste of Liquipedia's TI 2026 format section was taken on 2026-08-11 and deliberately **not** committed. It is held outside the repository at `/private/tmp/liquipedia-ti2026-format.txt`; its SHA-256 is `397439cd28be51e0708b204d9215a0bc8c572d851f57d3fd5ffe39feb1da70f7` over 1781 bytes, computed from that file. Treat it as a candidate, not evidence: it is a chat-transported paste rather than a byte-exact page render, so the digest binds the paste. It may be reintroduced only after this subject is registered, the Liquipedia source key is approved, this schema is implemented, a dry run emits its actual digests, and the owner attests them.
+**The 2026-08-11 Liquipedia paste is not evidence.** A chat-transported Liquipedia paste was moved outside the repository. It is not evidence, is not a byte-exact page capture, and must not be referenced by digest or reused for import. Any future Liquipedia record requires a new owner-approved capture, metadata, dry run, and attestation.
 
 **Threshold derivation.** The two thresholds are established by a separate, explicit, tested derivation from compendium prediction-shape evidence rather than by the format extractor:
 
@@ -860,6 +881,25 @@ def derive_swiss_thresholds(prediction_categories: set[str]) -> dict[str, int]:
 ```
 
 Three provenance classes stay distinct and are never merged: directly published format structure; compendium prediction-shape evidence carrying the categories and capacities; and derived configuration facts, which is where the two thresholds live. `shipping_rules_format_facts` projects only the direct published vocabulary, so it must stop emitting `advance_at_wins` and `eliminate_at_losses`.
+
+**Dropping them from that projection must not drop them from reconciliation.** Removing the thresholds from `shipping_rules_format_facts` without replacing their check would leave two load-bearing shipping values outside the evidence boundary entirely — a new hole, opened by a repair. Release reconciliation therefore requires **both** halves, and fails closed on either:
+
+1. the directly published format facts, reconciled as above; and
+2. bound compendium prediction-shape evidence, followed by deterministic threshold derivation whose output is compared against the unchanged shipping configuration.
+
+`RELEASE_SUBJECTS` gains a seventh entry for that evidence, `prediction_shape: "rules:ti2026:event-format:prediction-shape"`, kind `rules`, requiring a `present` observation and carrying the captured category set with its own span support. `reconcile_release_evidence` then calls `derive_swiss_thresholds` on the **captured** categories — never on a set written into this plan — and compares the result field by field against `config/ti2026_rules.yaml`. Absent prediction-shape evidence, a category missing from the captured set, or a derived threshold that differs from the shipping value each fail preflight. The shipping values themselves are never rewritten to match, and no value in this plan's examples may be copied into production output.
+
+The illustrative shape of the reconciled result, values included only to show the field layout:
+
+```json
+{
+  "published_format": {"n_teams": 16, "total_rounds": 5, "main_event_slots": 8, "elimination_matches": 5},
+  "prediction_shape": {"categories": ["4-0", "4-1", "ER_WINNER", "ER_LOSER", "1-4", "0-4"]},
+  "derived_config": {"derivation": "derive_swiss_thresholds.v1", "advance_at_wins": 4, "eliminate_at_losses": 4}
+}
+```
+
+**Redundant claims get a consistency check, not independence.** Several of these fields constrain each other — `main_event_slots` is the sum of the direct advancers and the elimination-round advancers, and `elimination_round_rank_range` spans exactly the teams the elimination matches consume. Where both a total and its components are retained, reconciliation asserts their arithmetic relationship explicitly and fails closed on violation, rather than recording them as unrelated observations that happen to agree.
 
 - [ ] **Step 4: Run GREEN and mutations**
 
@@ -1094,6 +1134,7 @@ Define registered subject constants; observed values never appear in them:
 RELEASE_SUBJECTS = {
     "rules": "rules:ti2026:valve:group-stage",
     "published_format": "rules:ti2026:event-format:group-stage",
+    "prediction_shape": "rules:ti2026:event-format:prediction-shape",
     "participants": "participants:ti2026:event-authority:field",
     "rosters": "rosters:ti2026:event-authority:registered-lineups",
     "groups": "draws:ti2026:event-authority:groups",
@@ -1132,7 +1173,7 @@ def reconcile_release_evidence(
 
 `groups` uses numeric configured team IDs as keys and group labels as values, matching the name-to-label shape returned by `load_group_draw` after names are translated to IDs. `round_one` preserves the existing YAML's pair order and orientation after the same translation.
 
-`reconcile_release_evidence` selects the unique current tip for each `RELEASE_SUBJECTS` entry with `allow_reconstructed_unknown=False`. Rules, participants, rosters, and published format require `present`; participant IDs must exactly equal `load_teams(teams_path)` IDs; roster keys must exactly equal those participant IDs; group-stage rules call `reconcile_rules_facts(shipping_rules_facts(rules_path), complete_extracted_object)`, and the distinct format subject's own exact normalized format payload is reconciled the same way, by calling `reconcile_rules_format_facts(shipping_rules_format_facts(rules_path), complete_format_extracted_object)` — Task 5 defines both functions for exactly this call site, and no other place in this slice reconciles the published format (the index forbids Plan 3 from reimplementing evidence reconciliation). Missing format evidence is a hard owner-input stop, never a claim inferred from the group-stage capture. Per the 2026-08-11 amendment, that reconciliation compares only the direct published-format vocabulary: `shipping_rules_format_facts` no longer projects `advance_at_wins` or `eliminate_at_losses`, and the format record does not assert them. Extract normalized payloads only from the selected validated records. Add `test_release_reconciliation_reconciles_published_format_facts` (`Kills mutation: gate the format subject on existence without reconciling its facts against shipping config.`); remove the `reconcile_rules_format_facts` call, observe RED, restore GREEN.
+`reconcile_release_evidence` selects the unique current tip for each `RELEASE_SUBJECTS` entry with `allow_reconstructed_unknown=False`. Rules, participants, rosters, published format, and prediction shape require `present`; participant IDs must exactly equal `load_teams(teams_path)` IDs; roster keys must exactly equal those participant IDs; group-stage rules call `reconcile_rules_facts(shipping_rules_facts(rules_path), complete_extracted_object)`, and the distinct format subject's own exact normalized format payload is reconciled the same way, by calling `reconcile_rules_format_facts(shipping_rules_format_facts(rules_path), complete_format_extracted_object)` — Task 5 defines both functions for exactly this call site, and no other place in this slice reconciles the published format (the index forbids Plan 3 from reimplementing evidence reconciliation). Missing format evidence is a hard owner-input stop, never a claim inferred from the group-stage capture. Per the 2026-08-11 amendment, that reconciliation compares only the direct published-format vocabulary: `shipping_rules_format_facts` no longer projects `advance_at_wins` or `eliminate_at_losses`, and the format record does not assert them. Extract normalized payloads only from the selected validated records. Add `test_release_reconciliation_reconciles_published_format_facts` (`Kills mutation: gate the format subject on existence without reconciling its facts against shipping config.`); remove the `reconcile_rules_format_facts` call, observe RED, restore GREEN.
 
 Draw selection remains independent even though the existing shipping input is one optional YAML file. If `groups_path` is absent, both selected draw facts must be `unpublished` with negative observations admissible through the cutoff. If it is supplied, use existing `load_group_draw(groups_path, configured_names)`, translate names to configured numeric team IDs, and compare `groups` against the published groups tip. Compare the optional `round_one` field separately: a present field requires a matching published Round-1 tip; an absent field requires a current unpublished Round-1 tip. A published Round 1 without published groups, `unknown`, missing tip, stale negative observation, mismatched names/IDs/order, or local/evidence publication-state disagreement fails closed. No draw state is inferred from a missing record.
 
