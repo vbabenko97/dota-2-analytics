@@ -233,13 +233,59 @@ these required fields:
 | `evidence_id` | Stable identifier unique within the evidence kind |
 | `kind` | Registered evidence kind |
 | `event_id` | Event to which the evidence applies, when event-specific |
-| `subject_key` | Canonical identity of the externally observable fact slot: evidence kind, event scope, source namespace, and stable subject locator; it never includes the observed value |
-| `source` | URL key, capture method, established availability time, optional claimed publication time, and retrieval time |
+| `subject_key` | Canonical identity of the externally observable fact slot: evidence kind, event scope, a namespace segment, and stable subject locator; it never includes the observed value. The namespace segment names the fact slot, not necessarily the publisher — a slot whose facts may come from several publishers uses a source-neutral segment, and the actual publisher of each fact is named in the source metadata |
+| `source` (v1) / `sources` (v2) | See the schema-version contract below |
 | `observation` | Exact-schema assertion of `present` or `absent`, observation time, supported-through time, and digest-bound source captures; an inadequate observation may be retained but proves neither assertion |
 | `construction` | `contemporaneous`, `reconstructed_verified`, or `reconstructed_unknown` |
 | `payloads` | Safe relative path and SHA-256 for every payload |
 | `supersedes` | Digests of predecessor evidence records for the same `kind` and `subject_key`, possibly empty |
 | `producer_revision` | Actual clean Git revision that produced the record |
+
+#### Manifest schema versions (amended 2026-08-11)
+
+A fact set may be established by several publications at different times — a
+February announcement and a May one, say — and one source object cannot honestly
+timestamp such a record. The manifest therefore has two schema versions, and
+both are exact:
+
+- **v1** carries a required singular `source`: URL key, capture method,
+  established availability time, optional claimed publication time, and
+  retrieval time. It remains fully valid and readable forever. Records written
+  under it are immutable history and are never rewritten, reinterpreted, or
+  declared invalid by a later schema.
+- **v2** carries a required `sources` map keyed by `source_url_key` and has **no**
+  singular `source` field. Each entry carries `capture_path`, `capture_sha256`,
+  `capture_method`, `published_at_utc`, `available_at_utc`, `observed_at_utc`,
+  `retrieved_at_utc`, and `construction`. Every fact names an entry; every entry
+  is named by at least one fact.
+
+Writers emit only v2. Readers accept both. There is never an optional `sources`
+under v1: one schema version with two structural meanings is the ambiguity this
+contract exists to prevent.
+
+A v2 record's composite values are **derived by validation and recomputed on
+every read**, never accepted as owner-written summaries. Over the sources its
+mandatory facts require:
+
+```text
+available_at_utc = max(source available_at_utc)
+observed_at_utc  = max(source observed_at_utc)
+retrieved_at_utc = max(source retrieved_at_utc)
+construction     = weakest(source construction)
+```
+
+Code wanting a single source from a parsed record uses a derived compatibility
+accessor, not a stored field. For a one-source v2 record it returns that sole
+entry; for a multi-source record it raises rather than nominating one, because a
+record assembled from several publications does not have "a source" and
+pretending otherwise is the error this version exists to remove.
+
+Whether a record is authoritative for shipping is a separate question from
+whether its facts are corroborated. Corroborating captures that establish no
+mandatory fact — a community mirror of something a publisher already states —
+belong in their own corroboration record, not in the release-authoritative
+composite, where a later retrieval would move the composite's derived
+availability without adding any fact the release needs.
 
 `available_at_utc`, `published_at_utc`, and `retrieved_at_utc` are distinct.
 `available_at_utc` is the earliest time supported by the evidence at which the

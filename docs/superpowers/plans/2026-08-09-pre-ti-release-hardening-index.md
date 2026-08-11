@@ -67,6 +67,13 @@ Implementation may begin with Plan 1 without external input. Plan 2's generic sc
 
 Before the near-lock release, the owner must separately capture and register current participants, exact five-account rosters, groups publication state, and Round-1 publication state. `unpublished` requires captured negative-observation evidence current through the release cutoff. Lack of adequate evidence is `unknown`, and final shipping rejects it.
 
+**Amended 2026-08-11 — the checklist above was short by two.** Preflight reconciles **seven** subjects, and the two missing from the owner-input list are:
+
+- **published format** (`rules:ti2026:event-format:group-stage`) — the directly published tournament structure, which may need captures from more than one publication and therefore a v2 multi-source record.
+- **prediction shape** (`rules:ti2026:event-format:prediction-shape`) — the captured compendium prediction categories, from which `advance_at_wins` and `eliminate_at_losses` are derived and compared against the shipping configuration.
+
+Neither is optional and neither is satisfied by the group-stage rules capture already bound. Until Plan 2's format repair ships, the published-format subject cannot be satisfied by any capture at all, which is why Plan 3 must not start first.
+
 No plan may invent a URL authority, timestamp, roster account, participant, draw, rule, or source-availability claim from prose or memory.
 
 **Recorded owner policy (2026-08-10) — Round 1 published without groups:** this
