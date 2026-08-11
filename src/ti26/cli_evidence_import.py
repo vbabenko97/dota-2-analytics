@@ -15,6 +15,7 @@ import subprocess
 from pathlib import Path
 
 from ti26.evidence import (
+    EVIDENCE_MANIFEST_WRITE_SCHEMA,
     EvidenceError,
     EvidenceExistsError,
     authoritative_source_keys_for,
@@ -25,6 +26,7 @@ from ti26.evidence import (
     extract_ti2026_rules,
     load_evidence_catalog,
     load_source_registry,
+    migrate_v1_record_to_v2,
     safe_relative_file,
     validate_evidence_manifest,
     validate_kind_payload,
@@ -249,6 +251,12 @@ def _build_parser() -> argparse.ArgumentParser:
             sub.add_argument("--facts", default=None)
         else:
             sub.add_argument("--facts", required=True)
+
+    migrate = subparsers.add_parser("migrate-v1")
+    migrate.add_argument("--root", required=True)
+    migrate.add_argument("--kind", required=True)
+    migrate.add_argument("--evidence-id", required=True)
+    migrate.add_argument("--source-registry", required=True)
     return parser
 
 
@@ -291,7 +299,7 @@ def _run_command(args: argparse.Namespace) -> Path | None:
         return None
 
     registry = load_source_registry(Path(args.source_registry))
-    authorized = authoritative_source_keys_for(registry, kind, args.subject_key)
+    authorized = authoritative_source_keys_for(registry, args.event_id, kind, args.subject_key)
     if assertion == "present":
         for key in captures:
             if key not in authorized:
@@ -335,13 +343,23 @@ def _run_command(args: argparse.Namespace) -> Path | None:
             {"path": entry["path"], "sha256": _sha256_bytes(captures[entry["source_url_key"]])}
         )
 
-    source_field = {
-        "source_url_key": primary_key,
-        "capture_method": source_meta["capture_method"],
-        "available_at_utc": source_meta["available_at_utc"],
-        "published_at_utc": source_meta["published_at_utc"],
-        "retrieved_at_utc": source_meta["retrieved_at_utc"],
-    }
+    # Every capture currently shares this one owner-supplied metadata
+    # document (the v1-era singular `--source` contract, unchanged in this
+    # tranche), so every `sources` entry gets identical timing/construction
+    # -- which trivially satisfies the v2 composite-equality requirement.
+    sources_field: dict[str, dict[str, object]] = {}
+    for entry in capture_entries:
+        sources_field[entry["source_url_key"]] = {
+            "capture_path": entry["path"],
+            "capture_sha256": _sha256_bytes(captures[entry["source_url_key"]]),
+            "capture_method": source_meta["capture_method"],
+            "published_at_utc": source_meta["published_at_utc"],
+            "available_at_utc": source_meta["available_at_utc"],
+            "observed_at_utc": source_meta["observed_at_utc"],
+            "supported_through_utc": source_meta["supported_through_utc"],
+            "retrieved_at_utc": source_meta["retrieved_at_utc"],
+            "construction": source_meta["construction"],
+        }
     observation_field = {
         "assertion": assertion,
         "observed_at_utc": source_meta["observed_at_utc"],
@@ -361,12 +379,12 @@ def _run_command(args: argparse.Namespace) -> Path | None:
         raise EvidenceError("--supersedes must not repeat an evidence id")
 
     manifest: dict[str, object] = {
-        "schema": "ti26.evidence-manifest.v1",
+        "schema": EVIDENCE_MANIFEST_WRITE_SCHEMA,
         "evidence_id": "",
         "kind": kind,
         "event_id": args.event_id,
         "subject_key": args.subject_key,
-        "source": source_field,
+        "sources": sources_field,
         "observation": observation_field,
         "attestation": source_meta["attestation"],
         "authority_registry": authority_registry_field,
@@ -399,11 +417,44 @@ def _run_command(args: argparse.Namespace) -> Path | None:
     return write_evidence_record(root, manifest, payload_bytes)
 
 
+def _run_migrate_v1(args: argparse.Namespace) -> Path:
+    """Migrate one existing single-source v1 record to v2, and nothing else.
+
+    Its argument surface deliberately carries no replacement capture,
+    metadata, timestamp, or attestation: `--root`, `--kind`, and
+    `--evidence-id` identify the existing v1 record, `--source-registry`
+    validates it, and every other field is lifted from that record by
+    `migrate_v1_record_to_v2`.
+    """
+    root = Path(args.root)
+    registry = load_source_registry(Path(args.source_registry))
+    catalog = load_evidence_catalog(root, registry)
+    v1_record = next(
+        (
+            record
+            for record in catalog
+            if record.kind == args.kind and record.evidence_id == args.evidence_id
+        ),
+        None,
+    )
+    if v1_record is None:
+        raise EvidenceError(
+            f"no evidence record found for migration: {args.kind}:{args.evidence_id}"
+        )
+    producer_revision = clean_head_revision(Path.cwd())
+    return migrate_v1_record_to_v2(
+        root, v1_record, catalog, registry, producer_revision=producer_revision
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
-        record = _run_command(args)
+        if args.command == "migrate-v1":
+            record: Path | None = _run_migrate_v1(args)
+        else:
+            record = _run_command(args)
     except (EvidenceError, EvidenceExistsError, OSError, ValueError) as exc:
         parser.error(str(exc))
         return 2  # pragma: no cover -- parser.error already raises SystemExit

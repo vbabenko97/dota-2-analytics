@@ -189,17 +189,23 @@ def _current_fork(tmp_path: Path, kind: str, subject_key: str):
             {"path": "extracted.json", "sha256": _sha(extracted)},
         ]
         manifest = {
-            "schema": "ti26.evidence-manifest.v1",
+            "schema": "ti26.evidence-manifest.v2",
             "evidence_id": "",
             "kind": kind,
             "event_id": "ti2026",
             "subject_key": subject_key,
-            "source": {
-                "source_url_key": _PRIMARY_SOURCE_KEY,
-                "capture_method": f"synthetic-{label}",
-                "available_at_utc": "2026-01-01T00:00:00Z",
-                "published_at_utc": None,
-                "retrieved_at_utc": "2026-01-01T00:00:01Z",
+            "sources": {
+                _PRIMARY_SOURCE_KEY: {
+                    "capture_path": "rendered.txt",
+                    "capture_sha256": _sha(rendered),
+                    "capture_method": f"synthetic-{label}",
+                    "published_at_utc": None,
+                    "available_at_utc": "2026-01-01T00:00:00Z",
+                    "observed_at_utc": "2026-01-01T00:00:01Z",
+                    "supported_through_utc": "2026-01-01T00:00:01Z",
+                    "retrieved_at_utc": "2026-01-01T00:00:01Z",
+                    "construction": "contemporaneous",
+                }
             },
             "observation": {
                 "assertion": "present",
@@ -261,17 +267,23 @@ def _expected_import_path(
     )
     registry_bytes = registry_path.read_bytes()
     manifest = {
-        "schema": "ti26.evidence-manifest.v1",
+        "schema": "ti26.evidence-manifest.v2",
         "evidence_id": "",
         "kind": kind,
         "event_id": "ti2026",
         "subject_key": subject_key,
-        "source": {
-            "source_url_key": _PRIMARY_SOURCE_KEY,
-            "capture_method": "owner-supplied-rendered-text",
-            "available_at_utc": "2026-01-01T00:00:00Z",
-            "published_at_utc": None,
-            "retrieved_at_utc": "2026-01-01T00:00:01Z",
+        "sources": {
+            _PRIMARY_SOURCE_KEY: {
+                "capture_path": "rendered.txt",
+                "capture_sha256": _sha(capture),
+                "capture_method": "owner-supplied-rendered-text",
+                "published_at_utc": None,
+                "available_at_utc": "2026-01-01T00:00:00Z",
+                "observed_at_utc": "2026-01-01T00:00:01Z",
+                "supported_through_utc": "2026-01-01T00:00:01Z",
+                "retrieved_at_utc": "2026-01-01T00:00:01Z",
+                "construction": "contemporaneous",
+            }
         },
         "observation": {
             "assertion": "present",
@@ -638,6 +650,8 @@ def test_import_reuses_complete_identical_content_and_rejects_incomplete_destina
         )
 
 
+
+
 def test_import_module_has_no_network_or_opendota_dependency():
     """Kills mutation: add a network-capable import to the offline evidence command."""
     tree = ast.parse(Path("src/ti26/cli_evidence_import.py").read_text(encoding="utf-8"))
@@ -774,3 +788,89 @@ def test_import_runtime_denies_socket_and_non_git_subprocess(tmp_path, clean_imp
 def _record_id(record_path: Path) -> str:
     manifest = json.loads((record_path / "manifest.json").read_text(encoding="utf-8"))
     return manifest["evidence_id"]
+
+
+def _write_v1_record_for_migration(root: Path, kind: str, subject_key: str) -> tuple[Path, str]:
+    """Write a single-source, migration-eligible v1 record directly to disk.
+
+    `write_evidence_record` refuses v1, so this bypasses it entirely --
+    modelling pre-existing immutable v1 history, never a route for producing
+    new v1 evidence. Returns `(record_path, evidence_id)`.
+    """
+    registry_bytes = _registry_bytes_for(kind, subject_key)
+    rendered = b"Group Stage Rules\n"
+    extracted = canonical_evidence_json_bytes(
+        {"schema": "ti26.rules-extracted.v1", "facts": {}}
+    ) + b"\n"
+    payloads = [
+        {"path": "authority-registry.json", "sha256": _sha(registry_bytes)},
+        {"path": "rendered.txt", "sha256": _sha(rendered)},
+        {"path": "extracted.json", "sha256": _sha(extracted)},
+    ]
+    manifest = {
+        "schema": "ti26.evidence-manifest.v1",
+        "evidence_id": "",
+        "kind": kind,
+        "event_id": "ti2026",
+        "subject_key": subject_key,
+        "source": {
+            "source_url_key": _PRIMARY_SOURCE_KEY,
+            "capture_method": "owner-supplied-rendered-text",
+            "available_at_utc": "2026-01-01T00:00:00Z",
+            "published_at_utc": None,
+            "retrieved_at_utc": "2026-01-01T00:00:01Z",
+        },
+        "observation": {
+            "assertion": "present",
+            "observed_at_utc": "2026-01-01T00:00:01Z",
+            "supported_through_utc": "2026-01-01T00:00:01Z",
+            "captures": [{"source_url_key": _PRIMARY_SOURCE_KEY, "path": "rendered.txt"}],
+            "authoritative_source_keys_checked": [],
+            "diagnostic_reason": None,
+        },
+        "attestation": {
+            "fact_payload_sha256": _sha(extracted),
+            "capture_sha256s": [_sha(rendered)],
+        },
+        "authority_registry": {
+            "schema": "ti26.evidence-authority-binding.v1",
+            "path": "authority-registry.json",
+            "sha256": _sha(registry_bytes),
+            "effective_at_utc": "2025-12-31T00:00:00Z",
+        },
+        "construction": "contemporaneous",
+        "payloads": payloads,
+        "supersedes": [],
+        "producer_revision": "a" * 40,
+    }
+    manifest["evidence_id"] = evidence_id_for_manifest(manifest)
+    record = root / kind / manifest["evidence_id"]
+    record.mkdir(parents=True)
+    (record / "authority-registry.json").write_bytes(registry_bytes)
+    (record / "rendered.txt").write_bytes(rendered)
+    (record / "extracted.json").write_bytes(extracted)
+    (record / "manifest.json").write_bytes(canonical_evidence_json_bytes(manifest) + b"\n")
+    return record, manifest["evidence_id"]
+
+
+def test_migration_rejects_any_replacement_capture_or_metadata_argument(tmp_path, clean_import_head):
+    """Kills mutation: accept --capture or --source on the migrate route."""
+    kind = "rules"
+    subject_key = "rules:ti2026:owner:migrate-argument-surface"
+    root = Path(tempfile.mkdtemp(dir=tmp_path))
+    _, evidence_id = _write_v1_record_for_migration(root, kind, subject_key)
+    registry_path = _source_registry(
+        Path(tempfile.mkdtemp(dir=tmp_path)),
+        kind=kind,
+        subject_key=subject_key,
+        source_keys=[_PRIMARY_SOURCE_KEY],
+    )
+    with pytest.raises(SystemExit):
+        main([
+            "migrate-v1",
+            "--root", str(root),
+            "--kind", kind,
+            "--evidence-id", evidence_id,
+            "--source-registry", str(registry_path),
+            "--capture", f"{_PRIMARY_SOURCE_KEY}=nonexistent.bin",
+        ])

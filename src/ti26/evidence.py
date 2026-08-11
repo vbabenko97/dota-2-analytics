@@ -23,10 +23,12 @@ from ti26.teams import load_teams
 
 _CHUNK_SIZE = 1024 * 1024
 
-EVIDENCE_MANIFEST_SCHEMA = "ti26.evidence-manifest.v1"
+EVIDENCE_MANIFEST_SCHEMA_V1 = "ti26.evidence-manifest.v1"
+EVIDENCE_MANIFEST_SCHEMA_V2 = "ti26.evidence-manifest.v2"
+EVIDENCE_MANIFEST_WRITE_SCHEMA = EVIDENCE_MANIFEST_SCHEMA_V2
 _AUTHORITY_BINDING_SCHEMA = "ti26.evidence-authority-binding.v1"
 
-_MANIFEST_KEYS = frozenset(
+_MANIFEST_KEYS_V1 = frozenset(
     {
         "schema",
         "evidence_id",
@@ -43,8 +45,26 @@ _MANIFEST_KEYS = frozenset(
         "producer_revision",
     }
 )
+_MANIFEST_KEYS_V2 = (_MANIFEST_KEYS_V1 - {"source"}) | {"sources"}
+_MANIFEST_KEYS_BY_SCHEMA = {
+    EVIDENCE_MANIFEST_SCHEMA_V1: _MANIFEST_KEYS_V1,
+    EVIDENCE_MANIFEST_SCHEMA_V2: _MANIFEST_KEYS_V2,
+}
 _SOURCE_KEYS = frozenset(
     {"source_url_key", "capture_method", "available_at_utc", "published_at_utc", "retrieved_at_utc"}
+)
+_SOURCE_ENTRY_KEYS = frozenset(
+    {
+        "capture_path",
+        "capture_sha256",
+        "capture_method",
+        "published_at_utc",
+        "available_at_utc",
+        "observed_at_utc",
+        "supported_through_utc",
+        "retrieved_at_utc",
+        "construction",
+    }
 )
 _OBSERVATION_KEYS = frozenset(
     {
@@ -91,6 +111,28 @@ class EvidenceSource:
 
 
 @dataclass(frozen=True)
+class EvidenceSourceEntry:
+    """One v2 `sources` map entry: a capture-anchored source with its own timing.
+
+    Unlike `EvidenceSource` (v1's singular source), an `EvidenceSourceEntry`
+    carries its own `observed_at_utc`/`supported_through_utc` and the
+    `capture_path`/`capture_sha256` pair the generic capture-anchored
+    invariant binds to the observation's matching capture.
+    """
+
+    source_url_key: str
+    capture_path: str
+    capture_sha256: str
+    capture_method: str
+    published_at_utc: datetime | None
+    available_at_utc: datetime
+    observed_at_utc: datetime
+    supported_through_utc: datetime
+    retrieved_at_utc: datetime
+    construction: str
+
+
+@dataclass(frozen=True)
 class EvidenceObservation:
     assertion: str
     observed_at_utc: datetime
@@ -118,7 +160,11 @@ class AuthorityRegistryBinding:
 class EvidenceManifest:
     """A fully validated evidence record. `root` is runtime location metadata;
 
-    it is never part of the semantic descriptor or the `evidence_id`.
+    it is never part of the semantic descriptor or the `evidence_id`. `source`
+    is populated for a v1 record and `None` for v2; `sources` is populated for
+    a v2 record and `None` for v1 -- exactly one is ever set. Timing code must
+    read only the version-neutral properties below, never `source`/`sources`
+    directly.
     """
 
     root: Path
@@ -127,7 +173,8 @@ class EvidenceManifest:
     kind: str
     event_id: str
     subject_key: str
-    source: EvidenceSource
+    source: EvidenceSource | None
+    sources: tuple[EvidenceSourceEntry, ...] | None
     observation: EvidenceObservation
     attestation: EvidenceAttestation | None
     authority_registry: AuthorityRegistryBinding
@@ -135,6 +182,54 @@ class EvidenceManifest:
     payloads: tuple[PayloadDigest, ...]
     supersedes: tuple[str, ...]
     producer_revision: str
+
+    @property
+    def available_at_utc(self) -> datetime:
+        """The version-neutral evidence-backed availability time: stored for v1,
+
+        the recomputed composite over the support set for v2.
+        """
+        if self.sources is None:
+            return self.source.available_at_utc
+        support = _support_set(self.sources, self.observation.assertion)
+        return max(entry.available_at_utc for entry in support)
+
+    @property
+    def observed_at_utc(self) -> datetime:
+        if self.sources is None:
+            return self.observation.observed_at_utc
+        support = _support_set(self.sources, self.observation.assertion)
+        return max(entry.observed_at_utc for entry in support)
+
+    @property
+    def supported_through_utc(self) -> datetime:
+        if self.sources is None:
+            return self.observation.supported_through_utc
+        support = _support_set(self.sources, self.observation.assertion)
+        return min(entry.supported_through_utc for entry in support)
+
+    @property
+    def retrieved_at_utc(self) -> datetime:
+        if self.sources is None:
+            return self.source.retrieved_at_utc
+        support = _support_set(self.sources, self.observation.assertion)
+        return max(entry.retrieved_at_utc for entry in support)
+
+    @property
+    def sole_source(self) -> EvidenceSource | EvidenceSourceEntry:
+        """Return the record's one source. Identity only -- never use for timing.
+
+        Returns the stored `source` for v1, or the sole `sources` entry for a
+        one-source v2 record; raises for a multi-source v2 record, which does
+        not have "a source" to nominate.
+        """
+        if self.sources is None:
+            return self.source
+        if len(self.sources) != 1:
+            raise EvidenceError(
+                "record has multiple sources; there is no singular source to return"
+            )
+        return self.sources[0]
 
 
 def canonical_evidence_json_bytes(value: object) -> bytes:
@@ -219,8 +314,16 @@ def _canonical_descriptor(payload: dict[str, object]) -> dict[str, object]:
 
 
 def evidence_id_for_manifest(payload: dict[str, object]) -> str:
-    """Return the content digest of `payload` without its own `evidence_id`."""
-    if not isinstance(payload, dict) or set(payload) != _MANIFEST_KEYS:
+    """Return the content digest of `payload` without its own `evidence_id`.
+
+    Dispatches the exact required key set on the payload's own `schema`
+    value: v1 requires a singular `source`, v2 requires `sources` instead --
+    no record straddles versions.
+    """
+    if not isinstance(payload, dict):
+        raise EvidenceError("evidence manifest has unsupported or missing keys")
+    expected_keys = _MANIFEST_KEYS_BY_SCHEMA.get(payload.get("schema"))
+    if expected_keys is None or set(payload) != expected_keys:
         raise EvidenceError("evidence manifest has unsupported or missing keys")
     if not isinstance(payload.get("evidence_id"), str):
         raise EvidenceError("evidence_id must be a string")
@@ -293,7 +396,7 @@ def _validate_authority_registry_shape(
 
 
 def _validate_observation(
-    value: object, source: EvidenceSource, payload_digests: tuple[PayloadDigest, ...]
+    value: object, payload_digests: tuple[PayloadDigest, ...]
 ) -> EvidenceObservation:
     if not isinstance(value, dict) or set(value) != _OBSERVATION_KEYS:
         raise EvidenceError("observation has unsupported or missing keys")
@@ -339,10 +442,6 @@ def _validate_observation(
     if assertion == "present":
         if not captures:
             raise EvidenceError("a present observation requires at least one capture")
-        if captures[0].source_url_key != source.source_url_key:
-            raise EvidenceError(
-                "a present observation's primary capture must match source.source_url_key"
-            )
         if checked_raw:
             raise EvidenceError("a present observation must not check any authority")
     else:
@@ -363,6 +462,184 @@ def _validate_observation(
         authoritative_source_keys_checked=tuple(sorted(checked_raw)),
         diagnostic_reason=diagnostic_reason,
     )
+
+
+def _validate_v1_primary_capture(source: EvidenceSource, observation: EvidenceObservation) -> None:
+    """v1-only: a present observation's first capture must be the singular source."""
+    if observation.assertion == "present" and observation.captures[0].source_url_key != source.source_url_key:
+        raise EvidenceError(
+            "a present observation's primary capture must match source.source_url_key"
+        )
+
+
+def _validate_entry_ordering(
+    published_at_utc: datetime | None,
+    available_at_utc: datetime,
+    observed_at_utc: datetime,
+    retrieved_at_utc: datetime,
+    supported_through_utc: datetime,
+    label: str,
+) -> None:
+    """Require non-decreasing timestamps and the no-freshness-allowance equality.
+
+    Shared by v1's singular `source`+`observation` pair and each v2 `sources`
+    entry: `published_at_utc <= available_at_utc <= observed_at_utc <=
+    retrieved_at_utc` (or without `published_at_utc`), and
+    `supported_through_utc == observed_at_utc`, since this schema registers
+    no freshness allowance.
+    """
+    if published_at_utc is not None:
+        ordered = published_at_utc <= available_at_utc <= observed_at_utc <= retrieved_at_utc
+        if not ordered:
+            raise EvidenceError(
+                f"{label}published_at_utc, available_at_utc, observed_at_utc, and "
+                "retrieved_at_utc must be non-decreasing"
+            )
+    else:
+        ordered = available_at_utc <= observed_at_utc <= retrieved_at_utc
+        if not ordered:
+            raise EvidenceError(
+                f"{label}available_at_utc, observed_at_utc, and retrieved_at_utc "
+                "must be non-decreasing"
+            )
+    if supported_through_utc != observed_at_utc:
+        raise EvidenceError(
+            f"{label}supported_through_utc must equal observed_at_utc; "
+            "no freshness allowance is registered"
+        )
+
+
+def _validate_sources_map(
+    value: object,
+    payload_digests: tuple[PayloadDigest, ...],
+    observation: EvidenceObservation,
+) -> tuple[EvidenceSourceEntry, ...]:
+    """Validate the v2 `sources` map against the capture-anchored invariant.
+
+    `sources.keys` must equal the observation's capture source-key set; each
+    entry's `capture_path` must equal that capture's declared path, and its
+    `capture_sha256` must equal that path's declared payload digest. Every
+    entry's own timestamps satisfy the same ordering rule as v1's singular
+    source.
+    """
+    if not isinstance(value, dict) or not value:
+        raise EvidenceError("sources must be a non-empty mapping")
+    capture_by_key = {capture.source_url_key: capture for capture in observation.captures}
+    if set(value) != set(capture_by_key):
+        raise EvidenceError("sources.keys must equal the observation's capture source keys")
+    payload_by_path = {digest.path: digest for digest in payload_digests}
+    entries: list[EvidenceSourceEntry] = []
+    for key in sorted(value):
+        entry_value = value[key]
+        if not isinstance(entry_value, dict) or set(entry_value) != _SOURCE_ENTRY_KEYS:
+            raise EvidenceError(f"sources entry has unsupported or missing keys: {key}")
+        capture_path = entry_value["capture_path"]
+        expected_capture_path = capture_by_key[key].path
+        if not isinstance(capture_path, str) or capture_path != expected_capture_path:
+            raise EvidenceError(f"sources.{key}.capture_path must equal its declared capture path")
+        capture_sha256 = entry_value["capture_sha256"]
+        if (
+            capture_path not in payload_by_path
+            or not _is_sha256(capture_sha256)
+            or capture_sha256 != payload_by_path[capture_path].sha256
+        ):
+            raise EvidenceError(
+                f"sources.{key}.capture_sha256 must equal its capture's declared payload digest"
+            )
+        capture_method = _require_nonempty_str(
+            entry_value["capture_method"], f"sources.{key}.capture_method"
+        )
+        available_at_utc = parse_utc(entry_value["available_at_utc"], f"sources.{key}.available_at_utc")
+        observed_at_utc = parse_utc(entry_value["observed_at_utc"], f"sources.{key}.observed_at_utc")
+        supported_through_utc = parse_utc(
+            entry_value["supported_through_utc"], f"sources.{key}.supported_through_utc"
+        )
+        retrieved_at_utc = parse_utc(entry_value["retrieved_at_utc"], f"sources.{key}.retrieved_at_utc")
+        published_raw = entry_value["published_at_utc"]
+        published_at_utc = (
+            None if published_raw is None else parse_utc(published_raw, f"sources.{key}.published_at_utc")
+        )
+        construction = entry_value["construction"]
+        if construction not in _CONSTRUCTIONS:
+            raise EvidenceError(f"sources.{key}.construction must be one of {_CONSTRUCTIONS}")
+        _validate_entry_ordering(
+            published_at_utc,
+            available_at_utc,
+            observed_at_utc,
+            retrieved_at_utc,
+            supported_through_utc,
+            f"sources.{key}.",
+        )
+        entries.append(
+            EvidenceSourceEntry(
+                source_url_key=key,
+                capture_path=capture_path,
+                capture_sha256=capture_sha256,
+                capture_method=capture_method,
+                published_at_utc=published_at_utc,
+                available_at_utc=available_at_utc,
+                observed_at_utc=observed_at_utc,
+                supported_through_utc=supported_through_utc,
+                retrieved_at_utc=retrieved_at_utc,
+                construction=construction,
+            )
+        )
+    return tuple(sorted(entries, key=lambda entry: entry.source_url_key))
+
+
+def _support_set(
+    sources: tuple[EvidenceSourceEntry, ...], assertion: str
+) -> tuple[EvidenceSourceEntry, ...]:
+    """Return the sources supporting a v2 record's mandatory facts.
+
+    For an `absent` record, every checked authoritative capture source
+    supports the (empty) mandatory-fact set. For a `present` record, only a
+    one-source record's sole source implicitly supports its complete
+    normalized payload; a multi-source positive composite requires per-field
+    `source_url_key` support that this evidence kind's schema does not
+    carry, so it fails closed rather than guessing which entries qualify.
+    """
+    if assertion == "absent" or len(sources) == 1:
+        return sources
+    raise EvidenceError(
+        "a multi-source positive record requires per-field source support, "
+        "which this evidence kind's schema does not carry"
+    )
+
+
+def _weakest_construction(constructions: Iterable[str]) -> str:
+    return max(constructions, key=_CONSTRUCTIONS.index)
+
+
+def _validate_v2_composites(
+    sources: tuple[EvidenceSourceEntry, ...],
+    observation: EvidenceObservation,
+    construction: str,
+) -> None:
+    """Recompute the five v2 composites and require exact equality with the stored fields.
+
+    v2 retains the stored `observation.observed_at_utc`,
+    `observation.supported_through_utc`, and top-level `construction`
+    fields, but they are assertions, not second truths: this function
+    recomputes each composite from `sources` on every read and rejects any
+    stored value that diverges, so an owner cannot author a composite the
+    evidence does not support.
+    """
+    support = _support_set(sources, observation.assertion)
+    composite_observed = max(entry.observed_at_utc for entry in support)
+    composite_supported_through = min(entry.supported_through_utc for entry in support)
+    composite_construction = _weakest_construction(entry.construction for entry in support)
+    if composite_observed > composite_supported_through:
+        raise EvidenceError(
+            "the recomputed composite observed_at_utc must be no later than "
+            "supported_through_utc"
+        )
+    if observation.observed_at_utc != composite_observed:
+        raise EvidenceError("observation.observed_at_utc must equal its recomputed composite")
+    if observation.supported_through_utc != composite_supported_through:
+        raise EvidenceError("observation.supported_through_utc must equal its recomputed composite")
+    if construction != composite_construction:
+        raise EvidenceError("construction must equal its recomputed composite")
 
 
 def _validate_attestation(
@@ -404,31 +681,14 @@ def _validate_attestation(
 
 
 def _validate_timestamp_ordering(source: EvidenceSource, observation: EvidenceObservation) -> None:
-    if source.published_at_utc is not None:
-        ordered = (
-            source.published_at_utc
-            <= source.available_at_utc
-            <= observation.observed_at_utc
-            <= source.retrieved_at_utc
-        )
-        if not ordered:
-            raise EvidenceError(
-                "published_at_utc, available_at_utc, observed_at_utc, and retrieved_at_utc "
-                "must be non-decreasing"
-            )
-    else:
-        ordered = (
-            source.available_at_utc <= observation.observed_at_utc <= source.retrieved_at_utc
-        )
-        if not ordered:
-            raise EvidenceError(
-                "available_at_utc, observed_at_utc, and retrieved_at_utc must be non-decreasing"
-            )
-    if observation.supported_through_utc != observation.observed_at_utc:
-        raise EvidenceError(
-            "observation.supported_through_utc must equal observed_at_utc; "
-            "no freshness allowance is registered"
-        )
+    _validate_entry_ordering(
+        source.published_at_utc,
+        source.available_at_utc,
+        observation.observed_at_utc,
+        source.retrieved_at_utc,
+        observation.supported_through_utc,
+        "",
+    )
 
 
 def _validate_supersedes(value: object) -> tuple[str, ...]:
@@ -475,6 +735,12 @@ def validate_evidence_manifest(
 ) -> EvidenceManifest:
     """Validate the exact evidence-manifest contract and return a trusted record.
 
+    Dispatches on the payload's exact `schema` value: `ti26.evidence-manifest.v1`
+    requires a singular `source` and remains fully valid for reading historical
+    records forever; `ti26.evidence-manifest.v2` requires a `sources` map
+    instead, whose five composite record-level values are recomputed from the
+    support set on every read and checked for exact equality against the
+    stored `observation`/`construction` fields. No record straddles versions.
     All schema, identifier, timestamp, and path-shape validation happens
     before any filesystem lookup. With `verify_payloads=True`, every declared
     payload's bytes -- starting with the bound authority registry -- are
@@ -485,18 +751,26 @@ def validate_evidence_manifest(
     computed_id = evidence_id_for_manifest(payload)
 
     schema = payload["schema"]
-    if schema != EVIDENCE_MANIFEST_SCHEMA:
-        raise EvidenceError(f"evidence manifest schema must be {EVIDENCE_MANIFEST_SCHEMA!r}")
     kind = _require_nonempty_str(payload["kind"], "kind")
     event_id = _require_nonempty_str(payload["event_id"], "event_id")
     subject_key = _require_nonempty_str(payload["subject_key"], "subject_key")
 
-    source = _validate_source(payload["source"])
     payload_digests = _validate_payloads_shape(root, payload["payloads"])
     authority_registry = _validate_authority_registry_shape(
         payload["authority_registry"], payload_digests
     )
-    observation = _validate_observation(payload["observation"], source, payload_digests)
+    observation = _validate_observation(payload["observation"], payload_digests)
+
+    source: EvidenceSource | None
+    sources: tuple[EvidenceSourceEntry, ...] | None
+    if schema == EVIDENCE_MANIFEST_SCHEMA_V1:
+        source = _validate_source(payload["source"])
+        sources = None
+        _validate_v1_primary_capture(source, observation)
+    else:
+        source = None
+        sources = _validate_sources_map(payload["sources"], payload_digests, observation)
+
     attestation = _validate_attestation(
         payload["attestation"], observation, payload_digests, authority_registry
     )
@@ -511,7 +785,10 @@ def validate_evidence_manifest(
     if not _is_sha256(evidence_id) or evidence_id != computed_id:
         raise EvidenceError("evidence_id does not match its derived content descriptor")
 
-    _validate_timestamp_ordering(source, observation)
+    if schema == EVIDENCE_MANIFEST_SCHEMA_V1:
+        _validate_timestamp_ordering(source, observation)
+    else:
+        _validate_v2_composites(sources, observation, construction)
 
     if verify_payloads:
         if root.is_symlink() or not root.is_dir():
@@ -527,6 +804,7 @@ def validate_evidence_manifest(
         event_id=event_id,
         subject_key=subject_key,
         source=source,
+        sources=sources,
         observation=observation,
         attestation=attestation,
         authority_registry=authority_registry,
@@ -542,8 +820,10 @@ def evidence_is_admissible(
 ) -> bool:
     """Return whether `record` is a valid observation as of `cutoff_utc`.
 
-    Pure predicate: false when the parsed cutoff precedes
-    `source.available_at_utc`; for an `absent` observation it also requires
+    Pure predicate: false when the parsed cutoff precedes the version-neutral
+    `record.available_at_utc` (stored for v1, the recomputed composite for
+    v2) -- never `record.source.available_at_utc`, which a multi-source v2
+    record does not have. For an `absent` observation it also requires
     `cutoff <= supported_through_utc`, using
     `max(available_at_utc, observed_at_utc)` as the lower bound so a negative
     observation cannot apply before it was actually made. A
@@ -556,9 +836,9 @@ def evidence_is_admissible(
     if record.construction == "reconstructed_unknown" and not allow_reconstructed_unknown:
         return False
     if record.observation.assertion == "present":
-        return cutoff >= record.source.available_at_utc
-    lower_bound = max(record.source.available_at_utc, record.observation.observed_at_utc)
-    return lower_bound <= cutoff <= record.observation.supported_through_utc
+        return cutoff >= record.available_at_utc
+    lower_bound = max(record.available_at_utc, record.observed_at_utc)
+    return lower_bound <= cutoff <= record.supported_through_utc
 
 
 class ReconciliationError(ValueError):
@@ -882,37 +1162,52 @@ def load_source_registry(path: Path) -> EvidenceSourceRegistry:
 
 
 def authoritative_source_keys_for(
-    registry: EvidenceSourceRegistry, kind: str, subject_key: str
+    registry: EvidenceSourceRegistry, event_id: str, kind: str, subject_key: str
 ) -> tuple[str, ...]:
-    """Return the complete sorted authority set for one exact (kind, subject) pair."""
+    """Return the complete sorted authority set for one exact (event, kind, subject) triple."""
     keys = {
         entry.source_url_key
         for entry in registry.entries
         for authorization in entry.authorizations
-        if authorization.kind == kind and authorization.subject_key == subject_key
+        if (
+            authorization.event_id == event_id
+            and authorization.kind == kind
+            and authorization.subject_key == subject_key
+        )
     }
     return tuple(sorted(keys))
 
 
 def validate_record_sources(record: EvidenceManifest, registry: EvidenceSourceRegistry) -> None:
-    """Require the record's primary source, and every checked authority, to be registered.
+    """Require every one of the record's sources, and every checked authority, to be registered.
 
-    A negative observation's checked set must equal -- not merely be a subset
-    of -- the registry-derived complete authority set for the exact
-    `(kind, subject_key)` pair; the owner cannot select a subset.
+    Matches on the exact `(event_id, kind, subject_key)` triple: an
+    authorization registered for a different event does not authorize this
+    record. A negative observation's checked set must equal -- not merely be
+    a subset of -- the registry-derived complete authority set for the exact
+    triple; the owner cannot select a subset. Under v1 there is a singular
+    `source`; under v2 there is no primary source, so every entry in
+    `sources` is checked.
     """
-    authorized = authoritative_source_keys_for(registry, record.kind, record.subject_key)
-    if record.source.source_url_key not in authorized:
-        raise EvidenceError(
-            f"source {record.source.source_url_key!r} is not registered for "
-            f"{record.kind}:{record.subject_key}"
-        )
+    authorized = authoritative_source_keys_for(
+        registry, record.event_id, record.kind, record.subject_key
+    )
+    if record.sources is None:
+        source_keys = (record.source.source_url_key,)
+    else:
+        source_keys = tuple(entry.source_url_key for entry in record.sources)
+    for source_key in source_keys:
+        if source_key not in authorized:
+            raise EvidenceError(
+                f"source {source_key!r} is not registered for "
+                f"{record.event_id}:{record.kind}:{record.subject_key}"
+            )
     if record.observation.assertion == "absent":
         checked = set(record.observation.authoritative_source_keys_checked)
         if checked != set(authorized):
             raise EvidenceError(
                 "a negative observation must check the complete authority set for "
-                f"{record.kind}:{record.subject_key}"
+                f"{record.event_id}:{record.kind}:{record.subject_key}"
             )
 
 
@@ -1090,9 +1385,19 @@ def write_evidence_record(
     filesystem-mutating step lstat-revalidates its ancestor directories
     immediately beforehand, closing a symlink substituted after an earlier
     check.
+
+    Writes only `EVIDENCE_MANIFEST_WRITE_SCHEMA` (v2); a v1 payload is
+    refused outright, before any path or reuse logic runs. The sole
+    exception is the `migrate-v1` route, which reads a v1 record but always
+    writes v2 through this same function.
     """
     if not isinstance(manifest, dict):
         raise EvidenceError("evidence manifest must be a JSON object")
+    if manifest.get("schema") != EVIDENCE_MANIFEST_WRITE_SCHEMA:
+        raise EvidenceError(
+            f"write_evidence_record only writes {EVIDENCE_MANIFEST_WRITE_SCHEMA!r}; "
+            "a legacy v1 manifest cannot be created by a new write"
+        )
     if not isinstance(payloads, dict) or not all(
         isinstance(value, bytes) for value in payloads.values()
     ):
@@ -1131,6 +1436,146 @@ def write_evidence_record(
     return record
 
 
+def _format_utc(value: datetime | None) -> str | None:
+    """Format a parsed UTC `datetime` back into its canonical `...Z` string."""
+    if value is None:
+        return None
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def migrate_v1_record_to_v2(
+    root: Path,
+    v1_record: EvidenceManifest,
+    catalog_records: tuple[EvidenceManifest, ...],
+    registry: EvidenceSourceRegistry,
+    *,
+    producer_revision: str,
+) -> Path:
+    """Mechanically migrate one single-source v1 evidence record to v2.
+
+    Takes the existing v1 record as its only evidence source: no replacement
+    capture, metadata, timestamp, or attestation is accepted. Every payload
+    byte -- including the bound `authority-registry.json` -- carries
+    unchanged; the existing attestation is reused verbatim. The single
+    `sources` entry is lifted mechanically from the v1 record's `source` and
+    `observation` fields, never newly asserted. `supersedes` is set to the
+    v1 record's own evidence id.
+
+    Preconditions, each failing closed: `v1_record` must be schema v1; it
+    must be the unique current tip for its `(kind, subject_key)` among
+    `catalog_records` (not a superseded ancestor); its capture-source set
+    must be exactly its one `source` (a multi-capture v1 record cannot be
+    migrated mechanically, since v1 carries no independent per-source
+    metadata for a secondary capture). The v1 record is re-read and
+    re-verified fresh from disk -- never trusted from a possibly-stale
+    in-memory object -- so a capture or normalized-fact byte that changed
+    after `v1_record` was loaded, or an attestation whose digests no longer
+    match the payloads, is caught here rather than silently carried forward.
+
+    Writes through the same exclusive, manifest-last `write_evidence_record`
+    path; an already-existing byte-identical migration is returned unmodified
+    rather than rewritten.
+    """
+    if v1_record.schema != EVIDENCE_MANIFEST_SCHEMA_V1:
+        raise EvidenceError("migrate-v1 requires an existing v1 evidence record")
+
+    matching = tuple(
+        record
+        for record in catalog_records
+        if record.kind == v1_record.kind and record.subject_key == v1_record.subject_key
+    )
+    superseded = {predecessor for record in matching for predecessor in record.supersedes}
+    if v1_record.evidence_id in superseded:
+        raise EvidenceError(
+            "migrate-v1 requires the unique current tip, not a superseded ancestor: "
+            f"{v1_record.evidence_id}"
+        )
+
+    capture_source_keys = {capture.source_url_key for capture in v1_record.observation.captures}
+    if len(v1_record.observation.captures) != 1 or capture_source_keys != {
+        v1_record.source.source_url_key
+    }:
+        raise EvidenceError(
+            "migrate-v1 can only migrate a single-source v1 record; "
+            f"{v1_record.evidence_id} has multiple capture sources"
+        )
+
+    manifest_path = v1_record.root / "manifest.json"
+    try:
+        raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EvidenceError(f"v1 evidence record manifest is unreadable: {manifest_path}") from exc
+    verified = validate_evidence_manifest(v1_record.root, raw_manifest, verify_payloads=True)
+    validate_record_sources(verified, registry)
+
+    payload_by_path = {digest.path: digest for digest in verified.payloads}
+    capture = verified.observation.captures[0]
+    capture_digest = payload_by_path[capture.path]
+
+    sources_entry = {
+        "capture_path": capture.path,
+        "capture_sha256": capture_digest.sha256,
+        "capture_method": verified.source.capture_method,
+        "published_at_utc": _format_utc(verified.source.published_at_utc),
+        "available_at_utc": _format_utc(verified.source.available_at_utc),
+        "observed_at_utc": _format_utc(verified.observation.observed_at_utc),
+        "supported_through_utc": _format_utc(verified.observation.supported_through_utc),
+        "retrieved_at_utc": _format_utc(verified.source.retrieved_at_utc),
+        "construction": verified.construction,
+    }
+    observation_payload = {
+        "assertion": verified.observation.assertion,
+        "observed_at_utc": _format_utc(verified.observation.observed_at_utc),
+        "supported_through_utc": _format_utc(verified.observation.supported_through_utc),
+        "captures": [
+            {"source_url_key": entry.source_url_key, "path": entry.path}
+            for entry in verified.observation.captures
+        ],
+        "authoritative_source_keys_checked": list(
+            verified.observation.authoritative_source_keys_checked
+        ),
+        "diagnostic_reason": verified.observation.diagnostic_reason,
+    }
+    attestation_payload = (
+        None
+        if verified.attestation is None
+        else {
+            "fact_payload_sha256": verified.attestation.fact_payload_sha256,
+            "capture_sha256s": list(verified.attestation.capture_sha256s),
+        }
+    )
+    authority_registry_payload = {
+        "schema": verified.authority_registry.schema,
+        "path": verified.authority_registry.path,
+        "sha256": verified.authority_registry.sha256,
+        "effective_at_utc": _format_utc(verified.authority_registry.effective_at_utc),
+    }
+    payloads_payload = [{"path": digest.path, "sha256": digest.sha256} for digest in verified.payloads]
+
+    manifest: dict[str, object] = {
+        "schema": EVIDENCE_MANIFEST_SCHEMA_V2,
+        "evidence_id": "",
+        "kind": verified.kind,
+        "event_id": verified.event_id,
+        "subject_key": verified.subject_key,
+        "sources": {capture.source_url_key: sources_entry},
+        "observation": observation_payload,
+        "attestation": attestation_payload,
+        "authority_registry": authority_registry_payload,
+        "construction": verified.construction,
+        "payloads": payloads_payload,
+        "supersedes": [verified.evidence_id],
+        "producer_revision": producer_revision,
+    }
+    manifest["evidence_id"] = evidence_id_for_manifest(manifest)
+
+    payload_bytes = {}
+    for digest in verified.payloads:
+        _, file_path = safe_relative_file(verified.root, digest.path, "payload")
+        payload_bytes[digest.path] = file_path.read_bytes()
+    return write_evidence_record(root, manifest, payload_bytes)
+
+
 @dataclass(frozen=True)
 class CurrentEvidence:
     """The unique current evidence tip for one `(kind, subject_key)` at a cutoff.
@@ -1152,8 +1597,8 @@ def _graph_applicability(record: EvidenceManifest) -> datetime:
     supersede an ancestor before the negative observation was actually made.
     """
     if record.observation.assertion == "present":
-        return record.source.available_at_utc
-    return max(record.source.available_at_utc, record.observation.observed_at_utc)
+        return record.available_at_utc
+    return max(record.available_at_utc, record.observed_at_utc)
 
 
 def _detect_supersession_cycle(

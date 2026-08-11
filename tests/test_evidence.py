@@ -11,6 +11,7 @@ from ti26.evidence import (
     EvidenceExistsError,  # noqa: F401 -- imported per Step 2's RED-import assertion
     EvidenceManifest,
     ReconciliationError,
+    authoritative_source_keys_for,
     canonical_evidence_json_bytes,
     evidence_id_for_manifest,
     evidence_is_admissible,
@@ -18,6 +19,7 @@ from ti26.evidence import (
     extract_ti2026_rules,
     load_release_evidence,
     load_source_registry,
+    migrate_v1_record_to_v2,
     reconcile_draw,
     reconcile_participants,
     reconcile_release_evidence,
@@ -118,6 +120,80 @@ def _manifest(*, observation: dict[str, object] | None = None) -> dict[str, obje
     return payload
 
 
+def _manifest_v2(*, observation: dict[str, object] | None = None) -> dict[str, object]:
+    """Build a valid, single-source v2 manifest payload, mirroring `_manifest()`'s shape.
+
+    A one-source v2 record's sole source implicitly supports its complete
+    normalized payload, so the sole `sources` entry's timing and
+    construction are also the record's recomputed composite -- the trivial
+    case validation must accept. This is the fixture write-side tests use;
+    `_manifest()` stays v1 for parser, historical-read, supersession, and
+    migration tests.
+    """
+    rendered = b"Group Stage Rules\n"
+    extracted = canonical_evidence_json_bytes(
+        {"schema": "ti26.rules-extracted.v1", "facts": {}}
+    ) + b"\n"
+    registry = _bound_registry()
+    resolved_observation = observation or {
+        "assertion": "present",
+        "observed_at_utc": "2026-01-01T00:00:01Z",
+        "supported_through_utc": "2026-01-01T00:00:01Z",
+        "captures": [
+            {
+                "source_url_key": "valve-ti-group-stage-rules",
+                "path": "rendered.txt",
+            }
+        ],
+        "authoritative_source_keys_checked": [],
+        "diagnostic_reason": None,
+    }
+    is_positive = resolved_observation["assertion"] == "present"
+    payloads = [
+        {"path": "authority-registry.json", "sha256": _sha(registry)},
+        {"path": "rendered.txt", "sha256": _sha(rendered)},
+    ]
+    if is_positive:
+        payloads.append({"path": "extracted.json", "sha256": _sha(extracted)})
+    payload = {
+        "schema": "ti26.evidence-manifest.v2",
+        "evidence_id": "",
+        "kind": "rules",
+        "event_id": "ti2026",
+        "subject_key": "rules:ti2026:valve:group-stage",
+        "sources": {
+            "valve-ti-group-stage-rules": {
+                "capture_path": "rendered.txt",
+                "capture_sha256": _sha(rendered),
+                "capture_method": "owner-supplied-rendered-text",
+                "published_at_utc": None,
+                "available_at_utc": "2026-01-01T00:00:00Z",
+                "observed_at_utc": "2026-01-01T00:00:01Z",
+                "supported_through_utc": "2026-01-01T00:00:01Z",
+                "retrieved_at_utc": "2026-01-01T00:00:01Z",
+                "construction": "contemporaneous",
+            }
+        },
+        "observation": resolved_observation,
+        "attestation": {
+            "fact_payload_sha256": _sha(extracted),
+            "capture_sha256s": [_sha(rendered)],
+        } if is_positive else None,
+        "authority_registry": {
+            "schema": "ti26.evidence-authority-binding.v1",
+            "path": "authority-registry.json",
+            "sha256": _sha(registry),
+            "effective_at_utc": "2025-12-31T00:00:00Z",
+        },
+        "construction": "contemporaneous",
+        "payloads": payloads,
+        "supersedes": [],
+        "producer_revision": "a" * 40,
+    }
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    return payload
+
+
 def _source_registry(
     tmp_path,
     *,
@@ -184,26 +260,40 @@ def _negative_manifest(*, checked: list[str]) -> dict[str, object]:
 def _negative_record_with_payload_bytes(
     *, checked: list[str] | None = None
 ) -> tuple[dict[str, object], dict[str, bytes]]:
-    """Build a manifest-valid absent-observation payload plus its exact payload bytes.
+    """Build a manifest-valid absent-observation v2 payload plus its exact payload bytes.
 
     In the style of `_negative_manifest`, but every declared digest is derived
     from real bytes returned alongside the manifest, so the result can be
-    handed to `write_evidence_record` -- not merely shape-validated.
+    handed to `write_evidence_record` -- not merely shape-validated. v2
+    write-side, per Task 2's amendment: `write_evidence_record` refuses v1.
     """
     checked = checked if checked is not None else ["valve-ti-group-stage-rules"]
     registry_bytes = _bound_registry()
     payload_bytes: dict[str, bytes] = {"authority-registry.json": registry_bytes}
     payloads = [{"path": "authority-registry.json", "sha256": _sha(registry_bytes)}]
     captures = []
+    sources: dict[str, object] = {}
     for key in checked:
         path = "rendered.txt" if key == "valve-ti-group-stage-rules" else f"captures/{key}.bin"
         data = f"synthetic-{key}".encode()
         payload_bytes[path] = data
         payloads.append({"path": path, "sha256": _sha(data)})
         captures.append({"source_url_key": key, "path": path})
-    payload = _manifest()
+        sources[key] = {
+            "capture_path": path,
+            "capture_sha256": _sha(data),
+            "capture_method": "synthetic-negative",
+            "published_at_utc": None,
+            "available_at_utc": "2026-01-01T00:00:00Z",
+            "observed_at_utc": "2026-01-01T00:00:01Z",
+            "supported_through_utc": "2026-01-01T00:00:01Z",
+            "retrieved_at_utc": "2026-01-01T00:00:01Z",
+            "construction": "contemporaneous",
+        }
+    payload = _manifest_v2()
     payload["payloads"] = payloads
     payload["attestation"] = None
+    payload["sources"] = sources
     payload["observation"] = {
         "assertion": "absent",
         "observed_at_utc": "2026-01-01T00:00:01Z",
@@ -333,6 +423,57 @@ def test_validate_evidence_manifest_rejects_changed_bound_registry_bytes(tmp_pat
         validate_evidence_manifest(record, _manifest(), verify_payloads=True)
 
 
+def test_v2_manifest_rejects_a_singular_source_key(tmp_path):
+    """Kills mutation: accept a v2 record that also stores source."""
+    payload = _manifest_v2()
+    payload["source"] = {
+        "source_url_key": "valve-ti-group-stage-rules",
+        "capture_method": "owner-supplied-rendered-text",
+        "available_at_utc": "2026-01-01T00:00:00Z",
+        "published_at_utc": None,
+        "retrieved_at_utc": "2026-01-01T00:00:01Z",
+    }
+    with pytest.raises(EvidenceError, match="unsupported or missing"):
+        validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
+
+
+def test_v1_manifest_rejects_a_sources_key(tmp_path):
+    """Kills mutation: accept an optional sources map under v1."""
+    payload = _manifest()
+    payload["sources"] = {}
+    with pytest.raises(EvidenceError, match="unsupported or missing"):
+        validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
+
+
+def test_v2_sources_entry_must_match_its_observation_capture(tmp_path):
+    """Kills mutation: accept a sources entry whose capture_path or capture_sha256 differs from the declared capture."""
+    payload = _manifest_v2()
+    payload["sources"]["valve-ti-group-stage-rules"]["capture_sha256"] = "0" * 64
+    payload["evidence_id"] = ""
+    payload["evidence_id"] = evidence_id_for_manifest(payload)
+    with pytest.raises(EvidenceError, match="capture_sha256"):
+        validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
+
+
+def test_v2_composite_times_are_recomputed_not_read(tmp_path):
+    """Kills mutation: accept owner-authored composite availability, observation, support, or construction."""
+    mutations = (
+        ("observation", "observed_at_utc", "2026-01-01T00:00:00Z"),
+        ("observation", "supported_through_utc", "2026-01-01T00:00:02Z"),
+        ("construction", None, "reconstructed_verified"),
+    )
+    for top_key, nested_key, bad_value in mutations:
+        payload = _manifest_v2()
+        if nested_key is None:
+            payload[top_key] = bad_value
+        else:
+            payload[top_key][nested_key] = bad_value
+        payload["evidence_id"] = ""
+        payload["evidence_id"] = evidence_id_for_manifest(payload)
+        with pytest.raises(EvidenceError, match="composite"):
+            validate_evidence_manifest(tmp_path, payload, verify_payloads=False)
+
+
 def test_roster_payload_requires_one_exact_five_account_set_per_team():
     """Kills mutation: accept a roster evidence entry with fewer than five unique accounts."""
     with pytest.raises(EvidenceError, match="five"):
@@ -418,6 +559,35 @@ def test_negative_observation_cannot_omit_a_registered_authority(tmp_path):
         validate_record_sources(record, registry)
 
 
+def test_authorization_for_another_event_does_not_authorize(tmp_path):
+    """Kills mutation: match an authorization on kind and subject while ignoring event_id."""
+    value = {
+        "schema": "ti26.evidence-source-registry.v1",
+        "effective_at_utc": "2025-12-31T00:00:00Z",
+        "sources": [
+            {
+                "source_url_key": "valve-ti-group-stage-rules",
+                "authorizations": [
+                    {
+                        "event_id": "ti2025",
+                        "kind": "rules",
+                        "subject_key": "rules:ti2026:valve:group-stage",
+                    }
+                ],
+            }
+        ],
+    }
+    path = tmp_path / "registry.json"
+    path.write_bytes(canonical_evidence_json_bytes(value) + b"\n")
+    registry = load_source_registry(path)
+    assert authoritative_source_keys_for(
+        registry, "ti2026", "rules", "rules:ti2026:valve:group-stage"
+    ) == ()
+    assert authoritative_source_keys_for(
+        registry, "ti2025", "rules", "rules:ti2026:valve:group-stage"
+    ) == ("valve-ti-group-stage-rules",)
+
+
 def test_write_evidence_record_binds_written_bytes_and_writes_manifest_last(tmp_path, monkeypatch):
     """Kills mutation: create manifest.json before validating every payload digest."""
     seen_manifest = []
@@ -433,7 +603,7 @@ def test_write_evidence_record_binds_written_bytes_and_writes_manifest_last(tmp_
 
     monkeypatch.setattr(Path, "open", observing_open)
     record = write_evidence_record(
-        tmp_path, _manifest(),
+        tmp_path, _manifest_v2(),
         {"authority-registry.json": _bound_registry(), "rendered.txt": b"Group Stage Rules\n", "extracted.json": canonical_json_bytes({"schema": "ti26.rules-extracted.v1", "facts": {}}) + b"\n"},
     )
     assert seen_manifest == [True]
@@ -443,8 +613,8 @@ def test_write_evidence_record_binds_written_bytes_and_writes_manifest_last(tmp_
 def test_write_evidence_record_reuses_only_an_identical_complete_record(tmp_path):
     """Kills mutation: reject an identical complete content-addressed retry or overwrite different bytes."""
     payloads = {"authority-registry.json": _bound_registry(), "rendered.txt": b"Group Stage Rules\n", "extracted.json": canonical_json_bytes({"schema": "ti26.rules-extracted.v1", "facts": {}}) + b"\n"}
-    write_evidence_record(tmp_path, _manifest(), payloads)
-    assert write_evidence_record(tmp_path, _manifest(), payloads) == tmp_path / "rules" / _manifest()["evidence_id"]
+    write_evidence_record(tmp_path, _manifest_v2(), payloads)
+    assert write_evidence_record(tmp_path, _manifest_v2(), payloads) == tmp_path / "rules" / _manifest_v2()["evidence_id"]
 
 
 def test_write_evidence_record_rejects_caller_digest_that_does_not_describe_bytes(tmp_path):
@@ -452,10 +622,44 @@ def test_write_evidence_record_rejects_caller_digest_that_does_not_describe_byte
     payload, payload_bytes = _negative_record_with_payload_bytes()
     corrupted = next(entry for entry in payload["payloads"] if entry["path"] != "authority-registry.json")
     corrupted["sha256"] = "0" * 64
+    # Also corrupt the matching `sources` entry's `capture_sha256` to the same
+    # wrong value, so the manifest is internally self-consistent (both fields
+    # agree) and only a write-time re-hash of the actual bytes -- not the
+    # capture-anchored shape cross-check -- can catch the lie.
+    for entry in payload["sources"].values():
+        if entry["capture_path"] == corrupted["path"]:
+            entry["capture_sha256"] = "0" * 64
     payload["evidence_id"] = ""
     payload["evidence_id"] = evidence_id_for_manifest(payload)
     with pytest.raises(EvidenceError, match="sha256"):
         write_evidence_record(tmp_path, payload, payload_bytes)
+
+
+def test_write_evidence_record_rejects_v1_new_write(tmp_path):
+    """Kills mutation: permit creation of a new legacy-v1 evidence record."""
+    payload = _manifest()
+    payload_bytes = {
+        "authority-registry.json": _bound_registry(),
+        "rendered.txt": b"Group Stage Rules\n",
+        "extracted.json": canonical_evidence_json_bytes(
+            {"schema": "ti26.rules-extracted.v1", "facts": {}}
+        ) + b"\n",
+    }
+    with pytest.raises(EvidenceError, match="v1"):
+        write_evidence_record(tmp_path, payload, payload_bytes)
+
+
+def test_sole_source_returns_the_one_entry_and_raises_for_multi_source(tmp_path):
+    """Kills mutation: return an arbitrary entry instead of raising for a multi-source record."""
+    single = validate_evidence_manifest(tmp_path, _manifest_v2(), verify_payloads=False)
+    assert single.sole_source.source_url_key == "valve-ti-group-stage-rules"
+
+    multi_payload, _ = _negative_record_with_payload_bytes(
+        checked=["valve-ti-group-stage-rules", "valve-ti-series-page"]
+    )
+    multi = validate_evidence_manifest(tmp_path, multi_payload, verify_payloads=False)
+    with pytest.raises(EvidenceError, match="multiple sources"):
+        _ = multi.sole_source
 
 
 def test_present_evidence_requires_availability_no_later_than_cutoff(tmp_path):
@@ -821,17 +1025,23 @@ def _write_release_record(
         attestation = None
 
     manifest = {
-        "schema": "ti26.evidence-manifest.v1",
+        "schema": "ti26.evidence-manifest.v2",
         "evidence_id": "",
         "kind": kind,
         "event_id": "ti2026",
         "subject_key": subject_key,
-        "source": {
-            "source_url_key": _RELEASE_SOURCE_KEY,
-            "capture_method": "owner-supplied-capture",
-            "available_at_utc": available_at_utc,
-            "published_at_utc": None,
-            "retrieved_at_utc": observed_at_utc,
+        "sources": {
+            _RELEASE_SOURCE_KEY: {
+                "capture_path": capture_path,
+                "capture_sha256": _sha(capture_bytes),
+                "capture_method": "owner-supplied-capture",
+                "published_at_utc": None,
+                "available_at_utc": available_at_utc,
+                "observed_at_utc": observed_at_utc,
+                "supported_through_utc": observed_at_utc,
+                "retrieved_at_utc": observed_at_utc,
+                "construction": construction,
+            }
         },
         "observation": observation,
         "attestation": attestation,
@@ -1173,7 +1383,10 @@ def test_committed_valve_rules_evidence_is_complete_and_reconciles_with_shipping
     catalog = load_release_evidence(Path("data/evidence"))
     rules_records = [record for record in catalog.records if record.subject_key == RELEASE_SUBJECTS["rules"]]
     assert rules_records
-    cutoff = max(record.source.available_at_utc for record in rules_records)
+    # Version-neutral: a v1 ancestor stores `available_at_utc` directly, a v2
+    # descendant derives it from `sources` -- never read `record.source`
+    # directly, which a multi-source v2 record would not have.
+    cutoff = max(record.available_at_utc for record in rules_records)
     current = select_current_evidence(
         catalog.records,
         "rules",
@@ -1182,3 +1395,215 @@ def test_committed_valve_rules_evidence_is_complete_and_reconciles_with_shipping
     )
     extracted = json.loads((current.selected.root / "extracted.json").read_text(encoding="utf-8"))
     assert reconcile_rules_facts(shipping_rules_facts("config/ti2026_rules.yaml"), extracted) == []
+
+
+# --- v1-to-v2 migration ------------------------------------------------------
+#
+# `write_evidence_record` refuses v1 outright, so a migration test that needs
+# a real on-disk v1 record cannot use it; `_write_v1_record` writes one
+# directly, exactly modelling immutable pre-v2-only-write history.
+
+
+def _migratable_v1_manifest_and_payloads(
+    *,
+    capture_method: str = "owner-supplied-original-capture",
+    available_at_utc: str = "2026-01-01T00:00:00Z",
+    observed_at_utc: str = "2026-01-01T00:00:01Z",
+    retrieved_at_utc: str = "2026-01-01T00:00:02Z",
+    extra_capture: bool = False,
+    supersedes: tuple[str, ...] = (),
+) -> tuple[dict[str, object], dict[str, bytes]]:
+    """Build a single-source, migration-eligible v1 manifest plus its exact payload bytes.
+
+    Mirrors `_manifest()`'s shape but uses distinct available/observed/
+    retrieved timestamps and a distinctive `capture_method`, so a migration
+    test can prove every source field is actually lifted -- not merely
+    re-asserted identically by coincidence. `extra_capture=True` adds a
+    second, differently-keyed capture so the single-source precondition can
+    be exercised.
+    """
+    rendered = b"Group Stage Rules\n"
+    extracted = canonical_evidence_json_bytes(
+        {"schema": "ti26.rules-extracted.v1", "facts": {}}
+    ) + b"\n"
+    registry = _bound_registry()
+    captures = [{"source_url_key": "valve-ti-group-stage-rules", "path": "rendered.txt"}]
+    payload_bytes = {
+        "authority-registry.json": registry,
+        "rendered.txt": rendered,
+        "extracted.json": extracted,
+    }
+    payloads = [
+        {"path": "authority-registry.json", "sha256": _sha(registry)},
+        {"path": "rendered.txt", "sha256": _sha(rendered)},
+        {"path": "extracted.json", "sha256": _sha(extracted)},
+    ]
+    capture_digests = [_sha(rendered)]
+    if extra_capture:
+        secondary = b"secondary capture bytes"
+        captures.append(
+            {"source_url_key": "valve-ti-series-page", "path": "captures/valve-ti-series-page.bin"}
+        )
+        payload_bytes["captures/valve-ti-series-page.bin"] = secondary
+        payloads.append({"path": "captures/valve-ti-series-page.bin", "sha256": _sha(secondary)})
+        capture_digests.append(_sha(secondary))
+    manifest = {
+        "schema": "ti26.evidence-manifest.v1",
+        "evidence_id": "",
+        "kind": "rules",
+        "event_id": "ti2026",
+        "subject_key": "rules:ti2026:valve:group-stage",
+        "source": {
+            "source_url_key": "valve-ti-group-stage-rules",
+            "capture_method": capture_method,
+            "available_at_utc": available_at_utc,
+            "published_at_utc": None,
+            "retrieved_at_utc": retrieved_at_utc,
+        },
+        "observation": {
+            "assertion": "present",
+            "observed_at_utc": observed_at_utc,
+            "supported_through_utc": observed_at_utc,
+            "captures": captures,
+            "authoritative_source_keys_checked": [],
+            "diagnostic_reason": None,
+        },
+        "attestation": {
+            "fact_payload_sha256": _sha(extracted),
+            "capture_sha256s": sorted(capture_digests),
+        },
+        "authority_registry": {
+            "schema": "ti26.evidence-authority-binding.v1",
+            "path": "authority-registry.json",
+            "sha256": _sha(registry),
+            "effective_at_utc": "2025-12-31T00:00:00Z",
+        },
+        "construction": "contemporaneous",
+        "payloads": payloads,
+        "supersedes": list(supersedes),
+        "producer_revision": "a" * 40,
+    }
+    manifest["evidence_id"] = evidence_id_for_manifest(manifest)
+    return manifest, payload_bytes
+
+
+def _write_v1_record(root: Path, manifest: dict[str, object], payload_bytes: dict[str, bytes]) -> Path:
+    """Write a v1 evidence record directly to disk, bypassing `write_evidence_record`'s v2-only gate.
+
+    Models pre-existing immutable v1 history -- exactly what the committed
+    Valve rules record already is -- never a route for producing new v1
+    evidence.
+    """
+    record = root / manifest["kind"] / manifest["evidence_id"]
+    record.mkdir(parents=True)
+    for path_text, data in payload_bytes.items():
+        destination = record / path_text
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(data)
+    (record / "manifest.json").write_bytes(canonical_evidence_json_bytes(manifest) + b"\n")
+    return record
+
+
+def test_migration_rejects_a_non_tip_v1_ancestor(tmp_path):
+    """Kills mutation: migrate any v1 record regardless of its position in the supersession graph."""
+    registry = _source_registry(tmp_path)
+    root = tmp_path / "evidence"
+    manifest_a, payloads_a = _migratable_v1_manifest_and_payloads()
+    record_a = _write_v1_record(root, manifest_a, payloads_a)
+    v1_a = validate_evidence_manifest(record_a, manifest_a, verify_payloads=True)
+    manifest_b, payloads_b = _migratable_v1_manifest_and_payloads(
+        capture_method="owner-supplied-second-capture", supersedes=(v1_a.evidence_id,)
+    )
+    record_b = _write_v1_record(root, manifest_b, payloads_b)
+    v1_b = validate_evidence_manifest(record_b, manifest_b, verify_payloads=True)
+    with pytest.raises(EvidenceError, match="tip"):
+        migrate_v1_record_to_v2(root, v1_a, (v1_a, v1_b), registry, producer_revision="a" * 40)
+
+
+def test_migration_rejects_a_multi_capture_v1_record(tmp_path):
+    """Kills mutation: synthesize per-source metadata for a v1 secondary capture."""
+    registry = _source_registry(tmp_path, additional_authority="valve-ti-series-page")
+    root = tmp_path / "evidence"
+    manifest, payloads = _migratable_v1_manifest_and_payloads(extra_capture=True)
+    record = _write_v1_record(root, manifest, payloads)
+    v1_record = validate_evidence_manifest(record, manifest, verify_payloads=True)
+    with pytest.raises(EvidenceError, match="single-source"):
+        migrate_v1_record_to_v2(root, v1_record, (v1_record,), registry, producer_revision="a" * 40)
+
+
+def test_migration_requires_identical_capture_bytes(tmp_path):
+    """Kills mutation: migrate a record whose capture bytes changed."""
+    registry = _source_registry(tmp_path)
+    root = tmp_path / "evidence"
+    manifest, payloads = _migratable_v1_manifest_and_payloads()
+    record = _write_v1_record(root, manifest, payloads)
+    v1_record = validate_evidence_manifest(record, manifest, verify_payloads=True)
+    (record / "rendered.txt").write_bytes(b"tampered rendered bytes\n")
+    with pytest.raises(EvidenceError, match="sha256"):
+        migrate_v1_record_to_v2(root, v1_record, (v1_record,), registry, producer_revision="a" * 40)
+
+
+def test_migration_requires_identical_normalized_facts(tmp_path):
+    """Kills mutation: re-extract facts during migration instead of carrying them."""
+    registry = _source_registry(tmp_path)
+    root = tmp_path / "evidence"
+    manifest, payloads = _migratable_v1_manifest_and_payloads()
+    record = _write_v1_record(root, manifest, payloads)
+    v1_record = validate_evidence_manifest(record, manifest, verify_payloads=True)
+    v2_path = migrate_v1_record_to_v2(root, v1_record, (v1_record,), registry, producer_revision="a" * 40)
+    assert (v2_path / "extracted.json").read_bytes() == payloads["extracted.json"]
+
+
+def test_migration_requires_the_original_attestation_digests_to_match(tmp_path):
+    """Kills mutation: reuse an attestation whose digests no longer match the payloads."""
+    registry = _source_registry(tmp_path)
+    root = tmp_path / "evidence"
+    manifest, payloads = _migratable_v1_manifest_and_payloads()
+    record = _write_v1_record(root, manifest, payloads)
+    v1_record = validate_evidence_manifest(record, manifest, verify_payloads=True)
+    (record / "extracted.json").write_bytes(
+        canonical_evidence_json_bytes({"schema": "ti26.rules-extracted.v1", "facts": {"changed": True}})
+        + b"\n"
+    )
+    with pytest.raises(EvidenceError, match="sha256"):
+        migrate_v1_record_to_v2(root, v1_record, (v1_record,), registry, producer_revision="a" * 40)
+
+
+def test_migration_lifts_every_source_field_mechanically(tmp_path):
+    """Kills mutation: assert a source field during migration instead of lifting it."""
+    registry = _source_registry(tmp_path)
+    root = tmp_path / "evidence"
+    manifest, payloads = _migratable_v1_manifest_and_payloads(
+        capture_method="owner-supplied-distinctive-capture",
+        available_at_utc="2026-01-01T00:00:00Z",
+        observed_at_utc="2026-01-01T00:00:01Z",
+        retrieved_at_utc="2026-01-01T00:00:02Z",
+    )
+    record = _write_v1_record(root, manifest, payloads)
+    v1_record = validate_evidence_manifest(record, manifest, verify_payloads=True)
+    v2_path = migrate_v1_record_to_v2(root, v1_record, (v1_record,), registry, producer_revision="a" * 40)
+    v2_manifest = json.loads((v2_path / "manifest.json").read_text(encoding="utf-8"))
+    entry = v2_manifest["sources"]["valve-ti-group-stage-rules"]
+    assert entry == {
+        "capture_path": "rendered.txt",
+        "capture_sha256": _sha(payloads["rendered.txt"]),
+        "capture_method": "owner-supplied-distinctive-capture",
+        "published_at_utc": None,
+        "available_at_utc": "2026-01-01T00:00:00Z",
+        "observed_at_utc": "2026-01-01T00:00:01Z",
+        "supported_through_utc": "2026-01-01T00:00:01Z",
+        "retrieved_at_utc": "2026-01-01T00:00:02Z",
+        "construction": "contemporaneous",
+    }
+
+
+def test_migration_supersedes_the_v1_record_id(tmp_path):
+    """Kills mutation: write the v2 record with an empty supersedes list."""
+    registry = _source_registry(tmp_path)
+    root = tmp_path / "evidence"
+    manifest, payloads = _migratable_v1_manifest_and_payloads()
+    record = _write_v1_record(root, manifest, payloads)
+    v1_record = validate_evidence_manifest(record, manifest, verify_payloads=True)
+    v2_path = migrate_v1_record_to_v2(root, v1_record, (v1_record,), registry, producer_revision="a" * 40)
+    v2_manifest = json.loads((v2_path / "manifest.json").read_text(encoding="utf-8"))
+    assert v2_manifest["supersedes"] == [v1_record.evidence_id]
