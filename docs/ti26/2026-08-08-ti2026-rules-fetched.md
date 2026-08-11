@@ -2,9 +2,11 @@
 
 > **Superseded as a release input.** The current TI 2026 group-stage rules
 > source is the immutable evidence record at
-> [`data/evidence/rules/b46dd6641b308dfa577c2e4fe93d41a3120499b0a86af1332a2f8230a96f5b5b/manifest.json`](../../data/evidence/rules/b46dd6641b308dfa577c2e4fe93d41a3120499b0a86af1332a2f8230a96f5b5b/manifest.json),
+> [`data/evidence/rules/1ce0dc6c91b564293ae6ce29ace34555840fe211b9a886bd24a833fbd9343a8c/manifest.json`](../../data/evidence/rules/1ce0dc6c91b564293ae6ce29ace34555840fe211b9a886bd24a833fbd9343a8c/manifest.json),
 > whose manifest hashes its rendered capture — the binding this file, by its own
-> admission below, never had. The archival prose and quoted capture below are
+> admission below, never had. That record is the manifest-v2 migration of the
+> original v1 record `b46dd664…`, which remains valid and byte-unchanged as its
+> superseded ancestor. The archival prose and quoted capture below are
 > unchanged.
 
 **Fetched 2026-08-08 from <https://www.dota2.com/esports/ti15/tirules>** with a

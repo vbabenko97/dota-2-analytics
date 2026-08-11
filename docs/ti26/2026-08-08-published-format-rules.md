@@ -1,6 +1,9 @@
 > **Superseded as a current TI 2026 rules source.** The group-stage rules Valve
 > later published are bound as immutable evidence at
-> [`data/evidence/rules/b46dd6641b308dfa577c2e4fe93d41a3120499b0a86af1332a2f8230a96f5b5b/manifest.json`](../../data/evidence/rules/b46dd6641b308dfa577c2e4fe93d41a3120499b0a86af1332a2f8230a96f5b5b/manifest.json).
+> [`data/evidence/rules/1ce0dc6c91b564293ae6ce29ace34555840fe211b9a886bd24a833fbd9343a8c/manifest.json`](../../data/evidence/rules/1ce0dc6c91b564293ae6ce29ace34555840fe211b9a886bd24a833fbd9343a8c/manifest.json),
+> the current tip. It is the manifest-v2 migration of the original v1 record
+> `b46dd664…`, which remains on disk, valid, and byte-unchanged as the
+> superseded ancestor — same capture, same facts, same owner attestation.
 > This transcript remains below, unchanged, as historical evidence of what the
 > owner saw on the morning it was supplied. The known difference between its
 > morning state and the later capture is exactly why it remains.
