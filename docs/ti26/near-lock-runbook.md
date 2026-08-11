@@ -216,16 +216,25 @@ outside `explorer_query` and outside this repository, same class as step 3.
 reverse of the arrival order this step anticipated. All eight matchups are
 archived in [the schedule archive](2026-08-10-ti2026-schedule-fetched.md);
 neither Valve page labels the groups, and the accepted input cannot represent
-Round 1 without them (`load_group_draw` requires `groups:` always). Re-check
-both pages on the day; do not derive groups from the broadcast time blocks.
+Round 1 without them (`load_group_draw` requires `groups:` always).
 
-**Recorded owner policy (2026-08-10) for this state: hard stop.** If the groups
-are still unpublished at regeneration time, do not run step 6 unconditioned —
-that would knowingly discard a published Round 1 — and do not modify
-`load_group_draw` to accept Round 1 alone, which is a predictive-behavior
-change requiring its own reviewed amendment. Stop and put the decision to the
-owner. The expected resolution is the groups publishing before lock day, since
-Rounds 2–4 cannot run without them.
+**Recorded owner decision (2026-08-11), superseding the two paragraphs that
+stood here:** take the broadcast time blocks as the group split. The earlier
+text recorded the opposite instruction — "do not derive groups from the
+broadcast time blocks" — together with a hard stop for exactly this state. Both
+are withdrawn by owner decision, and the resulting draw is committed at
+[`data/ti2026_groups.yaml`](../../data/ti2026_groups.yaml) with its basis
+stated in the file.
+
+What did NOT change: Valve still labels no groups, so this is an owner
+inference from the schedule, not a published draw. If Valve publishes a group
+draw that contradicts the file, the file is wrong and any run that consumed it
+is withdrawn rather than adjusted. `load_group_draw` is still not modified to
+accept Round 1 without groups; that remains a predictive-behavior change
+requiring its own reviewed amendment.
+
+Still re-check both pages on the day: a published draw supersedes the
+inference, and finding one is the better outcome.
 
 **If neither has been published:** run step 6 unchanged, then confirm the card
 averaged over draws rather than silently taking one:

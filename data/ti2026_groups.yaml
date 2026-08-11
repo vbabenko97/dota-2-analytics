@@ -1,0 +1,56 @@
+# TI 2026 group split and Round 1 pairings.
+#
+# Round 1 is PUBLISHED. The groups are NOT. Valve's schedule lists the eight
+# opening matchups in two broadcast blocks and labels neither block a group.
+#
+# The split below is an OWNER DECISION dated 2026-08-11: take the broadcast
+# blocks as the group split. Round 1 pairs inside the initial group, so a
+# published Round 1 partitions the sixteen teams into two sets of eight, and
+# the blocks reproduce that partition exactly. That is consistent with a group
+# split; it is not a statement by Valve that these are the groups.
+#
+# This supersedes the 2026-08-10 runbook line "do not derive groups from the
+# broadcast time blocks" and the hard-stop policy recorded with it. See
+# near-lock runbook section 5b.
+#
+# What is at stake if the inference is wrong: rounds 2 and 3 pair inside the
+# initial group and round 4 pairs across it, so an incorrect split produces a
+# confident forecast of a bracket that does not exist. If Valve publishes a
+# group draw that differs from this file, this file is wrong and the run that
+# consumed it is withdrawn, not adjusted.
+#
+# Source: the owner's 2026-08-11 capture of Valve's schedule page, archived in
+# docs/ti26/2026-08-10-ti2026-schedule-fetched.md. Team names are the
+# configured spellings in config/ti2026_teams.yaml, not the page's casing.
+
+groups:
+  # 04:00 CEST block, Thursday 13 August.
+  A:
+    - Team Falcons
+    - LGD Gaming
+    - Iron Wing
+    - Nigma Galaxy
+    - BoomBoys
+    - OG
+    - Team Vision
+    - Team Resilience
+  # 07:00 CEST block, Thursday 13 August.
+  B:
+    - Team Spirit
+    - Xtreme Gaming
+    - Team Liquid
+    - Vici Gaming
+    - Aurora Gaming
+    - GamerLegion
+    - Team Yandex
+    - HULIGANI
+
+round_one:
+  - [Team Falcons, LGD Gaming]
+  - [Iron Wing, Nigma Galaxy]
+  - [BoomBoys, OG]
+  - [Team Vision, Team Resilience]
+  - [Team Spirit, Xtreme Gaming]
+  - [Team Liquid, Vici Gaming]
+  - [Aurora Gaming, GamerLegion]
+  - [Team Yandex, HULIGANI]

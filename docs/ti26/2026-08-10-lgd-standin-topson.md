@@ -20,15 +20,56 @@ reported by [GosuGamers](https://www.gosugamers.net/dota2/news/78933-lgd-gaming-
 and multiple other outlets. GosuGamers is the same class of source
 `config/ti2026_teams.yaml` already cites for the field cross-check.
 
+## Account ids, resolved 2026-08-11 through the explorer seam
+
+The owner authorized resolving these rather than supplying them. They were read
+from OpenDota's curated `notable_players` table through `explorer_query`, the
+project's only network path — the same class of resolution
+`config/ti2026_teams.yaml` used for team ids. They were not recalled from
+memory and none was invented.
+
+| player | account id | `notable_players` country | owner's list |
+|---|---|---|---|
+| TaiLung | 1026694469 | pe | (absent — replaced) |
+| Topson | 94054712 | fi | Finland |
+| Yuma | 177203952 | af | Nicaragua |
+| Wisper | 292921272 | bo | Bolivia |
+| Thiolicor | 105045291 | br | Brazil |
+| KJ = KingJungles | 81306398 | br | Brazil |
+
+The five ids above other than Topson's are exactly the configured LGD roster,
+so the substitution is unambiguous: **remove 1026694469, add 94054712.**
+
+Two identification cautions, recorded rather than smoothed over. OpenDota
+carries two further accounts named `topson` and `TOPSON`, registered to
+ProstoServak Team and Novus; neither is this player. And `notable_players`
+gives Yuma's country as `af`, which contradicts the owner's list — an upstream
+data quirk that does not affect the account set, since Yuma's id was already
+configured and is unchanged.
+
+`notable_players` still lists Topson's registered team as Tundra Esports. That
+field lags roster moves and is not evidence of who he plays for now; the
+substitution rests on the reporting cited above, not on it.
+
 ## What is NOT established here
 
-- **Account ids.** This note deliberately binds no account id to either player.
-  The configured LGD entry (`config/ti2026_teams.yaml`, team_id 10150538)
-  records the five accounts the roster fielded; which of them is TaiLung's, and
-  what Topson's account id is, are identity claims that need their own evidence
-  before anyone edits a config or an alias. Do not guess them from memory.
 - **Organizer-approval details.** The primary article does not state the terms
   of the substitution's approval.
+- **Any rating for the standin roster.** See the next section: the account set
+  containing 94054712 has never played a map in this corpus.
+
+## The standin roster has no history in the committed store
+
+Checked 2026-08-11 against `data/processed/release-20260802T165535Z.sqlite`,
+the store the pinned snapshot builds: **no map fields the exact standin five,
+and no map fields Topson's account alongside any current LGD account.** Both
+are counts of zero, so there is nothing here to bind or restate. Topson's own
+maps in this store are under a different team id entirely, and none is recent
+relative to the snapshot.
+
+That makes the consequence below concrete rather than hypothetical: the standin
+roster hash is a cold start. It has no rating to inherit and no continuity to
+claim, and manufacturing either would be fabrication.
 
 ## What this means for the forecast
 

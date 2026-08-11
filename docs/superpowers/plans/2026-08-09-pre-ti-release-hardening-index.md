@@ -81,6 +81,18 @@ in exactly this state (see `docs/ti26/2026-08-10-ti2026-schedule-fetched.md`);
 the resolution everyone should expect is the groups publishing before lock day,
 since Rounds 2–4 cannot run without them.
 
+**Owner decision (2026-08-11) resolving that state:** the owner has supplied the
+group split by taking the broadcast time blocks, committed at
+`data/ti2026_groups.yaml`. This resolves the stop by supplying groups, not by
+weakening the rule: `load_group_draw` is unmodified, no Round-1-only
+conditioning was implemented, and the release path still requires a complete
+`groups:` mapping. The split is an owner inference from the schedule and is
+recorded as such — it is not a published Valve draw, and no evidence record
+claims it is. Under Plan 2's evidence contract a groups record still needs its
+own capture, authorization, and attestation before it can satisfy the
+`draws:ti2026:event-authority:groups` subject; the committed file is a release
+input, not evidence.
+
 **Recorded owner constraint (2026-08-10) — LGD roster standin:** external
 reporting has Topson replacing the banned TaiLung
 (`docs/ti26/2026-08-10-lgd-standin-topson.md`). Once Plan 3 is implemented and
