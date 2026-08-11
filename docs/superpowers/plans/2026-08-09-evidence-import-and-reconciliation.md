@@ -41,9 +41,13 @@ This is pre-TI hardening plan 2 from the approved design at `docs/superpowers/sp
 The new manifest schemas use string identifiers rather than an integer schema field:
 
 ```python
-EVIDENCE_MANIFEST_SCHEMA = "ti26.evidence-manifest.v1"
+EVIDENCE_MANIFEST_SCHEMA_V1 = "ti26.evidence-manifest.v1"
+EVIDENCE_MANIFEST_SCHEMA_V2 = "ti26.evidence-manifest.v2"
+EVIDENCE_MANIFEST_WRITE_SCHEMA = EVIDENCE_MANIFEST_SCHEMA_V2
 RULES_EXTRACTED_SCHEMA = "ti26.rules-extracted.v1"
 ```
+
+**Amended 2026-08-11 — read this before implementing anything below.** Both manifest versions are live: v1 is read-only legacy with a required singular `source`, v2 is what every writer emits and carries a required `sources` map instead. The two exact key sets are separate constants and `validate_evidence_manifest` dispatches on the exact `schema` value; no record straddles versions. Task 1's snippets and fixtures in the sections that follow are the **v1** contract, and they remain correct for reading historical records — but a worker implementing them as the write path would produce v1 records, which is wrong. The v2 contract, the multi-source import metadata document, the prediction-shape producer, and the executable v1→v2 migration are specified in the published-format section and its neighbours later in this plan. Read those before writing the writer.
 
 All evidence JSON producer output is `canonical_evidence_json_bytes(value) + b"\n"`, implemented locally with the same `json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)` contract as `ti26.provenance.canonical_json_bytes`; a test proves byte equality without making the production evidence module import the much wider run-provenance graph. Paths stored in manifests are POSIX-relative to the evidence-record directory, must name regular files, and may not contain a symlink, `.` component, `..` component, backslash, or absolute prefix. `evidence_id` is never an owner input: `evidence_descriptor(manifest_without_id)` returns the semantic descriptor containing all manifest fields except `evidence_id`, with every set-like field canonical-sorted; `evidence_id = sha256(canonical_evidence_json_bytes(descriptor)).hexdigest()`. The descriptor binds each payload digest, every capture mapping, and the record-local authority-registry digest/version. The producer first canonicalizes all payload bytes in memory, computes their digests, derives the descriptor and destination `data/evidence/<kind>/<evidence_id>/`, then exclusive-creates payload files, revalidates their on-disk digests, and exclusive-creates `manifest.json` last. The manifest repeats the derived identifier and is the completeness marker. A directory without it is incomplete and requires explicit owner recovery; identical inputs cannot honestly choose a different content identifier.
 
@@ -243,7 +247,7 @@ Define the generic `kind` payload contracts now: `rules` requires source capture
 
 Add immutable `EvidenceSource`/`EvidenceSourceRegistry` types plus `load_source_registry(path)`, `authoritative_source_keys_for(registry, kind, subject_key)`, `validate_record_sources(record, registry)`, and `load_evidence_catalog(root, registry)`. `source-registry.json` has exact schema `ti26.evidence-source-registry.v1`; each entry has one safe stable `source_url_key` and duplicate-free exact `authorizations`, each `{kind, subject_key}`. It grants no wildcard or kind-only authority. `authoritative_source_keys_for` returns the complete sorted authority set for one exact pair. Import and release loading require the primary source to be authorized for that exact pair; a negative record's checked and captured source-key sets must equal—not merely be subsets of—that derived set. The owner cannot choose a subset. The registry carries no raw URL and is itself a declared release input in Plan 3. `load_evidence_catalog` lstat-validates, loads, and source-validates every existing immutable record for importer preflight. Synthetic tests build a local registry; Task 8 adds the owner-reviewed current Valve entry rather than inventing future participant, roster, or draw authorities.
 
-`validate_record_sources` must authorize every positive capture source for the exact `(kind, subject_key)`, not only `source.source_url_key`; add `test_positive_capture_rejects_an_unregistered_secondary_source` with docstring `Kills mutation: authorize only the primary capture source.` Mutate the per-capture registry loop out, observe that node fail, restore, and rerun GREEN.
+Under v2 there is no `source.source_url_key` and no primary source: the phrase "primary source" in this section and the next is v1 vocabulary, and a v2 record's authorization is checked over every entry in `sources`, which the capture-anchored invariant already equates with the observation's capture keys. `validate_record_sources` must authorize every positive capture source for the exact `(kind, subject_key)`, not only `source.source_url_key`; add `test_positive_capture_rejects_an_unregistered_secondary_source` with docstring `Kills mutation: authorize only the primary capture source.` Mutate the per-capture registry loop out, observe that node fail, restore, and rerun GREEN.
 
 Graph applicability is `available_at_utc` for present assertions and `max(available_at_utc, observed_at_utc)` for absent assertions; use it in both maximal-tip filtering and importer boundary checks. The new negative-before-observation test must fail when this function is mutated to use availability alone.
 
@@ -839,18 +843,22 @@ The first real capture falsified the original contract, and this section replace
 
 **Owner ruling 2026-08-11: the manifest is versioned, and `sources` is required in v2.** The umbrella spec now defines both versions; this plan implements them.
 
-`ti26.evidence-manifest.v2` replaces the singular `source` with a required `sources` map keyed by `source_url_key`, each entry carrying `capture_path`, `capture_sha256`, `capture_method`, `published_at_utc`, `available_at_utc`, `observed_at_utc`, `retrieved_at_utc`, and `construction`. Every fact's `source_url_key` must name an entry, and every entry must be named by at least one fact — no unused captures, no unsupported facts. **v2 carries no singular `source` field at all**; two independently supplied truths would only invite disagreement between them. Code needing one source uses a derived accessor on the parsed record that returns the sole entry for a one-source record and raises for a multi-source one, rather than nominating a winner.
+`ti26.evidence-manifest.v2` replaces the singular `source` with a required `sources` map keyed by `source_url_key`, each entry carrying `capture_path`, `capture_sha256`, `capture_method`, `published_at_utc`, `available_at_utc`, `observed_at_utc`, `supported_through_utc`, `retrieved_at_utc`, and `construction`. **v2 carries no singular `source` field at all**; two independently supplied truths would only invite disagreement between them. Code needing one source uses a derived accessor on the parsed record that returns the sole entry for a one-source record and raises for a multi-source one, rather than nominating a winner.
 
-Four record-level values are **derived by validation and recomputed on every read**, never accepted as written, over the sources the record's mandatory facts require:
+The generic invariant is capture-anchored, exactly as the umbrella spec now defines it: `sources.keys` equals the observation's capture source-key set, each entry's `capture_path` equals that capture's path, and each `capture_sha256` equals that path's declared payload digest. Field-level `source_url_key` references are required only of payload schemas that carry them (`rules-format-extracted.v2`, `prediction-shape-extracted.v1`); a release-authoritative multi-source positive composite additionally requires every entry to support at least one mandatory fact; a negative record requires `sources.keys` to equal both its capture source keys and its `authoritative_source_keys_checked`. A one-source positive record's sole source implicitly supports its whole normalized payload, and no fictional fact reference is invented to satisfy a rule.
+
+Five record-level values are **derived by validation and recomputed on every read**, never accepted as written, over a support set that depends on the assertion — the sources supporting mandatory facts for a positive record, every checked authoritative capture source for a negative one:
 
 ```text
-available_at_utc = max(source available_at_utc)
-observed_at_utc  = max(source observed_at_utc)
-retrieved_at_utc = max(source retrieved_at_utc)
-construction     = weakest(source construction)
+available_at_utc      = max(support-set available_at_utc)
+observed_at_utc       = max(support-set observed_at_utc)
+retrieved_at_utc      = max(support-set retrieved_at_utc)
+supported_through_utc = min(support-set supported_through_utc)
+construction          = weakest(support-set construction)
+require observed_at_utc <= supported_through_utc
 ```
 
-A record is not current at a cutoff earlier than its last required source, and one `reconstructed_unknown` source makes the whole record `reconstructed_unknown`.
+A record is not current at a cutoff earlier than its last required source; support ends where its earliest-lapsing source's does; and one `reconstructed_unknown` source makes the whole record `reconstructed_unknown`. Because this schema registers no freshness allowance, a negative record whose authorities were observed at different times fails the final check and is unusable — so the authorities behind one negative record are observed together, and widening that interval requires a registered allowance with its own field and tests.
 
 **v1 stays valid; it is not invalidated.** The earlier draft of this section wrongly said the committed record "no longer validates". Immutable history remains valid under the schema that created it, and complete records are never overwritten. So: keep the v1 validator for historical records, make the writer emit only v2, and reject an optional `sources` under v1 outright — one schema version with two structural meanings is exactly the ambiguity being removed.
 
@@ -865,6 +873,10 @@ A record is not current at a cutoff earlier than its last required source, and o
 5. no source metadata is newly asserted rather than lifted.
 
 Fresh attestation **is** required whenever a capture changes, the normalized facts change, a source is added, or any source metadata is newly asserted.
+
+**The migration needs an executable step, not only a policy.** Register `migrate_v1_record_to_v2(...)` in `ti26.evidence` and importer subcommand `cli_evidence_import migrate-v1`. It takes the existing v1 record as its **only** evidence source and accepts **no replacement capture, metadata, timestamp, or attestation arguments** — that argument-level refusal is what makes it a migration rather than a re-import wearing convenient new metadata. It reconstructs the single `sources` entry mechanically from the v1 `source` and `observation` fields, reuses the existing attestation only after verifying all five conditions, sets `supersedes` to the v1 evidence ID, and writes the v2 record through the same exclusive `write_evidence_record` path with `manifest.json` last.
+
+Named tests, one per condition plus the argument surface, each observed RED then restored GREEN: `test_migration_rejects_any_replacement_capture_or_metadata_argument` (`Kills mutation: accept --capture or --source on the migrate route.`), `test_migration_requires_identical_capture_bytes` (`Kills mutation: migrate a record whose capture bytes changed.`), `test_migration_requires_identical_normalized_facts` (`Kills mutation: re-extract facts during migration instead of carrying them.`), `test_migration_requires_the_original_attestation_digests_to_match` (`Kills mutation: reuse an attestation whose digests no longer match the payloads.`), `test_migration_lifts_every_source_field_mechanically` (`Kills mutation: assert a source field during migration instead of lifting it.`), and `test_migration_supersedes_the_v1_record_id` (`Kills mutation: write the v2 record with an empty supersedes list.`).
 
 Option B — one ordinary record per source plus a manifest-bound composition artifact — was considered and not chosen. Under Plan 2's model each `(kind, subject)` resolves to exactly one current tip, so several non-superseding records under one subject are a fork and are rejected; Option B would therefore need either one subject per source or a composition record that owns no captures of its own, both of which add more contract than the versioned manifest.
 
@@ -922,6 +934,20 @@ The illustrative shape of the reconciled result, values included only to show th
   "derived_config": {"derivation": "derive_swiss_thresholds.v1", "advance_at_wins": 4, "eliminate_at_losses": 4}
 }
 ```
+
+**The prediction-shape subject needs a producer, or it is the old blocker with a new name.** Making it a required release subject without an extractor, schema, importer route, or capture representation would replace one unsatisfiable subject with another, and Plan 3 would hard-stop forever on the new one. Register all of it:
+
+- Schema `ti26.prediction-shape-extracted.v1`, one fact per category with `value`, `source_url_key`, and `span_sha256`, plus the complete `categories` set as an ordered fact carrying its own span. The `rules` importer cannot produce it (it runs the group-stage extraction) and `rules-format` is constrained to the other subject, so add importer subcommand `prediction-shape`, accepting subject `rules:ti2026:event-format:prediction-shape` only and calling `extract_ti2026_prediction_shape`.
+- `extract_ti2026_prediction_shape(rendered)` follows the same rules as the other extractors: exact required whole-line fragments, absence and duplication distinguished, ordered, and every span digest over the exact supporting substring rather than the page.
+- `reconcile_release_evidence` then calls `derive_swiss_thresholds` on the **captured** category set and compares against `config/ti2026_rules.yaml`, as specified above.
+- Tests: `test_prediction_shape_extractor_requires_every_category_span` (`Kills mutation: emit a category fact with no supporting span.`), `test_prediction_shape_import_rejects_the_rules_subject` (`Kills mutation: let the prediction-shape mode write the group-stage subject.`), and `test_release_reconciliation_derives_thresholds_from_captured_categories` (`Kills mutation: compare thresholds against a plan-stated category set instead of the captured one.`). Observe RED on each, restore GREEN.
+
+**Capture representation, decided rather than assumed.** The compendium card this evidence describes was supplied as a screenshot, and **an image has no UTF-8 span** — a span digest over image bytes would be a category error dressed as provenance. Two admissible paths, and no third:
+
+1. **Textual UI capture** — if the compendium surface can be captured as text, that capture is the sole payload, spans are computed over it, and `construction` is `contemporaneous`. Preferred.
+2. **Screenshot plus owner transcription** — the image is retained as a digest-bound payload with no spans, and the owner's transcription is a second UTF-8 payload over which every span is computed. The record must carry both, the attestation covers both digests, and `construction` is `reconstructed_verified`: a human step sits between the artifact and the text, and the class must say so. It is never `contemporaneous`, and the transcription is never presented as a capture of the source.
+
+Do not add a third path in which an image alone supports a span-bound fact.
 
 **Redundant claims get a consistency check, not independence.** Several of these fields constrain each other — `main_event_slots` is the sum of the direct advancers and the elimination-round advancers, and `elimination_round_rank_range` spans exactly the teams the elimination matches consume. Where both a total and its components are retained, reconciliation asserts their arithmetic relationship explicitly and fails closed on violation, rather than recording them as unrelated observations that happen to agree.
 
@@ -1065,6 +1091,37 @@ Implement `clean_head_revision(repo_root: Path) -> str` as the only local-Git bo
 Parse source JSON with exactly `source_url_key`, `capture_method`, `available_at_utc`, `published_at_utc`, `retrieved_at_utc`, `assertion`, `observed_at_utc`, `supported_through_utc`, `authoritative_source_keys_checked`, `attestation`, and `construction`. Load the source registry and require the primary and every checked key to authorize this exact kind/subject. For `present`, require the primary capture and no checked-source list. For `absent`, require keyed captures exactly equal to the registry-derived complete authority set, not a user subset. Participants and rosters accept only `present`; draw accepts `present/published` or `absent/unpublished`; rules accepts only `present`. Non-rules `--facts` is parsed as exact JSON, validated with `validate_kind_payload`, then re-serialized canonically before hashing. Positive normalized facts require an owner attestation in the source JSON whose fact payload digest and sorted referenced capture digests equal the computed bytes; reject swapped facts/captures. Before any write, call `load_evidence_catalog(root, registry)`, calculate all same-kind/subject maximal current tips at the incoming available time, and require `set(--supersedes)` to equal that entire set (empty only for a new subject). A catalog fork therefore requires superseding every tip; a stale/incomplete predecessor set fails. Derive the manifest and content ID in memory and call `write_evidence_record` once. Its verified identical-complete branch returns the old path; an immutable fork or incomplete destination fails.
 
 For a present observation, validate every `--capture SOURCE_URL_KEY` against the exact `(kind, subject_key)` registry authorization, including secondary captures; no primary-only shortcut is allowed. `test_import_rejects_unregistered_positive_secondary_capture` must remove that per-capture check, observe RED, restore GREEN.
+
+**Multi-source import metadata (amended 2026-08-11).** The paragraph above describes the v1 singular metadata document, and it cannot express a v2 record: `--capture` repeats but `--source` does not, so there is nowhere to supply February metadata and May metadata independently. Rather than inventing "primary source" semantics, `--source` accepts a v2 document whose per-source map mirrors the capture arguments:
+
+```json
+{
+  "schema": "ti26.evidence-import-metadata.v2",
+  "assertion": "present",
+  "authoritative_source_keys_checked": [],
+  "diagnostic_reason": null,
+  "attestation": {"fact_payload_sha256": "...", "capture_sha256s": ["..."]},
+  "sources": {
+    "<source-key>": {
+      "capture_method": "...",
+      "published_at_utc": "...",
+      "available_at_utc": "...",
+      "observed_at_utc": "...",
+      "supported_through_utc": "...",
+      "retrieved_at_utc": "...",
+      "construction": "..."
+    }
+  }
+}
+```
+
+`capture_path` and `capture_sha256` are **derived by the importer** from the `--capture` arguments and never typed into a second place, so the owner cannot desynchronize a digest from its file. The document's exact top-level keys are the eight above; each source entry's keys are exactly the seven above; and the importer enforces one equality that makes a missing or surplus source impossible:
+
+```text
+metadata.sources.keys == the set of --capture SOURCE_URL_KEY arguments
+```
+
+Add `test_import_metadata_sources_must_equal_capture_keys` (`Kills mutation: accept metadata describing a source the command did not capture.`) covering both directions — a metadata source with no capture, and a capture with no metadata — and `test_importer_derives_capture_paths_and_digests` (`Kills mutation: read capture_path or capture_sha256 from owner metadata instead of the captured file.`). Observe RED on each, restore GREEN. The v1 metadata document remains readable only for the `migrate-v1` route below; every other import mode requires v2.
 
 Before new-content supersession validation, derive the candidate content ID and call pure `validate_existing_exact(root, kind, evidence_id, canonical_manifest, payloads)`: it lstat-validates an existing destination and returns only a complete byte-identical record; if absent it returns `None`, and if incomplete/different it raises. Return a verified existing path immediately; only an absent candidate proceeds to supersession validation and then calls `write_evidence_record` once. For genuinely new content, validate the full graph at every existing and candidate graph-applicability boundary: each exact subject has one maximal tip, or the candidate supersedes every globally current maximal tip. This prevents a backdated fork, not merely a fork at the incoming timestamp. Add `test_identical_retry_precedes_supersession_validation` (`Kills mutation: check supersedes before returning an identical complete record.`) and `test_import_rejects_backdated_fork` (`Kills mutation: validate only tips at the incoming timestamp.`); bypass `validate_existing_exact` or the global-boundary check in turn, observe each node RED, restore, then GREEN.
 

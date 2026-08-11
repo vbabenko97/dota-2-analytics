@@ -256,23 +256,74 @@ both are exact:
 - **v2** carries a required `sources` map keyed by `source_url_key` and has **no**
   singular `source` field. Each entry carries `capture_path`, `capture_sha256`,
   `capture_method`, `published_at_utc`, `available_at_utc`, `observed_at_utc`,
-  `retrieved_at_utc`, and `construction`. Every fact names an entry; every entry
-  is named by at least one fact.
+  `supported_through_utc`, `retrieved_at_utc`, and `construction`.
 
 Writers emit only v2. Readers accept both. There is never an optional `sources`
 under v1: one schema version with two structural meanings is the ambiguity this
 contract exists to prevent.
 
-A v2 record's composite values are **derived by validation and recomputed on
-every read**, never accepted as owner-written summaries. Over the sources its
-mandatory facts require:
+**The generic invariant is capture-anchored, not fact-anchored.** An earlier
+draft required every fact to name a source entry and every entry to be named by
+a fact. That is satisfiable only by payload schemas carrying field-level support,
+and it makes participants, rosters, group-stage rules, draw facts, and above all
+negative records structurally impossible — a negative record may have no factual
+payload at all. Since writers must emit v2, that draft would have made new
+`unpublished` evidence unwritable, and lock-day `groups: unpublished` and
+`round_one: unpublished` are required release inputs. The generic rule is
+therefore:
 
 ```text
-available_at_utc = max(source available_at_utc)
-observed_at_utc  = max(source observed_at_utc)
-retrieved_at_utc = max(source retrieved_at_utc)
-construction     = weakest(source construction)
+sources.keys == {capture.source_url_key for capture in observation.captures}
+sources[key].capture_path   == the observation capture path for key
+sources[key].capture_sha256 == the declared payload digest of that path
 ```
+
+A one-source positive record's sole source implicitly supports its complete
+normalized payload; no fact-level reference is invented to satisfy a rule.
+Two stronger rules apply only where they are meaningful:
+
+```text
+payload schemas with field-level support (rules-format, prediction-shape):
+    every fact.source_url_key exists in sources
+
+release-authoritative multi-source positive composite:
+    every sources entry supports at least one mandatory fact
+
+negative record:
+    sources.keys == observation capture source keys
+                 == authoritative_source_keys_checked
+```
+
+A v2 record's composite values are **derived by validation and recomputed on
+every read**, never accepted as owner-written summaries. The support set over
+which they are derived is defined by assertion, because a negative record has no
+mandatory positive facts and would otherwise leave the set undefined:
+
+```text
+positive record: the sources supporting its mandatory facts
+negative record: every checked authoritative capture source
+
+available_at_utc      = max(support-set available_at_utc)
+observed_at_utc       = max(support-set observed_at_utc)
+retrieved_at_utc      = max(support-set retrieved_at_utc)
+supported_through_utc = min(support-set supported_through_utc)
+construction          = weakest(support-set construction)
+require observed_at_utc <= supported_through_utc
+```
+
+Support is a **minimum**, deliberately, and it is the conservative direction.
+Checking two authorities at different times does not prove the earlier one
+remained unchanged through the later timestamp, so the record's support ends
+where its earliest-lapsing source's does. Combined with this schema's registered
+choice to define no freshness allowance — `supported_through_utc` equals
+`observed_at_utc` per source — the honest consequence is that a negative record
+assembled from authorities observed at different times fails its own
+`observed_at_utc <= supported_through_utc` check and is unusable. That is not a
+defect to engineer around: it is what follows from claiming a point observation
+proves exactly one point in time. Making such evidence usable requires a
+registered freshness allowance with its own schema field and tests, not a
+quietly widened interval. Until then, authorities for one negative record are
+observed together.
 
 Code wanting a single source from a parsed record uses a derived compatibility
 accessor, not a stored field. For a one-source v2 record it returns that sole
