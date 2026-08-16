@@ -1,0 +1,26 @@
+{
+  "schema": "ti26.evidence-source-registry.v1",
+  "effective_at_utc": "2026-08-10T17:58:21Z",
+  "sources": [
+    {
+      "source_url_key": "valve-ti-group-stage-rules",
+      "authorizations": [
+        {
+          "event_id": "ti2026",
+          "kind": "rules",
+          "subject_key": "rules:ti2026:valve:group-stage"
+        }
+      ]
+    },
+    {
+      "source_url_key": "valve-steam-news-1840944183772671",
+      "authorizations": [
+        {
+          "event_id": "ti2026",
+          "kind": "rules",
+          "subject_key": "rules:ti2026:event-format:group-stage"
+        }
+      ]
+    }
+  ]
+}
