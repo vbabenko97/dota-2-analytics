@@ -841,7 +841,17 @@ The first real capture falsified the original contract, and this section replace
 
 **Subject.** The subject is renamed from `rules:ti2026:valve:published-format` to the source-neutral `rules:ti2026:event-format:group-stage`. The old key asserted Valve authorship in the subject namespace, which would make a non-Valve capture structurally valid while semantically false. A record's field-level support, not its subject key, names which source establishes each fact.
 
-**Source keys.** The subject accepts multiple bound captures under separately registered, honestly named source keys — for example `valve-ti2026-announcement-2026-02-11`, `valve-ti2026-invitations-2026-05-25`, `valve-ti2026-rules-page`, `liquipedia-ti2026-format`, `compendium-ui-ti2026`. Each must be registered and owner-approved before use, exactly as `valve-ti-group-stage-rules` was.
+**Source keys.** The subject accepts multiple bound captures under separately registered, honestly named source keys — for example `valve-steam-news-<gid>`, `valve-ti-group-stage-rules`, `liquipedia-ti2026-format`, `compendium-ui-ti2026`. Each must be registered and owner-approved before use, exactly as `valve-ti-group-stage-rules` was.
+
+**Correction 2026-08-11: two source keys named here were fabricated.** An earlier revision of this section listed `valve-ti2026-announcement-2026-02-11` and `valve-ti2026-invitations-2026-05-25` as the Valve sources carrying the format facts, and the paragraph on excluded fields below asserted what the May announcement says. Both came from a reviewer assertion that this plan's author wrote down without retrieving either page — the failure the [correction register](../../audits/2026-08-04-correction-register.md) exists to catch, committed in a planning document rather than a report.
+
+Retrieval on 2026-08-11 established:
+
+- **No February 2026 Dota 2 announcement exists.** The Steam announcement feed for `appid=570` contains no entry from that month.
+- **The 2026-05-25 announcement does not state the format.** `The International 2026 Invitations and Qualifiers` (posted `1779766203`) covers direct invitations and regional qualifier slots. It states neither the round count nor the elimination-round structure; `n_teams` is only derivable from it as seven invitations plus nine qualifier slots.
+- **The format facts are published by a later announcement.** `The International: Streams, Secret Shop, and More` (posted `1786494519`) states them in prose.
+
+No claim about a source's content belongs in this plan again unless it is quoted from a retrieved capture.
 
 `event-format` is the logical namespace of an observable fact slot. It is not a claim that every source in it carries equal authority. The registered authority policy for this subject:
 
@@ -920,7 +930,11 @@ Option B — one ordinary record per source plus a manifest-bound composition ar
 
 No value in that example is an input. Every value must be parsed from an exact span in a bound capture, and every `source_url_key` must name a capture present in the same record. A plan-stated value never substitutes for a parsed one, and no field acquires support because another field logically implies it.
 
-**Excluded from the direct projection.** `advance_at_wins` and `eliminate_at_losses` are removed from the published-format vocabulary. No 2026 format source states them; the archived transcript already records them as implied by the compendium's `4-0`/`4-1`/`1-4`/`0-4` prediction categories. They remain unchanged in `config/ti2026_rules.yaml` and are not reinterpreted — only their claimed provenance class changes, from "published format" to compendium-derived. `total_rounds` stays in the direct projection: it is directly stated by Valve's own 2026-05-25 announcement, which describes a five-round Swiss bracket followed by five elimination matches, so it needs an exact span from that capture rather than an invented labeled line.
+**Excluded from the direct projection — REVERSED 2026-08-11.** An earlier revision removed `advance_at_wins` and `eliminate_at_losses` from the published-format vocabulary on the stated ground that "no 2026 format source states them", and reclassified their provenance from published to compendium-derived. Retrieval falsified that ground: Valve states both, in one sentence, in `The International: Streams, Secret Shop, and More`. Both fields stay in the direct projection and keep their published-format provenance class. They remain unchanged in `config/ti2026_rules.yaml` either way — only the claimed provenance class was wrong, and it is now corrected back.
+
+`total_rounds` also stays in the direct projection, but **not for the reason previously given here**. The claim that the 2026-05-25 announcement "describes a five-round Swiss bracket followed by five elimination matches" was fabricated; that announcement says nothing about rounds. No retrieved source states the round count as a number. Its support is the already-captured Valve rules page, which enumerates per-round pairing modifications through `Round 5`, and it must cite that span rather than a sentence no source contains.
+
+**The grammar this implies.** Every published number is written as an English word — `Sixteen`, `eight`, `fourth`, `three`, `five` — inside flowing prose, with two distinct facts sharing one sentence. A labeled-line vocabulary cannot read this source in either its original or its replacement form. The extractor must anchor on exact whole sentences from a bound capture, and every pattern must be demonstrated against the captured bytes before it is committed.
 
 **The 2026-08-11 Liquipedia paste is not evidence.** A chat-transported Liquipedia paste was moved outside the repository. It is not evidence, is not a byte-exact page capture, and must not be referenced by digest or reused for import. Any future Liquipedia record requires a new owner-approved capture, metadata, dry run, and attestation.
 
