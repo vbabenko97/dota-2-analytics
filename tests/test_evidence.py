@@ -1,4 +1,5 @@
 import dataclasses
+import hashlib
 import json
 from pathlib import Path
 
@@ -847,54 +848,127 @@ def test_reconcile_rules_facts_reports_the_field_that_diverges():
         reconcile_rules_facts(expected, observed)
 
 
-def test_rules_format_extractor_requires_its_supporting_span():
-    """Kills mutation: derive published-format facts from the group-stage extractor."""
-    rendered = (
-        "Format\n"
-        "Number of Teams: 16\n"
-        "Total Rounds: 5\n"
-        "Advance at Wins: 4\n"
-        "Eliminate at Losses: 4\n"
-    )
-    extracted = extract_ti2026_published_format(rendered)
-    assert extracted["schema"] == "ti26.rules-format-extracted.v1"
-    assert extracted["facts"]["format"]["span_sha256"]
-    assert extracted["facts"]["format"]["value"] == {
+PINNED_VALVE_CAPTURE = Path("data/raw/steam-news/1840944183772671.json")
+
+
+def _valve_capture_text() -> str:
+    """The pinned Valve announcement, read from the committed capture.
+
+    Read from disk on purpose. The predecessor of this extractor passed its
+    own tests against fixtures written in the grammar it had invented, while
+    failing against every real source. A fixture cannot catch that; the
+    captured bytes can.
+    """
+    return json.loads(PINNED_VALVE_CAPTURE.read_text(encoding="utf-8"))["contents"]
+
+
+def test_published_format_extractor_reads_the_pinned_valve_capture():
+    """Kills reverting to labeled-line fragments, or to digit-only number parsing.
+
+    Every number in this source is an English word inside prose, so a labeled
+    `Number of Teams: 16` vocabulary -- or any pattern demanding `\\d+` -- finds
+    nothing here and raises.
+    """
+    extracted = extract_ti2026_published_format(_valve_capture_text())
+    assert extracted["schema"] == "ti26.rules-format-extracted.v2"
+    assert {key: entry["value"] for key, entry in extracted["facts"].items()} == {
         "n_teams": 16,
-        "total_rounds": 5,
+        "main_event_slots": 8,
+        "series_type": "bo3",
         "advance_at_wins": 4,
         "eliminate_at_losses": 4,
+        "direct_advance_count": 3,
+        "elimination_round_pool": 10,
+        "elimination_matches": 5,
     }
-    with pytest.raises(EvidenceError, match="format"):
-        extract_ti2026_published_format("Some unrelated published text with no format fragment.\n")
+
+
+def test_published_format_spans_digest_only_their_own_sentence():
+    """Kills widening a fact's span to the paragraph, the section, or the page.
+
+    Two of these facts share one sentence and the rest are paragraphs apart, so
+    a single shared span would have to cover most of the announcement to reach
+    them all -- exactly the "digest the whole page" failure spans exist to
+    prevent.
+    """
+    rendered = _valve_capture_text()
+    facts = extract_ti2026_published_format(rendered)["facts"]
+    whole_page = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+
+    for key, entry in facts.items():
+        assert entry["span_sha256"] != whole_page, key
+    # `n_teams` and `main_event_slots` come from one sentence but are supported
+    # by different substrings of it, so their digests must differ.
+    assert facts["n_teams"]["span_sha256"] != facts["main_event_slots"]["span_sha256"]
+    # Both `advance_at_wins` and `eliminate_at_losses` read the word "fourth",
+    # so equal values must still rest on distinct spans.
+    assert facts["advance_at_wins"]["value"] == facts["eliminate_at_losses"]["value"]
+    assert (
+        facts["advance_at_wins"]["span_sha256"] != facts["eliminate_at_losses"]["span_sha256"]
+    )
+
+
+def test_published_format_extractor_rejects_an_absent_sentence():
+    """Kills treating a missing sentence as an absent-but-acceptable field."""
+    with pytest.raises(EvidenceError, match="absent: 'n_teams'"):
+        extract_ti2026_published_format("Some unrelated published text with no format prose.\n")
+
+
+def test_published_format_extractor_rejects_a_duplicated_sentence():
+    """Kills using `find` without a uniqueness check.
+
+    With the sentence present twice there is no single span the fact rests on,
+    and silently binding to the first occurrence would hide that.
+    """
+    rendered = _valve_capture_text()
+    duplicated = rendered + "\na fourth loss will result in elimination\n"
+    with pytest.raises(EvidenceError, match="duplicated 2 times: 'eliminate_at_losses'"):
+        extract_ti2026_published_format(duplicated)
+
+
+def test_published_format_extractor_rejects_out_of_order_sentences():
+    """Kills dropping the cursor, which is what stops a fact binding to a re-used phrase.
+
+    Order is part of the registered contract: a page that mentions the
+    elimination sentence before the field-size sentence is not the source this
+    vocabulary was registered against.
+    """
+    rendered = _valve_capture_text()
+    tail = "Every single one of the five series on Sunday will send one team home and the other onward to the main event"
+    assert rendered.count(tail) == 1
+    reordered = tail + rendered.replace(tail, "")
+    with pytest.raises(EvidenceError, match="out of order"):
+        extract_ti2026_published_format(reordered)
 
 
 def test_reconcile_rules_format_facts_reports_each_field():
-    """Kills mutation: compare only a format schema or one scalar."""
-    expected = {
-        "format": {
-            "n_teams": 16,
-            "total_rounds": 5,
-            "advance_at_wins": 4,
-            "eliminate_at_losses": 4,
-        }
-    }
-    observed = {
-        "schema": "ti26.rules-format-extracted.v1",
-        "facts": {
-            "format": {
-                "value": {
-                    "n_teams": 16,
-                    "total_rounds": 5,
-                    "advance_at_wins": 4,
-                    "eliminate_at_losses": 5,
-                },
-                "span_sha256": "d" * 64,
-            }
-        },
-    }
-    with pytest.raises(ReconciliationError, match=r"format\.eliminate_at_losses"):
-        reconcile_rules_format_facts(expected, observed)
+    """Kills returning after the first field that matches, or comparing only the schema.
+
+    `n_teams` is deliberately correct and sorts before the diverging field, so
+    a loop that stops at the first agreement never reaches `series_type`.
+    """
+    expected = dict(_FORMAT_FACTS_VALUE)
+    observed_value = dict(_FORMAT_FACTS_VALUE)
+    observed_value["series_type"] = "bo5"
+    with pytest.raises(ReconciliationError, match="series_type mismatch"):
+        reconcile_rules_format_facts(expected, _extracted_format_value(observed_value))
+
+
+def test_reconcile_rules_format_facts_accepts_the_shipping_projection():
+    """Kills weakening the vocabulary check to a subset test.
+
+    The configured projection and the extracted vocabulary must agree on the
+    exact key set; dropping a field from either side has to fail rather than
+    quietly reconcile the remaining ones.
+    """
+    assert reconcile_rules_format_facts(
+        dict(_FORMAT_FACTS_VALUE), _extracted_format_value(dict(_FORMAT_FACTS_VALUE))
+    ) == []
+
+    short = dict(_FORMAT_FACTS_VALUE)
+    del short["elimination_matches"]
+    with pytest.raises(EvidenceError, match="unsupported or missing keys"):
+        reconcile_rules_format_facts(short, _extracted_format_value(dict(_FORMAT_FACTS_VALUE)))
 
 
 # --- Task 7: release-evidence catalog and reconciliation fixtures -----------
@@ -935,7 +1009,27 @@ _RULES_FACTS_VALUE = {
     },
     "elimination_selection_order": "best_3_2_sequential_choice",
 }
-_FORMAT_FACTS_VALUE = {"n_teams": 4, "total_rounds": 5, "advance_at_wins": 4, "eliminate_at_losses": 4}
+# What the YAML `format:` block holds, and what the published-format vocabulary
+# projects out of it, are no longer the same four numbers. The projection now
+# derives five of its eight fields from the capacity machinery, so the config
+# has to be a field that can actually pair -- the old `n_teams: 4` fixture was
+# only viable while the projection was an echo of the config.
+_FORMAT_CONFIG_VALUE = {
+    "n_teams": 16,
+    "total_rounds": 5,
+    "advance_at_wins": 4,
+    "eliminate_at_losses": 4,
+}
+_FORMAT_FACTS_VALUE = {
+    "n_teams": 16,
+    "advance_at_wins": 4,
+    "eliminate_at_losses": 4,
+    "series_type": "bo3",
+    "direct_advance_count": 3,
+    "elimination_round_pool": 10,
+    "elimination_matches": 5,
+    "main_event_slots": 8,
+}
 _DEFAULT_GROUPS_VALUE = {"A": [101, 102], "B": [103, 104]}
 _DEFAULT_ROUND_ONE_VALUE = [[101, 102], [103, 104]]
 
@@ -1071,10 +1165,14 @@ def _extracted_rules_value() -> dict[str, object]:
     }
 
 
-def _extracted_format_value(value: dict[str, int]) -> dict[str, object]:
+def _extracted_format_value(value: dict[str, object]) -> dict[str, object]:
+    """Build a v2 extracted object: one fact per field, each with its own span."""
     return {
-        "schema": "ti26.rules-format-extracted.v1",
-        "facts": {"format": {"value": value, "span_sha256": _sha(b"span:format")}},
+        "schema": "ti26.rules-format-extracted.v2",
+        "facts": {
+            key: {"value": field, "span_sha256": _sha(f"span:{key}".encode())}
+            for key, field in value.items()
+        },
     }
 
 
@@ -1279,7 +1377,7 @@ def _release_inputs(
         resolved_team_ids = [101, 102, 103, 104] if groups_path is not None else [101]
     return {
         "cutoff_utc": _RELEASE_CUTOFF,
-        "rules_path": _rules_yaml(tmp_path, format_value=format_value or _FORMAT_FACTS_VALUE),
+        "rules_path": _rules_yaml(tmp_path, format_value=format_value or _FORMAT_CONFIG_VALUE),
         "teams_path": _teams_yaml(tmp_path, resolved_team_ids),
         "groups_path": groups_path,
     }
@@ -1354,7 +1452,7 @@ def test_release_reconciliation_reconciles_published_format_facts(tmp_path):
     mismatched = dict(_FORMAT_FACTS_VALUE)
     mismatched["eliminate_at_losses"] = _FORMAT_FACTS_VALUE["eliminate_at_losses"] + 1
     catalog = _release_catalog(tmp_path, format_facts=mismatched)
-    with pytest.raises(ReconciliationError, match="format"):
+    with pytest.raises(ReconciliationError, match="eliminate_at_losses mismatch"):
         reconcile_release_evidence(catalog, **_release_inputs(tmp_path))
 
 

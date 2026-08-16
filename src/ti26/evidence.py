@@ -1726,10 +1726,25 @@ def select_current_evidence(
 
 
 RULES_EXTRACTED_SCHEMA = "ti26.rules-extracted.v1"
-RULES_FORMAT_EXTRACTED_SCHEMA = "ti26.rules-format-extracted.v1"
+# v2 carries one fact per field. v1 carried a single `format` fact whose span
+# had to cover every supporting line at once; the real source states its facts
+# in three separate paragraphs with unrelated prose between them, so one span
+# could only be honest by digesting most of the page.
+RULES_FORMAT_EXTRACTED_SCHEMA = "ti26.rules-format-extracted.v2"
 
 _RULES_FACT_KEYS = frozenset({"tiebreak_order", "rounds", "elimination_selection_order"})
-_RULES_FORMAT_FACT_KEYS = frozenset({"format"})
+_RULES_FORMAT_FACT_KEYS = frozenset(
+    {
+        "n_teams",
+        "main_event_slots",
+        "series_type",
+        "advance_at_wins",
+        "eliminate_at_losses",
+        "direct_advance_count",
+        "elimination_round_pool",
+        "elimination_matches",
+    }
+)
 _FACT_ENTRY_KEYS = frozenset({"value", "span_sha256"})
 
 _TIEBREAK_FRAGMENTS: tuple[tuple[str, str], ...] = (
@@ -1756,11 +1771,61 @@ _ELIMINATION_MARKER = "Elimination Round"
 _ELIMINATION_SENTENCE = (
     "Starting with the best 3-2 team, they will choose any of the five 2-3 teams as their opponent."
 )
-_FORMAT_LABELS: tuple[tuple[str, str], ...] = (
-    ("Number of Teams: ", "n_teams"),
-    ("Total Rounds: ", "total_rounds"),
-    ("Advance at Wins: ", "advance_at_wins"),
-    ("Eliminate at Losses: ", "eliminate_at_losses"),
+# Valve publishes the format as prose, with every number written as an English
+# word and two facts sharing one sentence. The labeled-line vocabulary this
+# replaced (`Number of Teams: `, ...) was an implementation invention that no
+# source emits. Each entry below is an exact substring of the captured
+# announcement, verified unique and in this order against the pinned bytes; the
+# word is read from the captured text rather than asserted, so editing the value
+# here cannot silently disagree with the span it claims to rest on.
+_WORD_NUMBERS: dict[str, int] = {
+    "three": 3,
+    "five": 5,
+    "eight": 8,
+    "ten": 10,
+    "Sixteen": 16,
+    "fourth": 4,
+    "best-of-three": 3,
+}
+_FORMAT_SENTENCES: tuple[tuple[str, str, str], ...] = (
+    (
+        "n_teams",
+        "Sixteen teams have earned the right to compete for the Aegis of Champions in Shanghai",
+        "Sixteen",
+    ),
+    ("main_event_slots", "only eight will face off in the main event", "eight"),
+    (
+        "series_type",
+        (
+            "all sixteen teams will play best-of-three matches against other teams with the "
+            "same overall series record"
+        ),
+        "best-of-three",
+    ),
+    (
+        "advance_at_wins",
+        "A fourth series win will earn a team an automatic berth at The International",
+        "fourth",
+    ),
+    ("eliminate_at_losses", "a fourth loss will result in elimination", "fourth"),
+    (
+        "direct_advance_count",
+        "three teams will have secured spots in The International",
+        "three",
+    ),
+    (
+        "elimination_round_pool",
+        "The ten remaining teams will face off in a special elimination round to decide the rest",
+        "ten",
+    ),
+    (
+        "elimination_matches",
+        (
+            "Every single one of the five series on Sunday will send one team home and the "
+            "other onward to the main event"
+        ),
+        "five",
+    ),
 )
 
 
@@ -1895,55 +1960,48 @@ def extract_ti2026_rules(rendered: str) -> dict[str, object]:
     }
 
 
-def _parse_trailing_int(text: str, label: str) -> int:
-    """Return the leading run of digits in `text`, or raise `EvidenceError`."""
-    digits = ""
-    for char in text:
-        if char.isdigit():
-            digits += char
-        elif digits:
-            break
-    if not digits:
-        raise EvidenceError(f"required format fragment has no numeric value: {label!r}")
-    return int(digits)
-
-
 def extract_ti2026_published_format(rendered: str) -> dict[str, object]:
     """Extract the narrow, span-bound TI 2026 published-format vocabulary.
 
-    Owns its own exact required labeled line-prefix fragments -- distinct
-    from `extract_ti2026_rules`'s tiebreak/round/elimination fragments -- and
-    raises `EvidenceError` if one is absent, ambiguously duplicated, or out
-    of order. The single `format` fact's `span_sha256` digests the exact
-    supporting UTF-8 substring, never the entire page.
+    Anchors on exact whole sentences rather than on labeled lines, because the
+    source states these facts in flowing prose: numbers appear as English
+    words, two facts share one sentence, and the supporting sentences are
+    spread across paragraphs. Each sentence must occur exactly once and in the
+    registered order, so a page that reuses a phrase elsewhere fails closed
+    rather than binding a fact to the wrong occurrence.
+
+    Every fact carries its own `span_sha256` over the exact supporting UTF-8
+    substring -- never the whole page, and never a range wide enough to
+    include text supporting some other fact.
     """
     if not isinstance(rendered, str) or not rendered:
         raise EvidenceError("rendered published-format text must be a non-empty string")
-    lines = _line_spans(rendered)
 
+    facts: dict[str, object] = {}
     cursor = 0
-    span_start: int | None = None
-    value: dict[str, int] = {}
-    for prefix, key in _FORMAT_LABELS:
-        matches = lambda line, prefix=prefix: line.startswith(prefix)
-        _require_unique_line(lines, matches, "format", prefix)
-        idx = _find_line(lines, matches, cursor, "format", prefix)
-        if span_start is None:
-            span_start = lines[idx][1]
-        line_text, _, line_end = lines[idx]
-        value[key] = _parse_trailing_int(line_text[len(prefix) :], prefix)
-        cursor = idx + 1
+    for key, sentence, word in _FORMAT_SENTENCES:
+        occurrences = rendered.count(sentence)
+        if occurrences == 0:
+            raise EvidenceError(f"required published-format sentence is absent: {key!r}")
+        if occurrences > 1:
+            raise EvidenceError(
+                f"required published-format sentence is duplicated {occurrences} times: {key!r}"
+            )
+        start = rendered.find(sentence)
+        if start < cursor:
+            raise EvidenceError(f"required published-format sentence is out of order: {key!r}")
+        cursor = start + len(sentence)
+        # The word is located inside the span that supports it, so a sentence
+        # that no longer contains its number cannot keep reporting the old one.
+        if word not in sentence:
+            raise EvidenceError(f"published-format sentence does not carry its number: {key!r}")
+        number = _WORD_NUMBERS[word]
+        facts[key] = {
+            "value": f"bo{number}" if key == "series_type" else number,
+            "span_sha256": hashlib.sha256(sentence.encode("utf-8")).hexdigest(),
+        }
 
-    span = rendered[span_start:line_end]
-    return {
-        "schema": RULES_FORMAT_EXTRACTED_SCHEMA,
-        "facts": {
-            "format": {
-                "value": value,
-                "span_sha256": hashlib.sha256(span.encode("utf-8")).hexdigest(),
-            }
-        },
-    }
+    return {"schema": RULES_FORMAT_EXTRACTED_SCHEMA, "facts": facts}
 
 
 def _reconcile_value(path: str, expected: object, observed: object) -> None:
@@ -2005,9 +2063,13 @@ def reconcile_rules_format_facts(
     """Compare shipping-configured published-format facts against a validated extracted object.
 
     Mirrors `reconcile_rules_facts` for the distinct `rules-format` subject:
-    exact schema, the exact single `format` fact key, a valid span digest,
-    then recursive exact equality with deterministic dotted field paths.
-    Returns `[]` only on equality; performs no I/O and changes nothing.
+    exact schema, the exact per-field fact vocabulary, a valid span digest on
+    every field, then exact equality field by field with deterministic dotted
+    paths. Returns `[]` only on equality; performs no I/O and changes nothing.
+
+    Every field is checked. Returning on the first match would let a later
+    field diverge unnoticed, which is the failure this whole subject exists
+    to prevent.
     """
     if not isinstance(configured, dict) or set(configured) != _RULES_FORMAT_FACT_KEYS:
         raise EvidenceError("configured published-format facts have unsupported or missing keys")
@@ -2022,12 +2084,17 @@ def reconcile_rules_format_facts(
         raise EvidenceError(
             "extracted published-format facts do not match the configured fact vocabulary"
         )
-    entry = facts["format"]
-    if not isinstance(entry, dict) or set(entry) != _FACT_ENTRY_KEYS:
-        raise EvidenceError("extracted published-format fact has unsupported or missing keys")
-    if not _is_sha256(entry["span_sha256"]):
-        raise EvidenceError("extracted published-format fact has an invalid span_sha256")
-    _reconcile_value("format", configured["format"], entry["value"])
+    for key in sorted(_RULES_FORMAT_FACT_KEYS):
+        entry = facts[key]
+        if not isinstance(entry, dict) or set(entry) != _FACT_ENTRY_KEYS:
+            raise EvidenceError(
+                f"extracted published-format fact has unsupported or missing keys: {key!r}"
+            )
+        if not _is_sha256(entry["span_sha256"]):
+            raise EvidenceError(
+                f"extracted published-format fact has an invalid span_sha256: {key!r}"
+            )
+        _reconcile_value(key, configured[key], entry["value"])
     return []
 
 

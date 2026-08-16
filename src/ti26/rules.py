@@ -163,15 +163,38 @@ def shipping_rules_format_facts(path: str) -> dict[str, object]:
 
     Reads `path` with `yaml.safe_load` only; never calls `load_rules`, never
     mutates the YAML, and exposes no model-facing behavior.
+
+    Only `n_teams`, `advance_at_wins` and `eliminate_at_losses` are configured
+    values. The other five are DERIVED here from the same
+    `derive_record_capacities`/`derive_category_capacities` the card already
+    runs on, rather than restated as a second configured vocabulary that could
+    drift from the first. `series_type` is not configured at all -- it names
+    the existing `ti26.series.series_win_prob` default of `best_of=3`.
+
+    `total_rounds` is deliberately absent: no retrieved published source
+    states the round count as a number, so it has no place in a vocabulary
+    that reconciles against captured spans. It remains a configured value
+    feeding the capacities below.
     """
     with open(path) as fh:
         raw = yaml.safe_load(fh)
     fmt = raw["format"]
+    records = derive_record_capacities(
+        n_teams=fmt["n_teams"],
+        advance_at=fmt["advance_at_wins"],
+        eliminate_at=fmt["eliminate_at_losses"],
+        total_rounds=fmt["total_rounds"],
+    )
+    caps = derive_category_capacities(records, fmt["advance_at_wins"], fmt["eliminate_at_losses"])
+    direct_advance_count = caps[Category.W4_0] + caps[Category.W4_1]
+    elimination_round_pool = caps[Category.ELIM_WIN] + caps[Category.ELIM_LOSS]
     return {
-        "format": {
-            "n_teams": fmt["n_teams"],
-            "total_rounds": fmt["total_rounds"],
-            "advance_at_wins": fmt["advance_at_wins"],
-            "eliminate_at_losses": fmt["eliminate_at_losses"],
-        }
+        "n_teams": fmt["n_teams"],
+        "advance_at_wins": fmt["advance_at_wins"],
+        "eliminate_at_losses": fmt["eliminate_at_losses"],
+        "series_type": "bo3",
+        "direct_advance_count": direct_advance_count,
+        "elimination_round_pool": elimination_round_pool,
+        "elimination_matches": caps[Category.ELIM_WIN],
+        "main_event_slots": direct_advance_count + caps[Category.ELIM_WIN],
     }
