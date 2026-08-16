@@ -145,6 +145,91 @@ provenance reports a calibrated best-versus-worst map win probability of 0.6739
 across the full sixteen-team field; the surviving eight are closer together
 than that. A result near the null is a result, and gets reported as one.
 
+## Protocol deviation: the store was not preregistered
+
+This section records a gap in the registration above, found after the first
+model run. It is written as history, not as a rule that existed beforehand.
+
+The spec fixed the metric, both nulls and the method, but **never fixed which
+store the strengths come from**. The choice was made de facto by running the
+producer on the post-group-stage store first. That is not preregistration, and
+back-dating it into a rule — "use the most recent store" — would be exactly the
+criterion-after-the-number this document exists to prevent.
+
+```
+primary_store:
+    data/processed/ti2026-postgroup.sqlite
+    sha256 be01fd916b89484fa24e90a8913941519825e391fab12eecbefd4a59e704b7ad
+    40076 rows, latest map 2026-08-16T10:24:26Z
+    selected by the first playoff-model run, before any store comparison
+    selection rule NOT preregistered: protocol deviation
+
+store_sensitivity:
+    comparator data/processed/release-20260802T165535Z.sqlite
+    result: 14/14 picks unchanged under cross-feed
+            14/14 picks unchanged under direct-feed
+
+interpretation:
+    the recommendation is robust to this one store perturbation.
+    That is a sensitivity result. It is NOT evidence of predictive accuracy,
+    and it does not retire the deviation above.
+```
+
+The digest and latest-map timestamp are frozen here because the store is
+gitignored: without them, "postgroup.sqlite" names a different file every time
+anyone re-ingests.
+
+## Expected lift, both topologies
+
+Neither may be quoted alone while the topology is unverified:
+
+| topology | expected | null | lift |
+|---|---|---|---|
+| cross-feed | 4.3615 | 3.7500 | **+0.6115** |
+| direct-feed | 4.5802 | 4.0000 | **+0.5802** |
+
+The unresolved edge is deployment-critical for two specific picks and almost
+irrelevant to the aggregate: it moves the lift by 0.03 of a slot.
+
+## What the rating response does and does not show
+
+Comparing calibrated strengths across the two stores mixes two effects, because
+the rolling-backtest slope also moved (0.4051 to 0.3596) and `apply_correction`
+recentres. Measured on raw Glicko instead, over the five teams whose Swiss
+result gives an unambiguous expected direction:
+
+| team | Swiss | raw change |
+|---|---|---|
+| Nigma Galaxy | 4-1 | +0.2338 |
+| Team Liquid | 4-1 | +0.1189 |
+| Team Yandex | 2-3 | −0.3533 |
+| BoomBoys | 2-3 | −0.1715 |
+| Team Vision | 4-0 | **−0.0029** |
+
+Four of five move as expected. **Team Vision does not**: it went 4-0 and its raw
+rating is flat. It only gains under a common slope, which recentres, so that
+gain is relative to the field rather than absolute. The 3-2 teams are excluded
+because their direction is not determined by the result.
+
+An earlier draft of this analysis claimed all eight moved consistently. That was
+wrong, and wrong in the flattering direction.
+
+## What the DatDota comparison is and is not
+
+It is a **weak ordering sanity check only**. It is not a probability-level
+check, and the two are not in the same information state:
+
+- Our pre-TI store fixes ratings at 2026-08-02; DatDota's snapshot #12 states
+  ratings as of 2026-08-10.
+- Our run is conditioned on the **actual** eight-team field and the actual
+  quarterfinal pairings. DatDota #12 still simulates the elimination round, so
+  five of its playoff places are unresolved and thirteen teams carry non-zero
+  title probability.
+
+Comparing 32.2% against our champion probability would therefore compare two
+different questions. `1W` and `Iron Wing` are the same organisation and are not
+a discrepancy.
+
 ## Blocking condition
 
 Compute the optimal slate under **both** topologies and compare.
