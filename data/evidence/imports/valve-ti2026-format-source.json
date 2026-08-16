@@ -1,0 +1,18 @@
+{
+  "source_url_key": "valve-steam-news-1840944183772671",
+  "capture_method": "steam-news-api-pinned-snapshot",
+  "available_at_utc": "2026-08-12T00:28:39Z",
+  "published_at_utc": "2026-08-12T00:28:39Z",
+  "retrieved_at_utc": "2026-08-16T00:12:00Z",
+  "assertion": "present",
+  "observed_at_utc": "2026-08-12T00:28:39Z",
+  "supported_through_utc": "2026-08-16T00:12:00Z",
+  "authoritative_source_keys_checked": [],
+  "attestation": {
+    "fact_payload_sha256": "35aa4546be2513fe3ec2d6e709e1defcea9f7a3c92aab9a892dd8366746100a6",
+    "capture_sha256s": [
+      "5de04eb3a9801833285abcaeab9aa84197628ff6695e07f0d5a08bcb70e13656"
+    ]
+  },
+  "construction": "contemporaneous"
+}

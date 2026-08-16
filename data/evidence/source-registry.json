@@ -11,6 +11,16 @@
           "subject_key": "rules:ti2026:valve:group-stage"
         }
       ]
+    },
+    {
+      "source_url_key": "valve-steam-news-1840944183772671",
+      "authorizations": [
+        {
+          "event_id": "ti2026",
+          "kind": "rules",
+          "subject_key": "rules:ti2026:event-format:group-stage"
+        }
+      ]
     }
   ]
 }

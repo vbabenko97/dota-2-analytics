@@ -2100,7 +2100,7 @@ def reconcile_rules_format_facts(
 
 RELEASE_SUBJECTS = {
     "rules": "rules:ti2026:valve:group-stage",
-    "published_format": "rules:ti2026:valve:published-format",
+    "published_format": "rules:ti2026:event-format:group-stage",
     "participants": "participants:ti2026:event-authority:field",
     "rosters": "rosters:ti2026:event-authority:registered-lineups",
     "groups": "draws:ti2026:event-authority:groups",

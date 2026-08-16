@@ -154,6 +154,21 @@ def test_cli_refuses_to_overwrite_a_diverged_capture(tmp_path, monkeypatch, caps
     assert json.loads((out / f"{ITEM['gid']}.json").read_text())["contents"] == "edited"
 
 
+def test_cli_renders_the_body_verbatim(tmp_path, monkeypatch, capsys):
+    """Kills appending a trailing newline, or rendering the JSON instead of the body.
+
+    The extractor's span digests are taken over exact substrings of these
+    bytes, so any byte the renderer adds or reflows silently changes every
+    digest the evidence record rests on.
+    """
+    monkeypatch.setattr(
+        "ti26.cli_fetch_steam_news.steam_news_query", lambda *a, **k: [ITEM]
+    )
+    rendered = tmp_path / "capture.txt"
+    assert main(["--gid", ITEM["gid"], "--out", str(tmp_path / "raw"), "--render-to", str(rendered)]) == 0
+    assert rendered.read_bytes() == ITEM["contents"].encode("utf-8")
+
+
 def test_cli_is_idempotent_on_identical_bytes(tmp_path, monkeypatch, capsys):
     """Kills reporting a re-fetch of unchanged content as a divergence."""
     monkeypatch.setattr(
