@@ -33,7 +33,7 @@ _KIND_BY_COMMAND = {
 }
 _DEFAULT_SUBJECT = {
     "rules": "rules:ti2026:owner:field",
-    "rules-format": "rules:ti2026:valve:published-format",
+    "rules-format": "rules:ti2026:event-format:group-stage",
     "participants": "participants:ti2026:owner:field",
     "rosters": "rosters:ti2026:owner:field",
     "draw": "draws:ti2026:owner:field",

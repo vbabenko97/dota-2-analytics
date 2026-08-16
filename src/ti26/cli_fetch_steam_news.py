@@ -28,10 +28,32 @@ def render_capture(item: dict) -> bytes:
     return (json.dumps(item, sort_keys=True, indent=2, ensure_ascii=False) + "\n").encode()
 
 
+def _render(render_to: str | None, item: dict) -> None:
+    """Write the announcement body verbatim, so the import capture is derived, not retyped.
+
+    The body is copied byte-for-byte out of the pinned snapshot with nothing
+    added -- no trailing newline, no re-wrapping -- because the extractor's
+    span digests are taken over exact substrings of these bytes.
+    """
+    if render_to is None:
+        return
+    target = Path(render_to)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    body = item["contents"].encode("utf-8")
+    target.write_bytes(body)
+    print(f"rendered: {target} ({len(body)} bytes)")
+    print(f"rendered sha256: {hashlib.sha256(body).hexdigest()}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Pin one Steam announcement under data/raw")
     parser.add_argument("--gid", required=True, help="Steam announcement gid")
     parser.add_argument("--out", default="data/raw/steam-news")
+    parser.add_argument(
+        "--render-to",
+        default=None,
+        help="also write the announcement body to this path as the import capture",
+    )
     parser.add_argument("--app-id", type=int, default=DOTA_2_APP_ID)
     parser.add_argument("--count", type=int, default=100)
     args = parser.parse_args(argv)
@@ -50,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         if existing == payload:
             print(f"unchanged: {path}")
             print(f"sha256: {digest}")
+            _render(args.render_to, item)
             return 0
         # A pinned capture is evidence. Overwriting it here would destroy the
         # record of what the source said when it was attested, so the divergence
@@ -63,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"pinned: {path} ({len(payload)} bytes)")
     print(f"sha256: {digest}")
     print(f"title: {item.get('title')!r} date: {item.get('date')}")
+    _render(args.render_to, item)
     return 0
 
 

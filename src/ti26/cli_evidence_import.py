@@ -46,7 +46,11 @@ _NORMALIZED_PATH_BY_KIND = {
     "rosters": "rosters.json",
     "draws": "draw.json",
 }
-_PUBLISHED_FORMAT_SUBJECT = "rules:ti2026:valve:published-format"
+# Source-neutral by design. The former key, `rules:ti2026:valve:published-format`,
+# asserted Valve authorship in the subject namespace, which would make a
+# non-Valve capture structurally valid while semantically false. Which source
+# establishes a fact is field-level support, not part of the subject key.
+_PUBLISHED_FORMAT_SUBJECT = "rules:ti2026:event-format:group-stage"
 _SOURCE_KEYS = frozenset(
     {
         "source_url_key",
