@@ -1,0 +1,46 @@
+# Compendium cards published by other people before TI 2026, for scoring against
+# the frozen truth in `ti2026_outcome.yaml`.
+#
+# ADMISSION RULE, carried over unchanged from `ti2025_external_cards.yaml` so
+# this cannot become a curated list of cards that flatter us:
+#   - The card must have been PUBLISHED BEFORE the event began, with a URL and a
+#     date, by someone who was not asked to produce it for this comparison.
+#   - It must be transcribed in full. A card cannot be entered partially, and a
+#     card cannot be removed once entered.
+#   - Its category counts must match the format's capacities exactly, which the
+#     runner asserts rather than trusts.
+#
+# TRANSCRIPTION SOURCE AND ITS WEAKNESS. The card below is transcribed from a
+# screenshot in the author's own post. No snapshot binds it and no manifest
+# hashes it, exactly as with the 2025 file, and it is why this is an input to a
+# DIAGNOSTIC that reaches no gate.
+#
+# ONE FURTHER WEAKNESS, SPECIFIC TO THIS ENTRY. The post says explicitly that
+# the author might still change the card before the lock: "Right now I think
+# I'll go Falcons but there's 90 minutes left to change it!". So this is his
+# stated intention roughly 90 minutes before submission closed, NOT a
+# confirmed record of what he submitted. Whatever score it earns here is the
+# score of the published card, and must never be described as his result.
+
+cards:
+  - id: noxville-ti2026
+    author: Noxville
+    published: "2026-08-12"
+    source: https://x.com/Noxville/status/2087697627764666405
+    assignments:
+      Team Vision: "4-0"
+      Team Yandex: "4-1"
+      Team Falcons: "4-1"
+      Team Liquid: elim_win
+      BoomBoys: elim_win
+      Team Spirit: elim_win
+      Aurora Gaming: elim_win
+      Iron Wing: elim_win
+      Nigma Galaxy: elim_loss
+      Xtreme Gaming: elim_loss
+      Team Resilience: elim_loss
+      Vici Gaming: elim_loss
+      OG: elim_loss
+      GamerLegion: "1-4"
+      LGD Gaming: "1-4"
+      HULIGANI: "0-4"

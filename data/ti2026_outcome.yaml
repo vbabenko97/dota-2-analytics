@@ -1,0 +1,103 @@
+# TI 2026's Swiss stage and elimination round: the OBSERVED outcome of the event
+# this project shipped a card for.
+#
+# This is the first out-of-sample result in the project's history. It is
+# recorded because the result was bad, not despite it: the shipped card scored
+# 5 of 16, which a random card matches or beats about a third of the time.
+#
+# THE RUNNER MUST RE-DERIVE every record, elimination result and category from
+# the store and assert equality with this file rather than trusting it. Two
+# independent statements of the same fact catch a transcription error here and a
+# reconstruction error there; either alone catches neither. This mirrors the
+# rule already fixed for `ti2025_backtest.yaml`.
+#
+# DERIVATION RULE. Unlike the 2025 file, the Swiss/elimination boundary here is
+# NOT a hand-chosen timestamp. It is derived from the published format facts
+# bound in the evidence record
+# `data/evidence/rules/066b04c68e286b86dd7dd20c5f7ea696ce26d05e2202b49da0ce4bd59ea7e2be`,
+# which digests Valve's own announcement:
+#
+#   - Event is league_id 19719.
+#   - Series are grouped by series_id and ordered by their first map's start_time.
+#   - A team is TERMINAL once it reaches 4 series wins, or 4 series losses, or
+#     has played 5 series. Valve states the first two directly ("A fourth series
+#     win will earn a team an automatic berth at The International; a fourth
+#     loss will result in elimination"); the round count comes from the rules
+#     page enumerating per-round modifications through Round 5.
+#   - A series is a Swiss series while NEITHER participant is already terminal.
+#     Once every team is terminal, the remaining series are the elimination
+#     round.
+#
+# That rule reproduces the event structure without being told it: 39 Swiss
+# series and 5 elimination series. 39 rather than 40 because Team Vision reached
+# 4-0 and HULIGANI 0-4 in round four and stopped playing, so round five had
+# seven matches. The evidence record therefore predicted the shape of data that
+# did not exist when the record was written.
+#
+# TEAM IDENTITY. Iron Wing played its elimination-round series under team_id
+# 10150413, which appears in no config and no alias list; it shares 5/5 accounts
+# with the configured 10182357. The pipeline is keyed by roster, so ratings were
+# unaffected, but a name-keyed or team_id-keyed reading would have lost that
+# series entirely. This is the sixth such duplicate registration in this field
+# and the first to appear during the event itself.
+#
+# NAMES are the configured TI-facing labels. They are cosmetic; the derivation
+# resolves teams by roster.
+
+# Team ids that appear at this event but in no config. Exactly one, verified by
+# account set rather than by name: 5/5 accounts shared with the configured id.
+duplicate_team_ids:
+  10150413: Iron Wing
+
+event:
+  league_id: 19719
+  # Derived, not configured. Asserted by the runner against the store.
+  swiss_series: 39
+  elimination_series: 5
+  maps: 109
+
+# Final Swiss series records, best first.
+swiss_records:
+  Team Vision: [4, 0]
+  Nigma Galaxy: [4, 1]
+  Team Liquid: [4, 1]
+  Team Spirit: [3, 2]
+  Iron Wing: [3, 2]
+  Team Falcons: [3, 2]
+  Aurora Gaming: [3, 2]
+  LGD Gaming: [3, 2]
+  BoomBoys: [2, 3]
+  Vici Gaming: [2, 3]
+  Team Yandex: [2, 3]
+  Team Resilience: [2, 3]
+  GamerLegion: [2, 3]
+  Xtreme Gaming: [1, 4]
+  OG: [1, 4]
+  HULIGANI: [0, 4]
+
+# The five elimination-round series, in chronological order.
+elimination_round:
+  - {winner: Team Falcons, loser: Vici Gaming}
+  - {winner: BoomBoys, loser: Aurora Gaming}
+  - {winner: Team Spirit, loser: Team Resilience}
+  - {winner: Iron Wing, loser: GamerLegion}
+  - {winner: Team Yandex, loser: LGD Gaming}
+
+# The card categories these produce. Capacities must be 1/2/5/5/2/1.
+categories:
+  Team Vision: "4-0"
+  Nigma Galaxy: "4-1"
+  Team Liquid: "4-1"
+  Team Falcons: elim_win
+  BoomBoys: elim_win
+  Team Spirit: elim_win
+  Iron Wing: elim_win
+  Team Yandex: elim_win
+  Vici Gaming: elim_loss
+  Aurora Gaming: elim_loss
+  Team Resilience: elim_loss
+  GamerLegion: elim_loss
+  LGD Gaming: elim_loss
+  Xtreme Gaming: "1-4"
+  OG: "1-4"
+  HULIGANI: "0-4"
