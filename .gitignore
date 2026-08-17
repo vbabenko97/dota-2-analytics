@@ -35,6 +35,13 @@ reports/*
 !reports/d4_matched_window/
 !reports/d4_matched_window/**
 
+# Group card postmortem, registered in
+# docs/superpowers/specs/2026-08-16-group-card-postmortem.md. Tracked for the
+# same reason as the matched-window backtest: it carries the only computed
+# E_model[S] the shipped card has, and a reader should be able to check it
+# without a 90-second re-run of 250000 simulations.
+!reports/card_postmortem.md
+
 # Agent harness local state — machine-local config, plugin caches, and skill
 # scratch workspaces. None of it is project source.
 .playwright-mcp/

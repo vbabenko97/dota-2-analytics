@@ -179,17 +179,29 @@ The digest and latest-map timestamp are frozen here because the store is
 gitignored: without them, "postgroup.sqlite" names a different file every time
 anyone re-ingests.
 
-## Expected lift, both topologies
+## Model-implied lift, both topologies
 
-Neither may be quoted alone while the topology is unverified:
+**These are model-implied edges, not measured ones.** Every number in this
+table is computed from the model's own probabilities; none of it is evidence
+that the model beats the null in reality. Neither row may be quoted alone
+while the topology is unverified:
 
-| topology | expected | null | lift |
+| topology | model-implied expected | null | model-implied edge |
 |---|---|---|---|
 | cross-feed | 4.3615 | 3.7500 | **+0.6115** |
 | direct-feed | 4.5802 | 4.0000 | **+0.5802** |
 
 The unresolved edge is deployment-critical for two specific picks and almost
 irrelevant to the aggregate: it moves the lift by 0.03 of a slot.
+
+The correct description of the resulting artifact is **preregistered model
+slate; predictive skill not yet demonstrated out of sample** — never "our
+optimal forecast". The single out-of-sample test this project has run scored
+5/16 against a null that matches or beats it 30.9% of the time: that did not
+demonstrate skill, and did not reject the model in favour of the null either.
+The case for using this slate is that it is frozen, consistent, data-driven
+and fixed before the outcome — not that it is known to work. See
+[the group card postmortem](2026-08-16-group-card-postmortem.md).
 
 ## What the rating response does and does not show
 
