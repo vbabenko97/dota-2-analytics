@@ -83,15 +83,36 @@ through the lower bracket; the owner's card removes Yandex from every branch.
 That is a third, separate judgement, and it is why E is frozen as itself rather
 than reconstructed from two flips.
 
-## Owner probabilities — a separate, smaller question
+## Subjective probabilities — a separate, smaller question
 
-Recorded in the same file, currently `elicited: false`. They cover **two
-matches**, not the card, and they are explicitly not an independent forecast:
-the owner saw `0.4709` and `0.4742` before stating them. That provenance is
-recorded with the numbers so their status cannot quietly inflate later.
+Two blocks, kept apart on purpose.
 
-They are left null rather than guessed. A number invented by the assistant
-would be worthless; one supplied after the matches would be worse.
+**`owner_probabilities` is `elicited: false`, both values null.** The owner has
+not stated numbers. They are left null rather than guessed: a number invented
+by the assistant would be worthless, one supplied after the matches would be
+worse, and one borrowed from somebody else would be a fabricated owner
+judgement that nothing in the file could later distinguish from a real one.
+
+**`external_reviewer_probabilities` holds a reviewer's stated numbers**, 0.53
+Liquid over Yandex and 0.48 Iron Wing over Spirit, against the model's 0.4709
+and 0.4742. The disagreement is concentrated almost entirely in one match:
+
+```
+Liquid    > Yandex   model 0.4709   reviewer 0.53   delta +0.0591
+Iron Wing > Spirit   model 0.4742   reviewer 0.48   delta +0.0058
+```
+
+Taken as picks these are Liquid and Spirit — **one** root override — which is
+exactly frozen card `C-override-liquid`. So the reviewer's position is already
+one of the five and is not the owner's card, which overrides both.
+
+Neither block covers the whole bracket. Doing that would need a stated
+probability for every matchup a card forecasts. Card E is scored on the 14-slot
+hit count and needs none of them.
+
+Two binary outcomes cannot establish calibration and will not be scored as
+though they could. Their value is that a position was written down before the
+matches instead of remembered afterwards.
 
 ## Interpretation, fixed in advance
 

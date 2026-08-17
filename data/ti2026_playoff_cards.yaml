@@ -161,3 +161,26 @@ owner_probabilities:
   elicited: false
   liquid_beats_yandex: null      # model says 0.4709
   iron_wing_beats_spirit: null   # model says 0.4742
+
+# An EXTERNAL REVIEWER's probabilities for the same two matches. Recorded in a
+# separate block on purpose: they are not the owner's, and writing them into
+# `owner_probabilities` above would manufacture an owner judgement that was
+# never made. The owner's fields stay null until the owner states numbers.
+#
+# Two binary outcomes. This cannot establish calibration and is not scored as
+# though it could -- its value is that a position was stated before the matches
+# rather than remembered afterwards.
+external_reviewer_probabilities:
+  reviewer: external_gpt_reviewer_relayed_by_owner
+  provenance: >-
+    elicited after the model's probabilities were visible and after completion
+    of the TI 2026 group stage; before any playoff outcome. Judgmental forecast,
+    not independent of the supplied context or of the model output.
+  elicited: true
+  liquid_beats_yandex: 0.53      # model says 0.4709, delta +0.0591
+  iron_wing_beats_spirit: 0.48   # model says 0.4742, delta +0.0058
+  # Taken as picks these two probabilities are Liquid and Spirit, which is
+  # exactly frozen card C-override-liquid. The reviewer's stated position is
+  # therefore already one of the five, and it is NOT the owner's card: it
+  # overrides one root decision, not both.
+  implied_card: C-override-liquid

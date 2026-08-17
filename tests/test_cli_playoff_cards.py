@@ -60,18 +60,44 @@ def test_the_headline_pair_is_designated_and_is_exactly_two_cards():
     assert attribution == {"B-override-iron-wing", "C-override-liquid", "D-override-both"}
 
 
-def test_owner_probabilities_are_null_until_elicited():
-    """Kills shipping an invented subjective probability.
+def test_owner_probabilities_are_null_until_the_owner_states_them():
+    """Kills filling the owner's field with somebody else's number.
 
-    A number the assistant made up would be indistinguishable in the file from
-    one the owner stated, and would then be scored as though it were a human
-    forecast.
+    An external reviewer supplied 0.53 and 0.48 for these two matches. Writing
+    those into `owner_probabilities` would manufacture an owner judgement that
+    was never made, and afterwards nothing in the file would distinguish it
+    from one the owner actually stated.
     """
     owner = FROZEN["owner_probabilities"]
     assert owner["elicited"] is False
     assert owner["liquid_beats_yandex"] is None
     assert owner["iron_wing_beats_spirit"] is None
     assert "not independent of the model" in owner["provenance"].lower()
+
+    reviewer = FROZEN["external_reviewer_probabilities"]
+    assert reviewer["elicited"] is True
+    assert reviewer["liquid_beats_yandex"] == 0.53
+    assert reviewer["iron_wing_beats_spirit"] == 0.48
+    assert reviewer["reviewer"] != "owner"
+
+
+def test_the_reviewer_position_maps_onto_an_already_frozen_card():
+    """Kills a drift between the stated probabilities and the card they imply.
+
+    Taken as picks, 0.53 Liquid and 0.48 Iron Wing mean Liquid and Spirit --
+    one root override, not both -- which is card C. If either number ever
+    crossed 0.5 the implied card would change and `implied_card` would quietly
+    become a false label on a frozen artifact.
+    """
+    reviewer = FROZEN["external_reviewer_probabilities"]
+    picks_liquid = reviewer["liquid_beats_yandex"] > 0.5
+    picks_iron_wing = reviewer["iron_wing_beats_spirit"] > 0.5
+    assert picks_liquid and not picks_iron_wing
+    assert reviewer["implied_card"] == "C-override-liquid"
+
+    card = next(e for e in FROZEN["cards"] if e["id"] == reviewer["implied_card"])
+    assert card["picks"]["UB QF3"] == "Team Liquid"
+    assert card["picks"]["UB QF1"] == "Team Spirit"
 
 
 def test_owner_card_is_not_the_model_optimum_under_its_own_two_overrides():
