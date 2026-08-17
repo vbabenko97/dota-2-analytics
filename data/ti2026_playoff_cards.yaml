@@ -1,0 +1,163 @@
+# Five playoff brackets, frozen before the Compendium lock.
+#
+# Registered in docs/superpowers/specs/2026-08-17-playoff-card-comparison.md.
+# The headline comparison is designated there in advance as A vs E; B, C and D
+# exist only to attribute the difference and may not be promoted to the
+# headline after the outcomes are known.
+#
+# Every card is a coherent 14-slot bracket over the confirmed eight-team field
+# under the CROSS-FEED topology, which is confirmed from the locked client
+# (provenance: owner-supplied locked-client screenshot, not web or community
+# evidence). The registered null for this topology is 3.75 / 14.
+#
+# `model_implied_expected` on each card is the sum of the model's own per-slot
+# marginals under that card. It is descriptive only and never evidence of
+# skill. It is recomputed from the store by `cli_playoff_cards`, which fails if
+# these literals drift.
+
+topology: cross-feed
+topology_provenance: owner_supplied_locked_client_screenshot
+null_expected_hits: 3.75
+
+seeds:
+  - Iron Wing
+  - Team Spirit
+  - Team Vision
+  - BoomBoys
+  - Team Liquid
+  - Team Yandex
+  - Nigma Galaxy
+  - Team Falcons
+
+cards:
+  - id: A-model
+    role: headline
+    provenance: >-
+      Model optimum by full enumeration of all 2^14 coherent brackets, on the
+      post-group-stage store (protocol deviation recorded in the playoff spec).
+      No human input.
+    model_implied_expected: 4.3615
+    picks:
+      UB QF1: Team Spirit
+      UB QF2: Team Vision
+      UB QF3: Team Yandex
+      UB QF4: Team Falcons
+      UB SF1: Team Vision
+      UB SF2: Team Yandex
+      UB Final: Team Vision
+      LB R1M1: BoomBoys
+      LB R1M2: Team Liquid
+      LB QF1: BoomBoys
+      LB QF2: Team Spirit
+      LB SF: Team Spirit
+      LB Final: Team Yandex
+      Grand Final: Team Vision
+
+  - id: B-override-iron-wing
+    role: attribution
+    provenance: >-
+      Model optimum subject to UB QF1 = Iron Wing. Constructed analytically to
+      isolate one of the owner's two root decisions; never submitted anywhere.
+    model_implied_expected: 4.2820
+    picks:
+      UB QF1: Iron Wing
+      UB QF2: Team Vision
+      UB QF3: Team Yandex
+      UB QF4: Team Falcons
+      UB SF1: Team Vision
+      UB SF2: Team Yandex
+      UB Final: Team Vision
+      LB R1M1: BoomBoys
+      LB R1M2: Team Liquid
+      LB QF1: BoomBoys
+      LB QF2: Team Liquid
+      LB SF: Team Liquid
+      LB Final: Team Yandex
+      Grand Final: Team Vision
+
+  - id: C-override-liquid
+    role: attribution
+    provenance: >-
+      Model optimum subject to UB QF3 = Team Liquid. Constructed analytically to
+      isolate the other root decision; never submitted anywhere.
+    model_implied_expected: 4.2545
+    picks:
+      UB QF1: Team Spirit
+      UB QF2: Team Vision
+      UB QF3: Team Liquid
+      UB QF4: Team Falcons
+      UB SF1: Team Vision
+      UB SF2: Team Falcons
+      UB Final: Team Vision
+      LB R1M1: BoomBoys
+      LB R1M2: Nigma Galaxy
+      LB QF1: BoomBoys
+      LB QF2: Team Spirit
+      LB SF: Team Spirit
+      LB Final: Team Falcons
+      Grand Final: Team Vision
+
+  - id: D-override-both
+    role: attribution
+    provenance: >-
+      Model optimum subject to BOTH root decisions. It is NOT the owner's card:
+      the model still routes Team Yandex deep through the lower bracket, which
+      the owner's card does not, so D and E differ at six further slots.
+    model_implied_expected: 4.2002
+    picks:
+      UB QF1: Iron Wing
+      UB QF2: Team Vision
+      UB QF3: Team Liquid
+      UB QF4: Team Falcons
+      UB SF1: Team Vision
+      UB SF2: Team Falcons
+      UB Final: Team Vision
+      LB R1M1: BoomBoys
+      LB R1M2: Team Yandex
+      LB QF1: BoomBoys
+      LB QF2: Team Yandex
+      LB SF: Team Yandex
+      LB Final: Team Yandex
+      Grand Final: Team Vision
+
+  - id: E-owner
+    role: headline
+    provenance: >-
+      The owner's own bracket, transcribed from the locked-client Predictions
+      screen before the lock. Formed AFTER seeing the model's per-slot
+      probabilities and after watching the group stage, so it is out of sample
+      with respect to the OUTCOMES but is not independent of the model.
+    model_implied_expected: 4.1356
+    picks:
+      UB QF1: Iron Wing
+      UB QF2: Team Vision
+      UB QF3: Team Liquid
+      UB QF4: Team Falcons
+      UB SF1: Team Vision
+      UB SF2: Team Liquid
+      UB Final: Team Vision
+      LB R1M1: BoomBoys
+      LB R1M2: Nigma Galaxy
+      LB QF1: Team Falcons
+      LB QF2: Iron Wing
+      LB SF: Team Falcons
+      LB Final: Team Liquid
+      Grand Final: Team Vision
+
+# Owner's subjective probabilities for the two disputed root decisions.
+#
+# NOT YET ELICITED. They are deliberately left null rather than guessed: a
+# number invented here would be worthless, and one supplied after the matches
+# would be worse than worthless. When supplied they must carry the provenance
+# below, because the owner saw the model's numbers first and they are therefore
+# not an independent forecast.
+#
+# These two probabilities describe TWO MATCHES, not the whole card. Card E is
+# scored on the 14-slot hit count and needs none of them.
+owner_probabilities:
+  provenance: >-
+    elicited after viewing the model's probabilities and after watching the TI
+    2026 group stage; before any playoff outcome. Not independent of the model.
+  elicited: false
+  liquid_beats_yandex: null      # model says 0.4709
+  iron_wing_beats_spirit: null   # model says 0.4742
