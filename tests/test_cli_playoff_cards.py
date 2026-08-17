@@ -60,25 +60,49 @@ def test_the_headline_pair_is_designated_and_is_exactly_two_cards():
     assert attribution == {"B-override-iron-wing", "C-override-liquid", "D-override-both"}
 
 
-def test_owner_probabilities_are_null_until_the_owner_states_them():
-    """Kills filling the owner's field with somebody else's number.
+def test_owner_and_reviewer_probabilities_stay_in_separate_blocks():
+    """Kills collapsing two different people's forecasts into one.
 
-    An external reviewer supplied 0.53 and 0.48 for these two matches. Writing
-    those into `owner_probabilities` would manufacture an owner judgement that
-    was never made, and afterwards nothing in the file would distinguish it
-    from one the owner actually stated.
+    Both are now stated and they differ: owner 0.60/0.55, reviewer 0.53/0.48.
+    Copying one into the other's block -- the tempting move when a field looks
+    empty -- would manufacture a judgement that was never made, and afterwards
+    nothing in the file could distinguish it from a real one.
     """
     owner = FROZEN["owner_probabilities"]
-    assert owner["elicited"] is False
-    assert owner["liquid_beats_yandex"] is None
-    assert owner["iron_wing_beats_spirit"] is None
-    assert "not independent of the model" in owner["provenance"].lower()
-
     reviewer = FROZEN["external_reviewer_probabilities"]
+    assert owner["elicited"] is True
     assert reviewer["elicited"] is True
-    assert reviewer["liquid_beats_yandex"] == 0.53
-    assert reviewer["iron_wing_beats_spirit"] == 0.48
-    assert reviewer["reviewer"] != "owner"
+    assert (owner["liquid_beats_yandex"], owner["iron_wing_beats_spirit"]) == (0.60, 0.55)
+    assert (reviewer["liquid_beats_yandex"], reviewer["iron_wing_beats_spirit"]) == (0.53, 0.48)
+    assert owner["liquid_beats_yandex"] != reviewer["liquid_beats_yandex"]
+    assert owner["iron_wing_beats_spirit"] != reviewer["iron_wing_beats_spirit"]
+    for block in (owner, reviewer):
+        provenance = block["provenance"].lower()
+        assert "not independent" in provenance
+        assert "before any playoff outcome" in provenance
+
+
+def test_owner_probabilities_are_not_labelled_with_a_single_card():
+    """Kills claiming these two numbers identify the owner's bracket.
+
+    0.60 Liquid and 0.55 Iron Wing pin BOTH root decisions, which cards D and E
+    share. They are separated only by six downstream slots that these two
+    probabilities say nothing about. An `implied_card: E-owner` label would
+    assert the numbers determine a card they cannot determine.
+    """
+    owner = FROZEN["owner_probabilities"]
+    assert "implied_card" not in owner
+    assert owner["consistent_with_cards"] == ["D-override-both", "E-owner"]
+    assert owner["card_actually_submitted"] == "E-owner"
+
+    cards = {entry["id"]: entry["picks"] for entry in FROZEN["cards"]}
+    roots = owner["implied_root_decisions"]
+    matching = [
+        name
+        for name, picks in cards.items()
+        if all(picks[slot] == team for slot, team in roots.items())
+    ]
+    assert sorted(matching) == ["D-override-both", "E-owner"]
 
 
 def test_the_reviewer_position_maps_onto_an_already_frozen_card():

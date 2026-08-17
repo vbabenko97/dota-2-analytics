@@ -149,12 +149,45 @@ def main(argv: list[str] | None = None) -> int:
         )
         print()
 
-    owner = frozen.get("owner_probabilities") or {}
-    if not owner.get("elicited"):
-        print(
-            "Owner probabilities are **not yet elicited**. They cover two matches, not the "
-            "card, and card E is scored on the hit count without them."
-        )
+    print("## Stated probabilities on the two root decisions")
+    print()
+    print("| match | model | reviewer | owner |")
+    print("|---|---|---|---|")
+    blocks = [
+        ("reviewer", frozen.get("external_reviewer_probabilities") or {}),
+        ("owner", frozen.get("owner_probabilities") or {}),
+    ]
+    for label, key, a, b in (
+        ("Liquid > Yandex", "liquid_beats_yandex", "Team Liquid", "Team Yandex"),
+        ("Iron Wing > Spirit", "iron_wing_beats_spirit", "Iron Wing", "Team Spirit"),
+    ):
+        model_p = prob(a, b, 3)
+        cells = []
+        for _name, block in blocks:
+            value = block.get(key)
+            cells.append("not stated" if value is None else f"{value:.2f}")
+        print(f"| {label} | {model_p:.4f} | {cells[0]} | {cells[1]} |")
+    print()
+    for name, block in blocks:
+        if not block.get("elicited"):
+            print(f"The {name}'s probabilities are **not stated**.")
+            continue
+        stated = [
+            (key, block[key], prob(a, b, 3))
+            for key, a, b in (
+                ("liquid_beats_yandex", "Team Liquid", "Team Yandex"),
+                ("iron_wing_beats_spirit", "Iron Wing", "Team Spirit"),
+            )
+            if block.get(key) is not None
+        ]
+        deltas = ", ".join(f"{value - model_p:+.4f}" for _key, value, model_p in stated)
+        print(f"The {name} is {deltas} from the model on those two matches.")
+    print()
+    print(
+        "Both are judgmental forecasts made after the model's numbers were visible: out of "
+        "sample with respect to the outcomes, not independent of the model. Two binary "
+        "outcomes cannot establish calibration and are not scored as though they could."
+    )
     return 0
 
 

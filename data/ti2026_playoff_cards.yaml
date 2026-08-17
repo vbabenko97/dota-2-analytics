@@ -156,11 +156,22 @@ cards:
 # scored on the 14-slot hit count and needs none of them.
 owner_probabilities:
   provenance: >-
-    elicited after viewing the model's probabilities and after watching the TI
-    2026 group stage; before any playoff outcome. Not independent of the model.
-  elicited: false
-  liquid_beats_yandex: null      # model says 0.4709
-  iron_wing_beats_spirit: null   # model says 0.4742
+    stated by the owner after viewing the model's probabilities and after
+    watching the TI 2026 group stage; before any playoff outcome. Judgmental
+    forecast, out of sample with respect to the outcomes but NOT independent of
+    the model, whose numbers the owner had already seen.
+  elicited: true
+  liquid_beats_yandex: 0.60      # model says 0.4709, delta +0.1291
+  iron_wing_beats_spirit: 0.55   # model says 0.4742, delta +0.0758
+  # Taken as picks these are Team Liquid and Iron Wing -- BOTH root decisions.
+  # That does NOT identify a single frozen card: D and E share both roots and
+  # are separated only by six downstream slots, which these two numbers say
+  # nothing about. So the field below is deliberately a pair, not `implied_card`.
+  implied_root_decisions:
+    UB QF1: Iron Wing
+    UB QF3: Team Liquid
+  consistent_with_cards: [D-override-both, E-owner]
+  card_actually_submitted: E-owner
 
 # An EXTERNAL REVIEWER's probabilities for the same two matches. Recorded in a
 # separate block on purpose: they are not the owner's, and writing them into

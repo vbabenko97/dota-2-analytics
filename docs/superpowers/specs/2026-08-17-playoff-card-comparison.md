@@ -85,34 +85,43 @@ than reconstructed from two flips.
 
 ## Subjective probabilities — a separate, smaller question
 
-Two blocks, kept apart on purpose.
+Two blocks, kept apart on purpose, both now stated before any playoff match.
+They are different people's judgements and must never be merged to fill a field
+that looks empty.
 
-**`owner_probabilities` is `elicited: false`, both values null.** The owner has
-not stated numbers. They are left null rather than guessed: a number invented
-by the assistant would be worthless, one supplied after the matches would be
-worse, and one borrowed from somebody else would be a fabricated owner
-judgement that nothing in the file could later distinguish from a real one.
+| match | model | reviewer | owner |
+|---|---|---|---|
+| Liquid > Yandex | 0.4709 | 0.53 | **0.60** |
+| Iron Wing > Spirit | 0.4742 | 0.48 | **0.55** |
 
-**`external_reviewer_probabilities` holds a reviewer's stated numbers**, 0.53
-Liquid over Yandex and 0.48 Iron Wing over Spirit, against the model's 0.4709
-and 0.4742. The disagreement is concentrated almost entirely in one match:
+A three-way spread on the same two matches, all frozen in advance. The owner is
+`+0.1291` and `+0.0758` from the model; the reviewer is `+0.0591` and `+0.0058`,
+i.e. effectively agreeing with the model on the second match.
 
-```
-Liquid    > Yandex   model 0.4709   reviewer 0.53   delta +0.0591
-Iron Wing > Spirit   model 0.4742   reviewer 0.48   delta +0.0058
-```
+Both are judgmental forecasts made after the model's numbers were visible.
+They are out of sample with respect to the outcomes and **not independent of
+the model**, and that provenance is recorded with the numbers so it cannot
+quietly inflate later.
 
-Taken as picks these are Liquid and Spirit — **one** root override — which is
-exactly frozen card `C-override-liquid`. So the reviewer's position is already
-one of the five and is not the owner's card, which overrides both.
+### What each pair does and does not identify
 
-Neither block covers the whole bracket. Doing that would need a stated
-probability for every matchup a card forecasts. Card E is scored on the 14-slot
-hit count and needs none of them.
+Taken as picks, the reviewer's are Liquid and Spirit — **one** root override —
+which is uniquely frozen card `C-override-liquid`.
+
+The owner's are Liquid and Iron Wing — **both** root overrides — which is
+**not** unique: cards D and E share both roots and are separated only by six
+downstream slots these two numbers say nothing about. The file therefore
+records `implied_root_decisions` and `consistent_with_cards: [D, E]` rather
+than a single `implied_card`, and notes separately that E is the card actually
+submitted.
+
+Neither pair covers a whole bracket. That would need a stated probability for
+every matchup a card forecasts. Card E is scored on the 14-slot hit count and
+needs none of them.
 
 Two binary outcomes cannot establish calibration and will not be scored as
-though they could. Their value is that a position was written down before the
-matches instead of remembered afterwards.
+though they could. Their value is that three positions were written down before
+the matches instead of remembered afterwards.
 
 ## Interpretation, fixed in advance
 
