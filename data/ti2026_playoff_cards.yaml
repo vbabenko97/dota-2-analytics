@@ -1,9 +1,10 @@
-# Five playoff brackets, frozen before the Compendium lock.
+# Seven playoff brackets, frozen before the first Main Event match.
 #
 # Registered in docs/superpowers/specs/2026-08-17-playoff-card-comparison.md.
 # The headline comparison is designated there in advance as A vs E; B, C and D
-# exist only to attribute the difference and may not be promoted to the
-# headline after the outcomes are known.
+# exist only to attribute the difference, and F and G are supplemental external
+# entrants. None of them may be promoted to the headline after the outcomes are
+# known, however well one happens to score.
 #
 # Every card is a coherent 14-slot bracket over the confirmed eight-team field
 # under the CROSS-FEED topology, which is confirmed from the locked client
@@ -144,6 +145,89 @@ cards:
       LB Final: Team Liquid
       Grand Final: Team Vision
 
+  - id: F-gpt-5-6-xhigh
+    role: external
+    provenance: >-
+      Bracket extracted from an LLM-authored analysis supplied by the owner,
+      raw file frozen at predictions-from-llms/gpt-5-6-xhigh.md. Time of
+      generation is NOT verifiable -- the file mtime is author-settable exactly
+      as a git commit date is -- so the only defensible claim is that it was
+      committed and pushed before the first Main Event match. The prompt,
+      settings and tool access were not supplied, so no claim is made about the
+      forecast's independence from any other entry here.
+    source_sha256: 5e041d69f5c257b86553859587fa90bf6f4a59285ee10aebdae34e482adc50b1
+    source_bytes: 45002
+    stated_model_identity: owner_supplied_unverified
+    # The author's own description of the method, not a claim by this project:
+    # a recency-weighted, roster-aware Elo variant with an approximately 60-day
+    # half-life, 300000 bracket simulations, explicitly "not presented as a
+    # formally calibrated" model. That half-life is the same time-decay
+    # hypothesis this project has DEFERRED to a future registration, so this
+    # card is one unvalidated realisation of it rather than evidence for it.
+    topology_used: cross-feed
+    topology_evidence: none
+    # It states it simulated "the standard eight-team double-elimination feed".
+    # That is an ASSUMPTION of the standard topology, not an observation of the
+    # locked client, and it may not be cited as corroboration of the topology.
+    probability_semantics: >-
+      The percentages in the source are CONDITIONAL series probabilities given
+      that the projected matchup occurs, which the file itself calls conditional
+      modal projections. They are NOT slot marginals and must never be placed
+      beside this project's per-slot marginals as though they disagreed.
+    model_implied_expected: 4.1886
+    picks:
+      UB QF1: Team Spirit
+      UB QF2: Team Vision
+      UB QF3: Team Liquid
+      UB QF4: Team Falcons
+      UB SF1: Team Vision
+      UB SF2: Team Liquid
+      UB Final: Team Vision
+      LB R1M1: BoomBoys
+      LB R1M2: Team Yandex
+      LB QF1: Team Falcons
+      LB QF2: Team Yandex
+      LB SF: Team Yandex
+      LB Final: Team Liquid
+      Grand Final: Team Vision
+
+  - id: G-gemini-3-1-pro
+    role: external
+    provenance: >-
+      Bracket extracted from an LLM-authored analysis supplied by the owner,
+      raw file frozen at predictions-from-llms/gemini-3-1-pro.md. Same limits as
+      F: generation time unverifiable, prompt and settings not supplied, no
+      independence claim.
+    source_sha256: 018ce4da34d3f409746b53ab09096ebd6f138a5e38e523879a16b112df5f4364
+    source_bytes: 38530
+    stated_model_identity: owner_supplied_unverified
+    topology_used: cross-feed
+    topology_evidence: none
+    # The source prose carries at least one internal contradiction: it states
+    # the Main Event is an eight-team bracket and then places the LB Round 1
+    # loser at "13th-16th place", which is impossible in a field of eight. The
+    # 14 picks are unaffected, and that is exactly why the CARD is frozen here
+    # and the explanatory text is not promoted to an evidence corpus.
+    #
+    # Checked and passing: its stated Swiss records for all eight playoff teams
+    # match data/ti2026_outcome.yaml exactly.
+    model_implied_expected: 4.0707
+    picks:
+      UB QF1: Iron Wing
+      UB QF2: Team Vision
+      UB QF3: Team Liquid
+      UB QF4: Team Falcons
+      UB SF1: Team Vision
+      UB SF2: Team Falcons
+      UB Final: Team Vision
+      LB R1M1: Team Spirit
+      LB R1M2: Nigma Galaxy
+      LB QF1: Team Liquid
+      LB QF2: Iron Wing
+      LB SF: Team Liquid
+      LB Final: Team Falcons
+      Grand Final: Team Vision
+
 # Owner's subjective probabilities for the two disputed root decisions.
 #
 # NOT YET ELICITED. They are deliberately left null rather than guessed: a
@@ -170,7 +254,7 @@ owner_probabilities:
   implied_root_decisions:
     UB QF1: Iron Wing
     UB QF3: Team Liquid
-  consistent_with_cards: [D-override-both, E-owner]
+  consistent_with_cards: [D-override-both, E-owner, G-gemini-3-1-pro]
   card_actually_submitted: E-owner
 
 # An EXTERNAL REVIEWER's probabilities for the same two matches. Recorded in a
@@ -190,8 +274,12 @@ external_reviewer_probabilities:
   elicited: true
   liquid_beats_yandex: 0.53      # model says 0.4709, delta +0.0591
   iron_wing_beats_spirit: 0.48   # model says 0.4742, delta +0.0058
-  # Taken as picks these two probabilities are Liquid and Spirit, which is
-  # exactly frozen card C-override-liquid. The reviewer's stated position is
-  # therefore already one of the five, and it is NOT the owner's card: it
-  # overrides one root decision, not both.
-  implied_card: C-override-liquid
+  # Taken as picks these two probabilities are Liquid and Spirit -- ONE root
+  # override, not both, so this is not the owner's position. It was unique to
+  # card C until the external entrants were frozen; F shares the same two roots,
+  # so a single `implied_card` label would now be false. Recorded as the pair
+  # and the set, like the owner's block.
+  implied_root_decisions:
+    UB QF1: Team Spirit
+    UB QF3: Team Liquid
+  consistent_with_cards: [C-override-liquid, F-gpt-5-6-xhigh]
