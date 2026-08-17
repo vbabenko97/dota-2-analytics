@@ -7,6 +7,34 @@ The date is bound to that verifiable state rather than to a calendar assertion:
 the owner's locked-client screenshot shows `THE INTERNATIONAL — LOCKS IN 2
 DAYS` and `UB ROUND 1 — AUG 20`, with the group stage already `LOCKED 5/16`.
 
+## The notarial record
+
+```
+frozen at    3ebff935b4e45cb891ce97ee7ba1399ceb9a006b
+branch       feat/playoff-card-freeze   (never rebased; these SHAs are the record)
+pull request https://github.com/vbabenko97/dota-2-analytics/pull/28
+created at   2026-08-17T08:19:20Z       (GitHub, third party)
+```
+
+**The commit dates in this repository are not evidence of when anything was
+written.** `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` are author-controlled, so
+a local commit — however early its timestamp reads — proves nothing about
+preregistration on its own. An earlier claim in discussion that "the local
+commit standing before the lock is the freeze" was wrong for audit purposes and
+is withdrawn.
+
+What does carry weight is the pull request's creation time above: a durable,
+public, third-party upper bound on when these exact objects existed. It is
+recorded here because the pre-lock claim rests on it and on nothing else.
+
+The commits are **not signed** — signing is not configured in this repository.
+Signing would establish authorship, which is a different question from time and
+is not what the preregistration claim needs.
+
+`feat/playoff-card-freeze` will not be rebased. When the branch it is stacked
+on merges, a separate branch carries the same content forward; this reference
+stays pointed at the original.
+
 Five brackets are frozen in `data/ti2026_playoff_cards.yaml`. This document
 fixes what they are for, which comparison is the headline, and what the result
 may and may not be used to claim.
