@@ -51,10 +51,33 @@ A pick naming a team that never reached the slot is a miss, not an error. The
 submitted bracket must be internally coherent: a team may occupy a later slot
 only if the same bracket advanced it there.
 
-## The unresolved input: lower-bracket feed topology
+## The lower-bracket feed topology — RESOLVED: cross-feed
+
+**Resolved from the locked client before any playoff match.** Provenance is
+`owner_supplied_locked_client_screenshot` — a distinct class from the web and
+community sources below, and the only one that settled it.
+
+The topology is not read off a label; it is derived from which teams the client
+places together in Lower Bracket Round 2:
+
+```
+LB R1M1 = losers of UB QF1, QF2   -> TOP half
+LB R1M2 = losers of UB QF3, QF4   -> BOTTOM half
+UB SF1 loser -> TOP    UB SF2 loser -> BOTTOM
+
+client shows:  UB SF2 loser  vs  LB R1M1 winner   (bottom vs top)
+               UB SF1 loser  vs  LB R1M2 winner   (top vs bottom)
+```
+
+Both pairings cross halves, which is cross-feed, and it matches `bracket.py`'s
+`cross_feed=True` routing exactly. **The registered null is therefore 3.75 /
+14**, and the blocking condition below is discharged.
+
+The paragraph that follows is kept as written, because the state of the
+evidence before the client settled it is part of the record.
 
 Whether an Upper Bracket semifinal loser meets the Lower Bracket Round 1 winner
-from its **own** half or the **opposite** half is not established. It is absent
+from its **own** half or the **opposite** half was not established. It is absent
 from Valve's announcements, from the Liquipedia page (flagged in development),
 and from every public derived source checked. One community implementation
 shows cross-feed; that is corroboration, not verification, and a second public
@@ -242,7 +265,41 @@ Comparing 32.2% against our champion probability would therefore compare two
 different questions. `1W` and `Iron Wing` are the same organisation and are not
 a discrepancy.
 
-## Blocking condition
+### Snapshot #13 removes the information-state objection, not the others
+
+DatDota #13 carries non-zero title probability for exactly **eight** teams,
+summing to 99.99%. It is now conditioned on the same field we are, so the
+first objection above no longer applies and the title probabilities are
+comparable directly:
+
+| team | ours | datdota #13 |
+|---|---|---|
+| Team Vision | 24.29% | 28.95% |
+| Team Yandex | 13.69% | 18.19% |
+| Team Falcons | 11.60% | 14.79% |
+| **Nigma Galaxy** | **11.23%** | **1.87%** |
+| Team Spirit | 11.19% | 8.21% |
+| Team Liquid | 10.23% | 11.95% |
+| BoomBoys | 9.21% | 9.95% |
+| Iron Wing | 8.56% | 6.08% |
+
+Three limits survive, and they are why this still is not corroboration:
+
+1. These are **title probabilities, not head-to-head probabilities**. That both
+   models rank Yandex above Liquid does not license "DatDota is more confident
+   than we are in Yandex over Liquid" — a title probability aggregates strength
+   with a path through the bracket.
+2. The two models are **not statistically independent**. Both are rating-based
+   Monte Carlo fits over professional match history. Agreement between two
+   implementations of one family is weaker than agreement between two different
+   kinds of evidence.
+3. The source is not independently retrievable: the DatDota page returns 403 to
+   an outside fetch, so #13 rests on an owner-supplied screenshot.
+
+The largest disagreement is not Yandex at all. It is **Nigma Galaxy, 11.23%
+against 1.87%** — a sixfold gap, and a far better target for investigation.
+
+## Blocking condition — DISCHARGED
 
 Compute the optimal slate under **both** topologies and compare.
 
@@ -250,3 +307,13 @@ Compute the optimal slate under **both** topologies and compare.
   artifact and remains a provenance note on which null applies.
 - If any pick differs, the artifact **may not ship** without verifying the
   topology from the locked client bracket.
+
+Two picks differed — LB QF1 and LB QF2 — so the second branch applied and the
+artifact was blocked. The topology was then verified from the locked client as
+cross-feed, which is the condition the branch names. **Discharged as
+registered**, by the route registered, not by waiving it.
+
+The slate that follows from it is frozen as card `A-model` in
+`data/ti2026_playoff_cards.yaml`, alongside the owner's own bracket and three
+attribution counterfactuals, under
+[the playoff card comparison registration](2026-08-17-playoff-card-comparison.md).
