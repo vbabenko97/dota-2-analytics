@@ -9,13 +9,6 @@ DAYS` and `UB ROUND 1 — AUG 20`, with the group stage already `LOCKED 5/16`.
 
 ## The notarial record
 
-```
-frozen at    3ebff935b4e45cb891ce97ee7ba1399ceb9a006b
-branch       feat/playoff-card-freeze   (never rebased; these SHAs are the record)
-pull request https://github.com/vbabenko97/dota-2-analytics/pull/28
-created at   2026-08-17T08:19:20Z       (GitHub, third party)
-```
-
 **The commit dates in this repository are not evidence of when anything was
 written.** `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` are author-controlled, so
 a local commit — however early its timestamp reads — proves nothing about
@@ -23,17 +16,45 @@ preregistration on its own. An earlier claim in discussion that "the local
 commit standing before the lock is the freeze" was wrong for audit purposes and
 is withdrawn.
 
-What does carry weight is the pull request's creation time above: a durable,
-public, third-party upper bound on when these exact objects existed. It is
-recorded here because the pre-lock claim rests on it and on nothing else.
+### Primary durable anchor
+
+```
+PR #28  merged_at         2026-08-17T08:21:38Z    (GitHub server timestamp)
+PR #28  merge_commit_sha  1e5960e7162d80cdf5dd862bb341c437fb2263ef
+frozen commit             3ebff935b4e45cb891ce97ee7ba1399ceb9a006b
+                          verified: an ancestor of that merge commit
+```
+
+The first playoff match is `UB ROUND 1 — AUG 20` per the locked client, so the
+merge precedes every outcome these cards forecast. Because #28 was merged with
+a **merge commit** rather than squashed or rebased, the frozen objects entered
+`main`'s ancestry unchanged. That is what makes this anchor durable: the exact
+commit is reachable from a server-timestamped merge, and no later branch
+activity — or deletion of `feat/playoff-card-freeze` — can affect it.
+
+### Supporting contemporaneous receipt
+
+```
+PR #28  created_at        2026-08-17T08:19:20Z
+        headRefOid observed at creation: 3ebff935b4e45cb891ce97ee7ba1399ceb9a006b
+```
+
+This is recorded as **supporting evidence only, and it is weaker than it looks**.
+`ae9907b` — this section itself — was pushed after the pull request was opened,
+so the PR's `head.sha` now reads `ae9907b124ecb4dba098020839113c2cb8197ed1`.
+Current PR metadata therefore does **not** show that the head at creation was
+`3ebff93`, and the events that would connect them expire. `created_at` alone
+must not be cited as binding the pull request to the frozen commit; the merge
+anchor above is what carries the claim.
+
+### Not claimed
 
 The commits are **not signed** — signing is not configured in this repository.
-Signing would establish authorship, which is a different question from time and
-is not what the preregistration claim needs.
+Signing establishes authorship, which is a different question from time and not
+the one this preregistration needs.
 
-`feat/playoff-card-freeze` will not be rebased. When the branch it is stacked
-on merges, a separate branch carries the same content forward; this reference
-stays pointed at the original.
+`feat/playoff-card-freeze` was never rebased, so the SHAs above are the original
+objects rather than replayed copies.
 
 Five brackets are frozen in `data/ti2026_playoff_cards.yaml`. This document
 fixes what they are for, which comparison is the headline, and what the result
