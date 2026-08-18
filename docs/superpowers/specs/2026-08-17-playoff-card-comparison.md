@@ -18,12 +18,30 @@ is withdrawn.
 
 ### Primary durable anchor
 
+Two freezes, each with its own anchor. **The second is the one that covers the
+card actually submitted**; the first covers the original five and the state of
+the registration on 2026-08-17.
+
 ```
 PR #28  merged_at         2026-08-17T08:21:38Z    (GitHub server timestamp)
 PR #28  merge_commit_sha  1e5960e7162d80cdf5dd862bb341c437fb2263ef
 frozen commit             3ebff935b4e45cb891ce97ee7ba1399ceb9a006b
                           verified: an ancestor of that merge commit
+
+PR #31  merged_at         2026-08-18T06:19:08Z    (GitHub server timestamp)
+PR #31  merge_commit_sha  f847d21141e077c3d939475a2631c1001a75c704
+frozen commits            8c9145f  H-owner-final and the headline amendment
+                          c03574c  the coin-flipped slots
+                          verified: both ancestors of that merge commit
 ```
+
+Both merges precede `UB ROUND 1 — AUG 20`, the first Main Event match, so every
+card here was fixed before any outcome existed.
+
+Unlike #28, PR #31's head was **not** moved after it was opened: its `head.sha`
+is still `c03574c`, the commit it was opened on, so for that one the
+`created_at` receipt and the merge receipt agree. The merge anchor remains the
+one to cite, because it is the one that cannot be disturbed later.
 
 The first playoff match is `UB ROUND 1 — AUG 20` per the locked client, so the
 merge precedes every outcome these cards forecast. Because #28 was merged with
