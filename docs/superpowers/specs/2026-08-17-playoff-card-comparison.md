@@ -74,12 +74,57 @@ event.
 
 ```
 headline:      A-model  vs  E-owner
-attribution:   B, C, D  — may NOT be promoted to the headline afterwards
+attribution:   B, C, D  — analytic constructions
+external:      F, G     — supplemental entrants
 ```
 
-B, C and D are analytic constructions. Naming the headline in advance is the
-whole point: after the outcomes, five cards offer five stories, and the
-flattering one would be available to whichever side lost.
+Only A and E are the headline. B, C and D exist to attribute the difference;
+F and G are outside forecasts along for the ride. **None may be promoted to
+the headline afterwards, however well one happens to score.** Naming it in
+advance is the whole point: after the outcomes, seven cards offer seven
+stories, and the flattering one would be available to whichever side lost.
+
+## The two external entrants
+
+`F-gpt-5-6-xhigh` and `G-gemini-3-1-pro` are brackets extracted from
+LLM-authored analyses supplied by the owner. Both are coherent 14-slot
+brackets and both are scored by the same registered metric. The raw documents
+are frozen in `predictions-from-llms/` and bound to the cards by SHA-256, so
+the transcription can be checked against the bytes it came from and the source
+cannot be edited afterwards to agree with the result.
+
+Four limits, all recorded in the data file:
+
+1. **They are not topology evidence.** Both produced cross-feed brackets and
+   one states outright that it simulated "the standard eight-team
+   double-elimination feed". That is an assumption about the standard bracket,
+   not an observation of the locked client. The fields are `topology_used:
+   cross-feed` and `topology_evidence: none`. The topology still rests entirely
+   on the owner's client screenshot.
+2. **They are not independent measurements.** Both read the same post-Swiss
+   public narrative, which is precisely the recency signal this project's model
+   underweights. Counting model + owner + reviewer + F + G as five votes on
+   Liquid over Yandex would be counting one signal five times — the same error
+   already rejected for the DatDota comparison.
+3. **F's percentages are conditional, not marginals.** The source calls its
+   later rounds conditional modal projections: "70.8%" means *if that matchup
+   occurs*. Placing it beside this project's per-slot marginal of 0.2112 would
+   compare two different questions.
+4. **The prose is not an evidence corpus.** G's text contradicts itself — it
+   states the Main Event is eight teams and then places the LB Round 1 loser
+   at "13th-16th place", impossible in a field of eight. Its 14 picks are
+   unaffected, which is exactly why the card is frozen and the explanation is
+   not. (Checked and passing: G's stated Swiss records for all eight teams
+   match `data/ti2026_outcome.yaml` exactly.)
+
+`model_implied_expected` for F and G is **this project's model's estimate of
+those cards**, not their authors' own expected accuracy.
+
+One incidental note worth keeping: F describes its method as a
+recency-weighted Elo with an approximately 60-day half-life. That is the same
+time-decay hypothesis this project has deferred to a future registration, so F
+is one unvalidated realisation of it — interesting, and not evidence that the
+half-life is right.
 
 ## This is not an experiment
 
@@ -107,7 +152,9 @@ defined on picks.
 | B + Iron Wing | 4.2820 | −0.0795 |
 | C + Liquid | 4.2545 | −0.1070 |
 | D + both | 4.2002 | −0.1613 |
+| F gpt-5-6-xhigh | 4.1886 | −0.1729 |
 | E owner | 4.1356 | −0.2259 |
+| G gemini-3-1-pro | 4.0707 | −0.2908 |
 
 The decomposition is the useful part:
 

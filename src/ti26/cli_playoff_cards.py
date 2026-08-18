@@ -19,6 +19,7 @@ diff, is what the owner's card actually costs on the model's own account.
 """
 
 import argparse
+import hashlib
 from pathlib import Path
 
 import yaml
@@ -67,6 +68,35 @@ def coherent_picks(card: dict[str, str], seeds: list[str], cross_feed: bool) -> 
         raise PlayoffCardError(f"{slot}: picked {pick!r}, but the match is {a!r} vs {b!r}")
 
     return resolve(seeds, decide, cross_feed)
+
+
+SOURCE_ROOT = Path("predictions-from-llms")
+
+
+def verify_source_digest(entry: dict) -> None:
+    """For an external card, bind the frozen picks to the raw file's bytes.
+
+    Without this the 14 picks are a transcription nobody can check against the
+    document they came from, and the document could be edited afterwards to
+    match whatever happened. Cards with no `source_sha256` -- the model's own
+    and the owner's -- have no external source and are skipped.
+    """
+    stated = entry.get("source_sha256")
+    if stated is None:
+        return
+    path = SOURCE_ROOT / f"{entry['id'].split('-', 1)[1]}.md"
+    if not path.exists():
+        raise PlayoffCardError(f"{entry['id']}: frozen source {path} is missing")
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != stated:
+        raise PlayoffCardError(
+            f"{entry['id']}: {path} hashes to {digest}, not the frozen {stated}"
+        )
+    if len(raw) != entry["source_bytes"]:
+        raise PlayoffCardError(
+            f"{entry['id']}: {path} is {len(raw)} bytes, not the frozen {entry['source_bytes']}"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -122,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     for entry in cards:
         picks = entry["picks"]
         coherent_picks(picks, seeds, True)
+        verify_source_digest(entry)
         value = sum(dist[slot][picks[slot]] for slot in SLOTS)
         recomputed[entry["id"]] = value
         stated = entry["model_implied_expected"]

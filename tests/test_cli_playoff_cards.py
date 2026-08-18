@@ -4,7 +4,7 @@ import pytest
 import yaml
 
 from ti26.bracket import SLOTS
-from ti26.cli_playoff_cards import PlayoffCardError, coherent_picks
+from ti26.cli_playoff_cards import PlayoffCardError, coherent_picks, verify_source_digest
 
 FROZEN = yaml.safe_load(Path("data/ti2026_playoff_cards.yaml").read_text())
 SEEDS = list(FROZEN["seeds"])
@@ -18,10 +18,55 @@ def test_every_frozen_card_is_a_coherent_bracket():
     miss, so the malformed input would score as a merely bad forecast and
     nobody would learn the card was invalid.
     """
-    assert len(FROZEN["cards"]) == 5
+    assert len(FROZEN["cards"]) == 7
     for entry in FROZEN["cards"]:
         replayed = coherent_picks(entry["picks"], SEEDS, True)
         assert replayed == entry["picks"], entry["id"]
+
+
+def test_external_cards_are_bound_to_their_raw_source_bytes():
+    """Kills a transcription nobody can check against its source.
+
+    The 14 picks are read out of a long prose document by hand. Without a
+    digest the document could be edited after the matches to agree with
+    whatever happened, and the card would still look frozen.
+    """
+    external = [e for e in FROZEN["cards"] if e["role"] == "external"]
+    assert {e["id"] for e in external} == {"F-gpt-5-6-xhigh", "G-gemini-3-1-pro"}
+    for entry in external:
+        verify_source_digest(entry)
+
+
+def test_external_cards_claim_no_topology_evidence():
+    """Kills promoting an assumed topology to a corroborating observation.
+
+    Both sources produced cross-feed brackets, and one says outright that it
+    simulated "the standard eight-team double-elimination feed". That is an
+    assumption about the standard bracket, not an observation of the locked
+    client. Recording it as evidence would manufacture two extra witnesses for
+    a fact that rests entirely on the owner's client screenshot.
+    """
+    for entry in FROZEN["cards"]:
+        if entry["role"] != "external":
+            continue
+        assert entry["topology_used"] == "cross-feed"
+        assert entry["topology_evidence"] == "none"
+    assert FROZEN["topology_provenance"] == "owner_supplied_locked_client_screenshot"
+
+
+def test_external_cards_cannot_become_the_headline():
+    """Kills promoting whichever external card happens to win.
+
+    Seven frozen cards offer seven stories after the playoff. The headline was
+    designated as A vs E before any of them was played, and an external entrant
+    scoring highest is not a reason to re-designate it.
+    """
+    roles = {e["id"]: e["role"] for e in FROZEN["cards"]}
+    assert sorted(k for k, v in roles.items() if v == "headline") == ["A-model", "E-owner"]
+    assert sorted(k for k, v in roles.items() if v == "external") == [
+        "F-gpt-5-6-xhigh",
+        "G-gemini-3-1-pro",
+    ]
 
 
 def test_a_pick_naming_a_team_not_in_the_match_is_rejected():
@@ -82,46 +127,44 @@ def test_owner_and_reviewer_probabilities_stay_in_separate_blocks():
         assert "before any playoff outcome" in provenance
 
 
-def test_owner_probabilities_are_not_labelled_with_a_single_card():
-    """Kills claiming these two numbers identify the owner's bracket.
+def test_the_submitted_card_is_recorded_separately_from_the_consistent_set():
+    """Kills inferring what was submitted from the stated probabilities.
 
-    0.60 Liquid and 0.55 Iron Wing pin BOTH root decisions, which cards D and E
-    share. They are separated only by six downstream slots that these two
-    probabilities say nothing about. An `implied_card: E-owner` label would
-    assert the numbers determine a card they cannot determine.
+    Three frozen cards share the owner's two root decisions, and only one of
+    them was entered in the client. Which one that is, is a separate fact that
+    the probabilities cannot supply and that must be recorded on its own.
     """
     owner = FROZEN["owner_probabilities"]
-    assert "implied_card" not in owner
-    assert owner["consistent_with_cards"] == ["D-override-both", "E-owner"]
     assert owner["card_actually_submitted"] == "E-owner"
-
-    cards = {entry["id"]: entry["picks"] for entry in FROZEN["cards"]}
-    roots = owner["implied_root_decisions"]
-    matching = [
-        name
-        for name, picks in cards.items()
-        if all(picks[slot] == team for slot, team in roots.items())
-    ]
-    assert sorted(matching) == ["D-override-both", "E-owner"]
+    assert len(owner["consistent_with_cards"]) > 1
+    assert owner["card_actually_submitted"] in owner["consistent_with_cards"]
 
 
-def test_the_reviewer_position_maps_onto_an_already_frozen_card():
-    """Kills a drift between the stated probabilities and the card they imply.
+def test_stated_probabilities_list_every_card_they_are_consistent_with():
+    """Kills a stale `consistent_with_cards` set after new cards are frozen.
 
-    Taken as picks, 0.53 Liquid and 0.48 Iron Wing mean Liquid and Spirit --
-    one root override, not both -- which is card C. If either number ever
-    crossed 0.5 the implied card would change and `implied_card` would quietly
-    become a false label on a frozen artifact.
+    The reviewer's pair was unique to card C until the external entrants
+    arrived; F shares the same two roots, and G shares the owner's. A set left
+    at its old value would silently become a false claim about which frozen
+    cards a stated position actually picks out -- and the failure is invisible,
+    because the listed card is still genuinely consistent.
     """
-    reviewer = FROZEN["external_reviewer_probabilities"]
-    picks_liquid = reviewer["liquid_beats_yandex"] > 0.5
-    picks_iron_wing = reviewer["iron_wing_beats_spirit"] > 0.5
-    assert picks_liquid and not picks_iron_wing
-    assert reviewer["implied_card"] == "C-override-liquid"
-
-    card = next(e for e in FROZEN["cards"] if e["id"] == reviewer["implied_card"])
-    assert card["picks"]["UB QF3"] == "Team Liquid"
-    assert card["picks"]["UB QF1"] == "Team Spirit"
+    cards = {entry["id"]: entry["picks"] for entry in FROZEN["cards"]}
+    for key, liquid_pick, iron_wing_pick in (
+        ("external_reviewer_probabilities", True, False),
+        ("owner_probabilities", True, True),
+    ):
+        block = FROZEN[key]
+        assert (block["liquid_beats_yandex"] > 0.5) is liquid_pick
+        assert (block["iron_wing_beats_spirit"] > 0.5) is iron_wing_pick
+        assert "implied_card" not in block, f"{key}: a single card cannot be implied"
+        roots = block["implied_root_decisions"]
+        matching = sorted(
+            name
+            for name, picks in cards.items()
+            if all(picks[slot] == team for slot, team in roots.items())
+        )
+        assert matching == sorted(block["consistent_with_cards"]), key
 
 
 def test_owner_card_is_not_the_model_optimum_under_its_own_two_overrides():
