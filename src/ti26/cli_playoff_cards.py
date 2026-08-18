@@ -163,20 +163,32 @@ def main(argv: list[str] | None = None) -> int:
         print(f"| {entry['id']} | {entry['role']} | {stated:.4f} | {value:.4f} | yes |")
     print()
 
-    if {"A-model", "D-override-both", "E-owner"} <= set(recomputed):
-        a, d, e = (recomputed[k] for k in ("A-model", "D-override-both", "E-owner"))
-        root, cascade = a - d, d - e
-        print("## Where the owner's card actually costs")
+    # The intermediate card is C, not D: the SUBMITTED card keeps Team Spirit at
+    # UB QF1 and overrides UB QF3 (Liquid) and UB QF4 (Nigma). D isolates a pair
+    # of roots the owner has since abandoned, so quoting it here would attribute
+    # the submitted card's cost to a decision it no longer contains.
+    if {"A-model", "C-override-liquid", "H-owner-final"} <= set(recomputed):
+        a, c, h = (recomputed[k] for k in ("A-model", "C-override-liquid", "H-owner-final"))
+        print("## Where the submitted card costs, against the model")
         print()
         print("```")
-        print(f"A -> D   {-root:+.4f}     the two root decisions")
-        print(f"D -> E   {-cascade:+.4f}     all six remaining differences combined")
-        print(f"A -> E   {-(a - e):+.4f}")
+        print(f"A -> C   {-(a - c):+.4f}     the Liquid override alone")
+        print(f"C -> H   {-(c - h):+.4f}     the Nigma override and everything downstream")
+        print(f"A -> H   {-(a - h):+.4f}")
         print("```")
         print()
         print(
-            f"**{root / (a - e):.0%} of the cost sits in the two root decisions.** The cascade "
-            "into six further slots looks large in a diff and is nearly free in expectation."
+            f"**{(a - c) / (a - h):.0%} of the cost sits in the Liquid override.** "
+            "Every remaining difference together is worth less than half of it."
+        )
+        print()
+    if {"A-model", "E-owner", "H-owner-final"} <= set(recomputed):
+        e, h = recomputed["E-owner"], recomputed["H-owner-final"]
+        print(
+            f"The superseded card E scored {e:.4f} on the model's own account and the "
+            f"submitted card H scores {h:.4f}, a revision worth **{h - e:+.4f}**. Both are "
+            "frozen; E is kept because a forecast that was revised is still a forecast that "
+            "was made."
         )
         print()
 

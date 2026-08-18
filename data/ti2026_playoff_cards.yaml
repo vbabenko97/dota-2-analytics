@@ -122,12 +122,17 @@ cards:
       Grand Final: Team Vision
 
   - id: E-owner
-    role: headline
+    role: attribution
+    superseded_by: H-owner-final
     provenance: >-
-      The owner's own bracket, transcribed from the locked-client Predictions
-      screen before the lock. Formed AFTER seeing the model's per-slot
-      probabilities and after watching the group stage, so it is out of sample
-      with respect to the OUTCOMES but is not independent of the model.
+      The owner's bracket as entered on 2026-08-17. SUPERSEDED: the owner
+      revised six slots the following day, before any match, and H-owner-final
+      is what was actually submitted. E is kept frozen and scored because it was
+      a real position held at a real time, and deleting a superseded forecast
+      because it was superseded is how a record becomes flattering. Formed AFTER
+      seeing the model's per-slot probabilities and after watching the group
+      stage, so it is out of sample with respect to the OUTCOMES but is not
+      independent of the model.
     model_implied_expected: 4.1356
     picks:
       UB QF1: Iron Wing
@@ -228,6 +233,42 @@ cards:
       LB Final: Team Falcons
       Grand Final: Team Vision
 
+  - id: H-owner-final
+    role: headline
+    supersedes: E-owner
+    provenance: >-
+      The owner's FINAL bracket, transcribed from the locked-client Predictions
+      screen on 2026-08-18, before any Main Event match. This is the card
+      actually submitted. It revises six slots of E-owner, including both root
+      decisions: UB QF1 moved from Iron Wing to Team Spirit (joining the model)
+      and UB QF4 from Team Falcons to Nigma Galaxy (leaving every other card).
+      Formed after seeing the model's per-slot probabilities and after the group
+      stage: out of sample with respect to the OUTCOMES, not independent of the
+      model.
+    # PARTLY RANDOMISED. The owner states that some picks were decided by a coin
+    # flip. A coin-flipped slot carries no human judgement at all, so treating
+    # this card as a pure judgemental forecast would measure a signal that is
+    # not there. Which slots is not yet recorded; the field is left null rather
+    # than guessed, exactly as the owner's probabilities were.
+    randomisation: partial_coin_flip_owner_stated
+    coin_flipped_slots: null
+    model_implied_expected: 4.2039
+    picks:
+      UB QF1: Team Spirit
+      UB QF2: Team Vision
+      UB QF3: Team Liquid
+      UB QF4: Nigma Galaxy
+      UB SF1: Team Vision
+      UB SF2: Team Liquid
+      UB Final: Team Vision
+      LB R1M1: BoomBoys
+      LB R1M2: Team Falcons
+      LB QF1: BoomBoys
+      LB QF2: Team Falcons
+      LB SF: Team Falcons
+      LB Final: Team Falcons
+      Grand Final: Team Vision
+
 # Owner's subjective probabilities for the two disputed root decisions.
 #
 # NOT YET ELICITED. They are deliberately left null rather than guessed: a
@@ -255,7 +296,17 @@ owner_probabilities:
     UB QF1: Iron Wing
     UB QF3: Team Liquid
   consistent_with_cards: [D-override-both, E-owner, G-gemini-3-1-pro]
-  card_actually_submitted: E-owner
+  card_actually_submitted: H-owner-final
+  # The submitted card CONTRADICTS these probabilities and is deliberately not
+  # in the consistent set above. 0.55 favours Iron Wing at UB QF1; H picks Team
+  # Spirit. Either the stated number went stale within a day, or that slot was
+  # one of the coin flips. Recorded rather than reconciled: quietly adjusting
+  # the probability to match the pick would destroy the only evidence that a
+  # stated forecast and a submitted action came apart.
+  contradicted_by_submitted_card:
+    slot: UB QF1
+    stated_probability_favours: Iron Wing
+    submitted_pick: Team Spirit
 
 # An EXTERNAL REVIEWER's probabilities for the same two matches. Recorded in a
 # separate block on purpose: they are not the owner's, and writing them into
@@ -282,4 +333,8 @@ external_reviewer_probabilities:
   implied_root_decisions:
     UB QF1: Team Spirit
     UB QF3: Team Liquid
-  consistent_with_cards: [C-override-liquid, F-gpt-5-6-xhigh]
+  # Note: the owner's FINAL submitted card H shares these two roots. The
+  # reviewer's stated position turned out to agree with what the owner
+  # eventually submitted, and with neither the owner's own stated
+  # probabilities nor the owner's earlier card E.
+  consistent_with_cards: [C-override-liquid, F-gpt-5-6-xhigh, H-owner-final]
