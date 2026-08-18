@@ -73,16 +73,82 @@ event.
 ## The headline is designated now
 
 ```
-headline:      A-model  vs  E-owner
-attribution:   B, C, D  — analytic constructions
-external:      F, G     — supplemental entrants
+headline:      A-model  vs  H-owner-final
+attribution:   B, C, D, E  — analytic constructions and the superseded owner card
+external:      F, G        — supplemental entrants
 ```
 
-Only A and E are the headline. B, C and D exist to attribute the difference;
-F and G are outside forecasts along for the ride. **None may be promoted to
-the headline afterwards, however well one happens to score.** Naming it in
-advance is the whole point: after the outcomes, seven cards offer seven
-stories, and the flattering one would be available to whichever side lost.
+Only A and H are the headline. **None of the others may be promoted afterwards,
+however well one happens to score.** Naming it in advance is the whole point:
+after the outcomes, eight cards offer eight stories, and the flattering one
+would be available to whichever side lost.
+
+### Amendment: the headline moved from E to H, before any match
+
+Registered as A vs E on 2026-08-17. On 2026-08-18 — still before the first
+Main Event match — the owner revised six slots and submitted a different
+bracket. E was frozen as the card actually submitted, and that had stopped
+being true.
+
+This is an amendment to a registered designation and is recorded as one. It is
+**not** a criterion chosen after seeing a number: no playoff match has been
+played, so nothing about the outcomes was known when it was made. What would
+have been forbidden is re-designating after results, and what would have been
+worse is leaving the headline pointed at a card the owner never submitted.
+
+E is kept frozen, demoted to attribution, and still scored. Deleting a forecast
+because it was later revised is how a record becomes flattering. That the
+"frozen" human card moved within a day is itself a result about the stability
+of judgemental forecasts, and it survives only if E survives.
+
+The revision was worth **+0.0683** on the model's own account (E 4.1356, H
+4.2039), and moved the owner from 6/14 to 7/14 agreement with the model.
+
+### The submitted card is partly randomised
+
+Two of the fourteen slots were decided by a **coin flip**, both named by the
+owner: `LB SF` and `LB Final`. A coin-flipped slot carries no human judgement,
+so scoring H as a pure judgemental forecast would credit or blame a person for
+a randomiser this experiment introduced itself.
+
+**The list is a lower bound, not a census.** The owner first described the card
+as made "not without using a coin in some matches" and later named these two.
+An earlier flip is neither confirmed nor excluded — `UB QF4` is the obvious
+candidate, sitting at a model probability of 0.5032 and being the one slot
+where H disagrees with all seven other cards. `coin_flipped_slots_complete:
+false` records that, and scoring must respect it.
+
+What makes these two worth keeping is that **a stated human estimate existed
+before the coin was thrown, and the coin overrode it**:
+
+| slot | matchup | reviewer | model | coin gave |
+|---|---|---|---|---|
+| LB SF | BoomBoys vs Falcons | BB **0.58** | BB 0.4824 | Falcons |
+| LB Final | Liquid vs Falcons | Liquid **0.58** | Liquid 0.4882 | Falcons |
+| Grand Final | Vision vs Falcons | Vision 0.66 | Vision 0.6056 | *no coin* |
+
+On both flipped slots the reviewer favoured the other team and the model
+weakly favoured the side the coin produced. That is chance, not vindication —
+two flips decide nothing — but it is exactly the kind of detail that becomes
+invisible if only the final picks are stored.
+
+The reviewer's three estimates are **conditional series probabilities** —
+`P(A beats B | that series is played)`, and the series exists only along H's
+path. Each is stored beside the directly comparable conditional from this
+project's own strengths, never beside a slot marginal. Quoting `0.58` against
+a marginal would repeat the DatDota title-probability error.
+
+### The stated probabilities and the submitted card disagree
+
+`P_owner(Iron Wing > Spirit) = 0.55` favours Iron Wing. H picks Team Spirit.
+Either the number went stale within a day or that slot was one of the coin
+flips. Recorded in `contradicted_by_submitted_card` rather than reconciled:
+adjusting the probability to match the pick would erase the only evidence here
+that a stated forecast and a submitted action came apart.
+
+One more thing fell out of it: H shares its two root decisions with the
+**reviewer's** stated position, not the owner's own. The owner's final card
+agrees with the reviewer's probabilities and contradicts the owner's.
 
 ## The two external entrants
 
@@ -151,22 +217,30 @@ defined on picks.
 | A model | 4.3615 | — |
 | B + Iron Wing | 4.2820 | −0.0795 |
 | C + Liquid | 4.2545 | −0.1070 |
+| **H owner, submitted** | **4.2039** | **−0.1576** |
 | D + both | 4.2002 | −0.1613 |
 | F gpt-5-6-xhigh | 4.1886 | −0.1729 |
-| E owner | 4.1356 | −0.2259 |
+| E owner, superseded | 4.1356 | −0.2259 |
 | G gemini-3-1-pro | 4.0707 | −0.2908 |
 
-The decomposition is the useful part:
+The decomposition is the useful part. For the **submitted** card the
+intermediate is C, not D: H keeps Team Spirit at UB QF1 and overrides UB QF3
+(Liquid) and UB QF4 (Nigma), so D isolates a pair of roots the owner has since
+abandoned and quoting it would attribute H's cost to a decision it no longer
+contains.
 
 ```
-A -> D   -0.1613     the two root decisions
-D -> E   -0.0646     all six remaining differences combined
+A -> C   -0.1070     the Liquid override alone
+C -> H   -0.0506     the Nigma override and everything downstream
+A -> H   -0.1576
 ```
 
-**71% of the model-implied cost of the owner's card sits in the two root
-decisions**, `Spirit -> Iron Wing` and `Yandex -> Liquid`. The cascade into six
-further slots looks large in a diff and is nearly free in expectation. So the
-disagreement really is about those two matches, despite the table.
+**68% of the submitted card's model-implied cost sits in the Liquid override.**
+Everything else together is worth less than half of it, so the disagreement is
+still essentially about one match.
+
+For the superseded card E the corresponding split was `A -> D -0.1613`,
+`D -> E -0.0646`, i.e. 71% in its two root decisions.
 
 Every number here is model-implied and descriptive. None of it is evidence
 about which card will score better.

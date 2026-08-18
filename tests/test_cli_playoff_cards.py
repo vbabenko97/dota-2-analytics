@@ -18,7 +18,7 @@ def test_every_frozen_card_is_a_coherent_bracket():
     miss, so the malformed input would score as a merely bad forecast and
     nobody would learn the card was invalid.
     """
-    assert len(FROZEN["cards"]) == 7
+    assert len(FROZEN["cards"]) == 8
     for entry in FROZEN["cards"]:
         replayed = coherent_picks(entry["picks"], SEEDS, True)
         assert replayed == entry["picks"], entry["id"]
@@ -62,7 +62,7 @@ def test_external_cards_cannot_become_the_headline():
     scoring highest is not a reason to re-designate it.
     """
     roles = {e["id"]: e["role"] for e in FROZEN["cards"]}
-    assert sorted(k for k, v in roles.items() if v == "headline") == ["A-model", "E-owner"]
+    assert sorted(k for k, v in roles.items() if v == "headline") == ["A-model", "H-owner-final"]
     assert sorted(k for k, v in roles.items() if v == "external") == [
         "F-gpt-5-6-xhigh",
         "G-gemini-3-1-pro",
@@ -100,9 +100,14 @@ def test_the_headline_pair_is_designated_and_is_exactly_two_cards():
     the headline as A vs E; this binds that to the data file.
     """
     headline = sorted(e["id"] for e in FROZEN["cards"] if e["role"] == "headline")
-    assert headline == ["A-model", "E-owner"]
+    assert headline == ["A-model", "H-owner-final"]
     attribution = {e["id"] for e in FROZEN["cards"] if e["role"] == "attribution"}
-    assert attribution == {"B-override-iron-wing", "C-override-liquid", "D-override-both"}
+    assert attribution == {
+        "B-override-iron-wing",
+        "C-override-liquid",
+        "D-override-both",
+        "E-owner",
+    }
 
 
 def test_owner_and_reviewer_probabilities_stay_in_separate_blocks():
@@ -127,17 +132,105 @@ def test_owner_and_reviewer_probabilities_stay_in_separate_blocks():
         assert "before any playoff outcome" in provenance
 
 
-def test_the_submitted_card_is_recorded_separately_from_the_consistent_set():
-    """Kills inferring what was submitted from the stated probabilities.
+def test_the_submitted_card_contradicts_the_owners_stated_probability():
+    """Kills quietly reconciling a stated forecast with a later action.
 
-    Three frozen cards share the owner's two root decisions, and only one of
-    them was entered in the client. Which one that is, is a separate fact that
-    the probabilities cannot supply and that must be recorded on its own.
+    The owner put 0.55 on Iron Wing at UB QF1 and then submitted Team Spirit.
+    The tempting repair is to nudge the probability to match the pick, which
+    would erase the only evidence in this repository that a stated forecast and
+    a submitted action came apart. The contradiction is recorded instead, and
+    the submitted card is deliberately absent from the consistent set.
     """
     owner = FROZEN["owner_probabilities"]
-    assert owner["card_actually_submitted"] == "E-owner"
-    assert len(owner["consistent_with_cards"]) > 1
-    assert owner["card_actually_submitted"] in owner["consistent_with_cards"]
+    cards = {entry["id"]: entry["picks"] for entry in FROZEN["cards"]}
+    submitted = owner["card_actually_submitted"]
+    assert submitted == "H-owner-final"
+    assert submitted not in owner["consistent_with_cards"]
+
+    clash = owner["contradicted_by_submitted_card"]
+    slot = clash["slot"]
+    assert cards[submitted][slot] == clash["submitted_pick"]
+    assert owner["implied_root_decisions"][slot] == clash["stated_probability_favours"]
+    assert clash["submitted_pick"] != clash["stated_probability_favours"]
+
+
+def test_the_superseded_owner_card_is_kept_and_linked():
+    """Kills deleting or overwriting a forecast because it was revised.
+
+    E was the owner's position on 2026-08-17 and H is the position on 08-18.
+    Overwriting E -- the obvious tidy-up, and forbidden by the registration --
+    would hide that the 'frozen' human card moved within a day, which is itself
+    a result about the stability of judgemental forecasts.
+    """
+    entries = {entry["id"]: entry for entry in FROZEN["cards"]}
+    assert entries["E-owner"]["superseded_by"] == "H-owner-final"
+    assert entries["H-owner-final"]["supersedes"] == "E-owner"
+    assert entries["E-owner"]["role"] == "attribution"
+    assert entries["H-owner-final"]["role"] == "headline"
+    differing = [s for s in SLOTS if entries["E-owner"]["picks"][s] != entries["H-owner-final"]["picks"][s]]
+    assert len(differing) == 6
+
+
+def test_the_submitted_card_declares_its_randomisation():
+    """Kills scoring a partly coin-flipped card as a pure human forecast.
+
+    Two of the fourteen slots were decided by a coin. Those carry no judgement,
+    so counting them as human signal measures noise this experiment introduced
+    itself.
+    """
+    submitted = next(e for e in FROZEN["cards"] if e["id"] == "H-owner-final")
+    assert submitted["randomisation"] == "partial_coin_flip_owner_stated"
+    assert submitted["coin_flipped_slots"] == ["LB SF", "LB Final"]
+    for slot in submitted["coin_flipped_slots"]:
+        assert slot in SLOTS
+
+
+def test_the_coin_flip_list_is_marked_as_a_lower_bound():
+    """Kills reading a partial disclosure as a complete one.
+
+    The owner first said the card used a coin "in some matches" and later named
+    two. A list that looks complete would let a later reader claim the other
+    twelve slots are all judgement, which nobody has established -- UB QF4 sits
+    at a model probability of 0.5032 and is neither confirmed nor excluded.
+    """
+    submitted = next(e for e in FROZEN["cards"] if e["id"] == "H-owner-final")
+    assert submitted["coin_flipped_slots_complete"] is False
+
+
+def test_late_reviewer_estimates_are_marked_conditional_and_paired_with_the_model():
+    """Kills comparing a conditional series probability to a slot marginal.
+
+    "BoomBoys 58%" means *if that series is played*; the model's marginal for
+    the same slot also carries the probability of getting there. Quoting them
+    side by side compares two different questions -- the error already rejected
+    for DatDota's title probabilities. Each estimate therefore ships with the
+    directly comparable conditional from this project's own strengths.
+    """
+    block = FROZEN["external_reviewer_conditional_probabilities"]
+    assert "conditional" in block["provenance"].lower()
+    submitted = next(e for e in FROZEN["cards"] if e["id"] == "H-owner-final")
+    coin_slots = set(submitted["coin_flipped_slots"])
+    for estimate in block["estimates"]:
+        assert estimate["slot"] in SLOTS
+        assert 0.0 < estimate["model_probability"] < 1.0
+        assert submitted["picks"][estimate["slot"]] == estimate["submitted_pick"]
+        assert (estimate["decided_by"] == "coin_flip") is (estimate["slot"] in coin_slots)
+
+
+def test_the_coin_overrode_a_stated_human_estimate_on_both_flipped_slots():
+    """Kills losing the fact that randomisation beat an available judgement.
+
+    On both flipped slots a human estimate favouring the OTHER team existed
+    before the coin was thrown. If that is not preserved, the card later reads
+    as though nobody had a view, when in fact a view was recorded and discarded
+    by a randomiser.
+    """
+    block = FROZEN["external_reviewer_conditional_probabilities"]
+    flipped = [e for e in block["estimates"] if e["decided_by"] == "coin_flip"]
+    assert len(flipped) == 2
+    for estimate in flipped:
+        assert estimate["reviewer_probability"] > 0.5
+        assert estimate["submitted_pick"] != estimate["reviewer_favours"]
 
 
 def test_stated_probabilities_list_every_card_they_are_consistent_with():
