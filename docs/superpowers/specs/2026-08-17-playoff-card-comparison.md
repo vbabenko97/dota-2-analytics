@@ -106,15 +106,37 @@ The revision was worth **+0.0683** on the model's own account (E 4.1356, H
 
 ### The submitted card is partly randomised
 
-The owner states that some picks were decided by a **coin flip**. A
-coin-flipped slot carries no human judgement, so scoring H as a pure
-judgemental forecast would credit or blame a person for a randomiser this
-experiment introduced itself.
+Two of the fourteen slots were decided by a **coin flip**, both named by the
+owner: `LB SF` and `LB Final`. A coin-flipped slot carries no human judgement,
+so scoring H as a pure judgemental forecast would credit or blame a person for
+a randomiser this experiment introduced itself.
 
-`randomisation: partial_coin_flip_owner_stated` is recorded on the card. Which
-slots is **not yet recorded** and is left null rather than guessed. Until it is
-supplied, any claim of the form "the eye test beat the model" is bounded by an
-unknown number of slots that contained no eye test at all.
+**The list is a lower bound, not a census.** The owner first described the card
+as made "not without using a coin in some matches" and later named these two.
+An earlier flip is neither confirmed nor excluded — `UB QF4` is the obvious
+candidate, sitting at a model probability of 0.5032 and being the one slot
+where H disagrees with all seven other cards. `coin_flipped_slots_complete:
+false` records that, and scoring must respect it.
+
+What makes these two worth keeping is that **a stated human estimate existed
+before the coin was thrown, and the coin overrode it**:
+
+| slot | matchup | reviewer | model | coin gave |
+|---|---|---|---|---|
+| LB SF | BoomBoys vs Falcons | BB **0.58** | BB 0.4824 | Falcons |
+| LB Final | Liquid vs Falcons | Liquid **0.58** | Liquid 0.4882 | Falcons |
+| Grand Final | Vision vs Falcons | Vision 0.66 | Vision 0.6056 | *no coin* |
+
+On both flipped slots the reviewer favoured the other team and the model
+weakly favoured the side the coin produced. That is chance, not vindication —
+two flips decide nothing — but it is exactly the kind of detail that becomes
+invisible if only the final picks are stored.
+
+The reviewer's three estimates are **conditional series probabilities** —
+`P(A beats B | that series is played)`, and the series exists only along H's
+path. Each is stored beside the directly comparable conditional from this
+project's own strengths, never beside a slot marginal. Quoting `0.58` against
+a marginal would repeat the DatDota title-probability error.
 
 ### The stated probabilities and the submitted card disagree
 

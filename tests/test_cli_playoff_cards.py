@@ -174,14 +174,63 @@ def test_the_superseded_owner_card_is_kept_and_linked():
 def test_the_submitted_card_declares_its_randomisation():
     """Kills scoring a partly coin-flipped card as a pure human forecast.
 
-    The owner states some picks were decided by a coin. Those slots carry no
-    judgement, so counting them as human signal measures noise this experiment
-    introduced itself. The declaration is mandatory even while the slot list is
-    still unrecorded.
+    Two of the fourteen slots were decided by a coin. Those carry no judgement,
+    so counting them as human signal measures noise this experiment introduced
+    itself.
     """
     submitted = next(e for e in FROZEN["cards"] if e["id"] == "H-owner-final")
     assert submitted["randomisation"] == "partial_coin_flip_owner_stated"
-    assert "coin_flipped_slots" in submitted
+    assert submitted["coin_flipped_slots"] == ["LB SF", "LB Final"]
+    for slot in submitted["coin_flipped_slots"]:
+        assert slot in SLOTS
+
+
+def test_the_coin_flip_list_is_marked_as_a_lower_bound():
+    """Kills reading a partial disclosure as a complete one.
+
+    The owner first said the card used a coin "in some matches" and later named
+    two. A list that looks complete would let a later reader claim the other
+    twelve slots are all judgement, which nobody has established -- UB QF4 sits
+    at a model probability of 0.5032 and is neither confirmed nor excluded.
+    """
+    submitted = next(e for e in FROZEN["cards"] if e["id"] == "H-owner-final")
+    assert submitted["coin_flipped_slots_complete"] is False
+
+
+def test_late_reviewer_estimates_are_marked_conditional_and_paired_with_the_model():
+    """Kills comparing a conditional series probability to a slot marginal.
+
+    "BoomBoys 58%" means *if that series is played*; the model's marginal for
+    the same slot also carries the probability of getting there. Quoting them
+    side by side compares two different questions -- the error already rejected
+    for DatDota's title probabilities. Each estimate therefore ships with the
+    directly comparable conditional from this project's own strengths.
+    """
+    block = FROZEN["external_reviewer_conditional_probabilities"]
+    assert "conditional" in block["provenance"].lower()
+    submitted = next(e for e in FROZEN["cards"] if e["id"] == "H-owner-final")
+    coin_slots = set(submitted["coin_flipped_slots"])
+    for estimate in block["estimates"]:
+        assert estimate["slot"] in SLOTS
+        assert 0.0 < estimate["model_probability"] < 1.0
+        assert submitted["picks"][estimate["slot"]] == estimate["submitted_pick"]
+        assert (estimate["decided_by"] == "coin_flip") is (estimate["slot"] in coin_slots)
+
+
+def test_the_coin_overrode_a_stated_human_estimate_on_both_flipped_slots():
+    """Kills losing the fact that randomisation beat an available judgement.
+
+    On both flipped slots a human estimate favouring the OTHER team existed
+    before the coin was thrown. If that is not preserved, the card later reads
+    as though nobody had a view, when in fact a view was recorded and discarded
+    by a randomiser.
+    """
+    block = FROZEN["external_reviewer_conditional_probabilities"]
+    flipped = [e for e in block["estimates"] if e["decided_by"] == "coin_flip"]
+    assert len(flipped) == 2
+    for estimate in flipped:
+        assert estimate["reviewer_probability"] > 0.5
+        assert estimate["submitted_pick"] != estimate["reviewer_favours"]
 
 
 def test_stated_probabilities_list_every_card_they_are_consistent_with():

@@ -245,13 +245,22 @@ cards:
       Formed after seeing the model's per-slot probabilities and after the group
       stage: out of sample with respect to the OUTCOMES, not independent of the
       model.
-    # PARTLY RANDOMISED. The owner states that some picks were decided by a coin
-    # flip. A coin-flipped slot carries no human judgement at all, so treating
-    # this card as a pure judgemental forecast would measure a signal that is
-    # not there. Which slots is not yet recorded; the field is left null rather
-    # than guessed, exactly as the owner's probabilities were.
+    # PARTLY RANDOMISED. A coin-flipped slot carries no human judgement at all,
+    # so treating this card as a pure judgemental forecast would measure a
+    # signal that is not there.
+    #
+    # Two slots are confirmed by the owner, both decided by a coin AFTER a
+    # stated human estimate favouring the other team was available. On both the
+    # coin landed on the side this project's model weakly favours.
+    #
+    # COMPLETENESS IS NOT CONFIRMED. The owner first described the card as made
+    # "not without using a coin in some matches" and later named these two. Any
+    # earlier flip -- UB QF4 is the obvious candidate at a model probability of
+    # 0.5032 -- is neither confirmed nor excluded. Scoring must treat this list
+    # as a lower bound.
     randomisation: partial_coin_flip_owner_stated
-    coin_flipped_slots: null
+    coin_flipped_slots: [LB SF, LB Final]
+    coin_flipped_slots_complete: false
     model_implied_expected: 4.2039
     picks:
       UB QF1: Team Spirit
@@ -338,3 +347,48 @@ external_reviewer_probabilities:
   # eventually submitted, and with neither the owner's own stated
   # probabilities nor the owner's earlier card E.
   consistent_with_cards: [C-override-liquid, F-gpt-5-6-xhigh, H-owner-final]
+
+# Three more reviewer estimates, stated before any match, for LATE matchups.
+#
+# These are CONDITIONAL in two senses and neither may be dropped when quoting
+# them. They are P(A beats B | that series is played), and the series in
+# question exists only along card H's path through the bracket. They are NOT
+# slot marginals and must never be placed beside this project's per-slot
+# marginals, which is the error already rejected for DatDota's title
+# probabilities and for F's conditional modal projections.
+#
+# The `model` column is the directly comparable quantity: the same conditional
+# series probability from this project's strengths. It is NOT the model's pick
+# for that slot, because the model's own bracket routes different teams there.
+#
+# Both of the first two were overridden by a coin flip in the submitted card,
+# which is the cleanest thing in this file: a stated probabilistic forecast and
+# a submitted action diverging for a known, documented reason.
+external_reviewer_conditional_probabilities:
+  reviewer: external_gpt_reviewer_relayed_by_owner
+  provenance: >-
+    stated before any Main Event match, after the group stage and after the
+    model's numbers were visible. Judgmental, not independent of the model.
+    Conditional on card H's bracket path.
+  estimates:
+    - slot: LB SF
+      matchup: BoomBoys vs Team Falcons
+      reviewer_favours: BoomBoys
+      reviewer_probability: 0.58
+      model_probability: 0.4824      # same quantity, BoomBoys to win
+      submitted_pick: Team Falcons
+      decided_by: coin_flip
+    - slot: LB Final
+      matchup: Team Liquid vs Team Falcons
+      reviewer_favours: Team Liquid
+      reviewer_probability: 0.58
+      model_probability: 0.4882      # same quantity, Team Liquid to win
+      submitted_pick: Team Falcons
+      decided_by: coin_flip
+    - slot: Grand Final
+      matchup: Team Vision vs Team Falcons
+      reviewer_favours: Team Vision
+      reviewer_probability: 0.66
+      model_probability: 0.6056      # same quantity, Team Vision to win, Bo5
+      submitted_pick: Team Vision
+      decided_by: judgement
