@@ -1,0 +1,87 @@
+# The actual TI 2026 playoff result, slot by slot.
+#
+# Frozen AFTER the playoff, which is why every field here is an observation and
+# none of it may be used to alter a card, a metric, a null or the headline. All
+# of those were registered in
+# docs/superpowers/specs/2026-08-17-playoff-card-comparison.md and anchored to
+# PR #28 and PR #31, both merged before the first match.
+#
+# Provenance: owner-supplied Liquipedia playoff bracket screenshot. This is the
+# same class of source as the topology fact -- an observation the two network
+# seams cannot deliver -- and it carries the same limit: it is not machine
+# retrievable here, so a later re-derivation from the match store is the check
+# that matters. `cli_playoff_score` refuses to score if the series scores below
+# are internally inconsistent with the winners.
+
+event:
+  league_id: 19719
+  stage: main_event_playoffs
+  topology: cross-feed
+  topology_confirmed_by_result: true
+
+# Slot names are `ti26.bracket.SLOTS`. Under cross-feed:
+#   LB QF1 = LB R1M1 winner vs UB SF2 loser
+#   LB QF2 = LB R1M2 winner vs UB SF1 loser
+# The realised bracket matches that routing, which is the third independent
+# confirmation of the topology after the client screenshot and the two LLM
+# assumptions -- and the only one that is an observation of the actual event.
+results:
+  UB QF1:
+    matchup: [Iron Wing, Team Spirit]
+    score: [0, 2]
+    winner: Team Spirit
+  UB QF2:
+    matchup: [Team Vision, BoomBoys]
+    score: [2, 1]
+    winner: Team Vision
+  UB QF3:
+    matchup: [Team Liquid, Team Yandex]
+    score: [0, 2]
+    winner: Team Yandex
+  UB QF4:
+    matchup: [Nigma Galaxy, Team Falcons]
+    score: [2, 1]
+    winner: Nigma Galaxy
+  UB SF1:
+    matchup: [Team Spirit, Team Vision]
+    score: [1, 2]
+    winner: Team Vision
+  UB SF2:
+    matchup: [Team Yandex, Nigma Galaxy]
+    score: [2, 1]
+    winner: Team Yandex
+  UB Final:
+    matchup: [Team Vision, Team Yandex]
+    score: [2, 1]
+    winner: Team Vision
+  LB R1M1:
+    matchup: [Iron Wing, BoomBoys]
+    score: [1, 2]
+    winner: BoomBoys
+  LB R1M2:
+    matchup: [Team Liquid, Team Falcons]
+    score: [2, 1]
+    winner: Team Liquid
+  LB QF1:
+    matchup: [Nigma Galaxy, BoomBoys]
+    score: [1, 2]
+    winner: BoomBoys
+  LB QF2:
+    matchup: [Team Spirit, Team Liquid]
+    score: [2, 0]
+    winner: Team Spirit
+  LB SF:
+    matchup: [BoomBoys, Team Spirit]
+    score: [0, 2]
+    winner: Team Spirit
+  LB Final:
+    matchup: [Team Yandex, Team Spirit]
+    score: [0, 2]
+    winner: Team Spirit
+  Grand Final:
+    matchup: [Team Vision, Team Spirit]
+    score: [2, 3]
+    winner: Team Spirit
+
+champion: Team Spirit
+runner_up: Team Vision
