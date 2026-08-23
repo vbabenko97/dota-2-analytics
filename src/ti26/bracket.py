@@ -9,7 +9,7 @@ implemented and neither is the default. Callers pass the one they mean, and the
 producer is required to report both until the locked client bracket settles it.
 """
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from itertools import product
 
 # Slot order is fixed and is the order picks are reported in. Grand Final last.
@@ -99,18 +99,20 @@ def all_brackets(seeds: Sequence[object], cross_feed: bool) -> list[dict[str, ob
     return out
 
 
-def slot_distributions(
+def weighted_brackets(
     seeds: Sequence[object],
     series_win_prob: Callable[[object, object, int], float],
     cross_feed: bool,
-) -> dict[str, dict[object, float]]:
-    """P(team wins slot) for every slot, by exact enumeration over outcome space.
+) -> Iterator[tuple[dict[str, object], float]]:
+    """Every coherent bracket paired with its probability.
 
-    Exact rather than simulated: the same 2**14 leaves carry both the bracket
-    structure and its probability, so there is no Monte Carlo error to reason
-    about and no seed to be unstable under.
+    The 2**14 leaves carry structure and probability on the same walk, so any
+    quantity accumulated from this is exact: no Monte Carlo error, no seed, no
+    generator whose stream stability has to be pinned.
+
+    Yielded rather than returned as a list. Callers accumulate as they go, and
+    holding 16384 dicts at once buys nothing.
     """
-    dist: dict[str, dict[object, float]] = {slot: {} for slot in SLOTS}
     for bits in product((0, 1), repeat=len(SLOTS)):
         choices = iter(bits)
         weight = 1.0
@@ -124,7 +126,24 @@ def slot_distributions(
             weight *= 1.0 - p
             return b
 
-        for slot, team in resolve(seeds, decide, cross_feed).items():
+        winners = resolve(seeds, decide, cross_feed)
+        yield winners, weight
+
+
+def slot_distributions(
+    seeds: Sequence[object],
+    series_win_prob: Callable[[object, object, int], float],
+    cross_feed: bool,
+) -> dict[str, dict[object, float]]:
+    """P(team wins slot) for every slot, by exact enumeration over outcome space.
+
+    Exact rather than simulated: the same 2**14 leaves carry both the bracket
+    structure and its probability, so there is no Monte Carlo error to reason
+    about and no seed to be unstable under.
+    """
+    dist: dict[str, dict[object, float]] = {slot: {} for slot in SLOTS}
+    for winners, weight in weighted_brackets(seeds, series_win_prob, cross_feed):
+        for slot, team in winners.items():
             dist[slot][team] = dist[slot].get(team, 0.0) + weight
     return dist
 

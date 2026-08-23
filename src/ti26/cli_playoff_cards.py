@@ -99,6 +99,36 @@ def verify_source_digest(entry: dict) -> None:
         )
 
 
+def fit_strengths(
+    store: str,
+    teams_path: str,
+    aliases_path: str,
+    gate_config_path: str,
+    min_train: int,
+) -> dict[str, float]:
+    """Refit the calibrated strengths the frozen cards were solved from.
+
+    Shared with `cli_playoff_postmortem` rather than copied into it. Its
+    registration requires the postmortem to reconstruct the distribution
+    "exactly as cli_playoff_cards does", and two transcriptions of a ten-line
+    model fit is precisely how that stops being true without anyone noticing.
+    """
+    teams = load_teams(teams_path)
+    aliases = load_aliases(aliases_path)
+    gate_config = load_gate_config(gate_config_path)
+    rows = load_rows(open_store(store))
+    slope, _intercept = derive_glicko_calibration_slope(
+        rows, aliases, gate_config.glicko_tau, min_train
+    )
+    model = GlickoModel(tau=gate_config.glicko_tau, roster_index=RosterIndex(aliases))
+    for row in rows:
+        model.update(row)
+    model.flush()
+    resolved = resolve_rosters(rows, teams, aliases)
+    raw, _prior_driven = team_strengths(resolved, model.strengths())
+    return apply_correction(raw, slope)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate the frozen playoff cards")
     parser.add_argument("--store", required=True)
@@ -118,20 +148,9 @@ def main(argv: list[str] | None = None) -> int:
     seeds = list(frozen["seeds"])
     cards = frozen["cards"]
 
-    teams = load_teams(args.teams)
-    aliases = load_aliases(args.aliases)
-    gate_config = load_gate_config(args.gate_config)
-    rows = load_rows(open_store(args.store))
-    slope, _intercept = derive_glicko_calibration_slope(
-        rows, aliases, gate_config.glicko_tau, args.min_train
+    strengths = fit_strengths(
+        args.store, args.teams, args.aliases, args.gate_config, args.min_train
     )
-    model = GlickoModel(tau=gate_config.glicko_tau, roster_index=RosterIndex(aliases))
-    for row in rows:
-        model.update(row)
-    model.flush()
-    resolved = resolve_rosters(rows, teams, aliases)
-    raw, _prior_driven = team_strengths(resolved, model.strengths())
-    strengths = apply_correction(raw, slope)
 
     def prob(a: str, b: str, best_of: int) -> float:
         return series_win_prob(map_win_prob(strengths[a], strengths[b]), best_of)
