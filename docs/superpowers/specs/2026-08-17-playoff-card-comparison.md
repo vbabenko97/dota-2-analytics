@@ -339,3 +339,123 @@ backtest and never on whether they move a particular pick.
 An earlier claim in discussion — that no reasonable decay could shift a
 strength by the 0.0776 logits this pick turns on — was an impossibility
 assertion made without measurement, and is withdrawn.
+
+---
+
+# Result — appended 2026-08-23, after the playoff
+
+**Everything above this line was written before the first Main Event match and
+is unchanged. Everything below was written after the outcome was known and is
+not registration.** Producer:
+
+```
+.venv/bin/python -m ti26.cli_playoff_score
+```
+
+Champion **Team Spirit**, runner-up Team Vision. The realised bracket is in
+[`data/ti2026_playoff_outcome.yaml`](../../../data/ti2026_playoff_outcome.yaml),
+transcribed from an owner-supplied Liquipedia screenshot; re-derivation from the
+match store is the check that matters and has not been done.
+
+| card | role | score | model-implied E | P(random ≥ score) |
+|---|---|---|---|---|
+| **A model** | headline | **11/14** | 4.3615 | 0.004517 |
+| B + Iron Wing | attribution | 8/14 | 4.2820 | 0.058838 |
+| C + Liquid | attribution | 8/14 | 4.2545 | 0.058838 |
+| **H owner, submitted** | headline | **7/14** | 4.2039 | 0.117432 |
+| D + both | attribution | 5/14 | 4.2002 | 0.345215 |
+| F gpt-5-6-xhigh | external | 5/14 | 4.1886 | 0.345215 |
+| E owner, superseded | attribution | 4/14 | 4.1356 | 0.510254 |
+| G gemini-3-1-pro | external | 3/14 | 4.0707 | 0.685547 |
+
+The tail is enumerated over all 2\*\*14 coherent brackets against this outcome,
+not read off the registration.
+
+## The headline, in the permitted form
+
+Card A scored 11/14 and card H scored 7/14 on TI 2026. The pair was designated
+before any match and the roles are read out of the frozen artifact by the
+producer, so neither could be re-designated afterwards.
+
+The two cards share 7 slots and contest 7. On the shared slots both took 6 hits
+and both missed the Grand Final. On the seven contested slots the **model took
+five, the owner one, and neither took LB Final**.
+
+Attribution as registered, with C as the intermediate:
+
+```
+A model            11/14
+C + Liquid only     8/14
+H owner submitted   7/14
+```
+
+The Liquid override — which carried 68% of the submitted card's model-implied
+cost — cost 3 realised hits: Yandex beat Liquid 2-0 at UB QF3 and reached the
+Upper Bracket final. The Nigma override was the owner's one gain over the model
+and it is the only slot on the card where the eye test beat the rating.
+
+Of the submitted card's two disclosed coin-flipped slots the coin landed
+correctly on **none**. The disclosure is a lower bound, so the remaining twelve
+slots are not thereby established as judgement.
+
+## What this does not license
+
+The forbidden list above stands unchanged and is now load-bearing rather than
+hypothetical. `P(random ≥ 11) = 0.004517` is the strongest single number this
+project has produced and it is still one event on fourteen dependent slots. It
+does not establish that the model has skill, and G scoring below the null does
+not retire Gemini. The producer prints that caveat with the table so a reader
+cannot get the number without it.
+
+One arithmetic correction to the preregistered text, which is left as written:
+"the two cards agree on six of them, so the comparison effectively turns on
+eight" was computed for A vs E, the headline pair at the time. For A vs H it is
+seven and seven.
+
+## Two nulls, checked rather than assumed
+
+The registered 3.75 is `Σ p²`, averaged over outcomes as well as brackets; the
+reported tail is conditional on the one bracket that happened. Placing a
+conditional number beside a marginal is the error this project has rejected
+twice, so the conditional mean was computed independently — and equals 3.75
+exactly, because a fair coin leaves each slot's winner uniform over the teams
+that can reach it, making both `Σ 1/n` over slots for any coherent outcome. The
+producer asserts the identity every run. The tail's *shape* does depend on the
+outcome, which is why it is enumerated and not quoted.
+
+## Topology, now observed
+
+The realised bracket replays under cross-feed and **refuses** to replay under
+direct-feed: `LB QF2` was Team Spirit vs Team Liquid, a pairing direct-feed
+routes as Liquid vs Nigma. The topology is therefore an observation of the
+event, no longer an inference from the locked-client screenshot alone. The
+producer asserts both halves, so a later change of feed cannot pass silently.
+
+This retires the *provenance* limit on the topology — that a fact the whole
+bracket space depends on rested on one non-machine-retrievable screenshot. It
+retires nothing else. The three limits on the DatDota comparison in
+[the bracket spec](2026-08-16-ti2026-playoff-bracket-prediction.md) — title
+probabilities are not head-to-head, the two models are not independent, and the
+source returns 403 to an outside fetch — all stand untouched.
+
+## Open, and requiring its own registration first
+
+The model scored 11 against its own expectation of **4.3615**. That is a large
+divergence in the model's favour and it is the same species of miscalibration
+signal as a divergence against — the group card, by contrast, expected 4.5879
+and realised 5. `P_model(S ≥ 11)` for the playoff card is the internal-
+consistency analogue of the group-card postmortem and must be registered before
+it is computed, exactly as that one was. It is not computed here.
+
+## Notarial record of publication
+
+Not preregistration evidence — both merges are after the outcome. Recorded only
+to date the analysis:
+
+```
+PR #33  merged_at 2026-08-23T18:23:58Z  merge_commit_sha b06e5ea  producer, outcome, tests
+PR #32  merged_at 2026-08-23T18:23:45Z  merge_commit_sha 894c8e5  the final-card anchor
+```
+
+The anchors that carry evidential weight remain PR #28 and PR #31, both merged
+before `UB ROUND 1 — AUG 20`, recorded in the notarial section above.
