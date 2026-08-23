@@ -200,8 +200,12 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print(
         "Exact over all 2**14 coherent brackets. No seed, no Monte Carlo error: the leaves "
-        "carry structure and probability on the same walk."
+        "carry structure and probability on the same walk, so there is no generator whose "
+        "stream would have to be pinned and no replicate count to report."
     )
+    print()
+    print(f"Store: `{args.store}`. Cards: `{args.cards}`. Outcome: `{args.outcome}`.")
+    print(f"Topology **{frozen['topology']}**, read from the cards file.")
     print()
 
     print("## 1. Hit-count distribution under the model's own probabilities")

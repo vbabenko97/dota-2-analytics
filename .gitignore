@@ -42,6 +42,14 @@ reports/*
 # without a 90-second re-run of 250000 simulations.
 !reports/card_postmortem.md
 
+# Playoff card postmortem, registered in
+# docs/superpowers/specs/2026-08-23-playoff-card-postmortem.md. Same reason
+# again: it carries the only computed hit-count distributions the eight frozen
+# cards have, and the run needs the match store, which is NOT tracked -- so
+# without this artifact the numbers are unrecheckable by anyone who does not
+# already hold the store.
+!reports/playoff_postmortem.md
+
 # Agent harness local state — machine-local config, plugin caches, and skill
 # scratch workspaces. None of it is project source.
 .playwright-mcp/
