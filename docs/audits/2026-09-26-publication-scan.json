@@ -1,0 +1,202 @@
+{
+  "schema": 1,
+  "date": "2026-09-26",
+  "purpose": "Offline pre-publication inventory; no secret values are recorded.",
+  "scope": {
+    "intended_tree": {
+      "revision": "56b653edc667c838bc8f6bbf86d6aef64af72d31",
+      "command": "git ls-tree -r --name-only HEAD",
+      "tracked_path_count": 373,
+      "note": "Untracked planning, compression, and concurrent implementation files were excluded. They are not part of the HEAD public-tree inventory."
+    },
+    "local_reachable_history": {
+      "command": "git rev-list --objects --all",
+      "commit_count": 225,
+      "unique_object_count": 1878,
+      "unique_blob_count": 754,
+      "bytes_scanned": 21182545,
+      "binary_blobs_scanned": 69,
+      "blobs_over_1_mib": 0,
+      "largest_blob": {
+        "path": "data/raw/20260807T182355Z/2025-09.json.gz",
+        "object": "93ce9f0f05f566fd9aa519f13cbdf605dbda73c7",
+        "bytes": 215340
+      },
+      "internal_ref_count": 3,
+      "other_ref_count": 12
+    }
+  },
+  "tooling": {
+    "git": "2.50.1 (Apple Git-155)",
+    "python": "3.13.5",
+    "available_scanners": {
+      "trufflehog": "3.96.0",
+      "detect_secrets": "1.5.0"
+    },
+    "unavailable_scanners": [
+      "gitleaks",
+      "pip-audit",
+      "syft",
+      "licensee"
+    ],
+    "custom_scanner": {
+      "source": "<temporary scanner source>",
+      "sha256": "d52673f4b600cb0ad9783c4fd241d885c3921ce054d9d786b6aa44b050d3c2e7",
+      "invocation": "python -c '<compile and execute the recorded source>'",
+      "patterns": [
+        "private key PEM",
+        "AWS access key id",
+        "GitHub token",
+        "Slack token",
+        "database URL",
+        "sensitive-assignment keyword"
+      ],
+      "match_events": 39,
+      "strong_pattern_matches": 0,
+      "generic_keyword_candidates": 39,
+      "raw_result_sha256": "71d8e0d3551ff54dac5c45183b3396a069e519633965edfcedf48d78ccb8e1e5"
+    },
+    "trufflehog": {
+      "invocation": "trufflehog git --no-update --no-verification --json --results=unverified,unknown file://<repo>",
+      "coverage": "local Git repository history; scan completed with 9053 chunks and 100976693 bytes reported by TruffleHog",
+      "verified_findings": 0,
+      "unverified_findings": 0,
+      "raw_result_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "note": "TruffleHog reported a sandbox-limited temporary-artifact cleanup warning after completing its scan."
+    },
+    "detect_secrets": {
+      "invocation": "git archive HEAD | tar -x -C <temporary directory>; detect-secrets scan --all-files --no-verify <temporary directory>",
+      "coverage": "HEAD tracked tree only",
+      "findings": 0,
+      "raw_result_sha256": "3ce0ba263419f4b9b1e8423aa6f133249cefa5f69148a1a089a28ee3226f9208"
+    }
+  },
+  "findings": [
+    {
+      "id": "PUB-001",
+      "severity": "owner-decision",
+      "area": "author identity",
+      "location": "reachable commit metadata",
+      "evidence": "Two distinct author email identifiers occur across all reachable commits: one has 9 commits and the other 216. Exact values are intentionally omitted from this public audit.",
+      "disposition": "Before public visibility, the owner must affirm that both addresses may be public. If either is unsuitable, history rewriting needs a separate impact review and owner authorization."
+    },
+    {
+      "id": "PUB-002",
+      "severity": "owner-decision",
+      "area": "third-party data and identifiers",
+      "location": "data/raw/, data/evidence/, predictions-from-llms/",
+      "evidence": "Tracked frozen inputs include OpenDota-derived rows, Steam/Valve source material, owner-supplied external analyses, and person-linked player account identifiers.",
+      "disposition": "Do not assert redistribution permission under the code license. Record source-specific redistribution decisions and the account-identifier disclosure before publication."
+    },
+    {
+      "id": "PUB-003",
+      "severity": "review",
+      "area": "ignored local-note disclosure",
+      "location": ".gitignore:53-65",
+      "evidence": "The tracked ignore file names machine-local agent configuration and a local working-note filename, but contains no note content.",
+      "disposition": "Non-secret; decide whether those descriptive ignore comments belong in the public repository."
+    },
+    {
+      "id": "PUB-004",
+      "severity": "non-blocking candidate",
+      "area": "generic sensitive-word matches",
+      "location": ".gitignore:7,10,11,14; tests/test_steam_news.py:15; data/raw/steam-news/1840944183772671.json:4,16; data/evidence/imports/valve-ti2026-format-rendered.txt:1; predictions-from-llms/gemini-3-1-pro.md:185; docs/audits/2026-08-02-rung3-source-research.md:175,184; docs/audits/2026-09-26-doc-compression.json:2; docs/audits/2026-09-26-public-release-review.json:358; docs/public-release-plan.md:31,101,134,136,157; docs/public-release-plan-compressed.md:31,101,136,138,159; docs/public-release-plan-removal-log.md:5,30; mlsd-scorecard-ti26-removal-log.md:5,24; docs/superpowers/plans/2026-08-09-evidence-import-and-reconciliation.md:852,933; docs/superpowers/plans/2026-08-09-narrow-ci.md:71,90,109,121,176; docs/superpowers/specs/2026-08-01-ti2026-forecast-design.md:122,142,150,172,204",
+      "evidence": "The bounded custom regex emitted 39 generic keyword candidates across 39 historical blobs. Dedicated scanners and all stronger custom patterns returned zero findings; values are not recorded.",
+      "disposition": "Treat as terminology, ignored-path, fixture, or source-text candidates pending ordinary reviewer inspection; no credential was confirmed."
+    },
+    {
+      "id": "PUB-005",
+      "severity": "review",
+      "area": "dependency advisory coverage",
+      "location": "uv.lock",
+      "evidence": "pip-audit is not installed and this audit performed no network advisory query.",
+      "disposition": "No vulnerability conclusion. Run a locked-environment advisory scan at release time when an approved advisory source is available."
+    }
+  ],
+  "dependency_and_license_inventory": {
+    "lock": {
+      "path": "uv.lock",
+      "sha256": "fd9c83268b717ae525b26c4c5fceb6a5f51aa20e21e4eceabbd44eb138927805"
+    },
+    "project_metadata": {
+      "path": "pyproject.toml",
+      "sha256": "e43ad4c235e969fdd2de7d32de9bdda7d8a9739cdc1663495c48ab6ea9689b6b"
+    },
+    "source": "uv.lock registry records plus locally installed distribution metadata; no package was downloaded.",
+    "packages": [
+      {
+        "name": "colorama",
+        "version": "0.4.6",
+        "installed": false,
+        "license": "not available locally"
+      },
+      {
+        "name": "iniconfig",
+        "version": "2.3.0",
+        "installed": true,
+        "license": "MIT"
+      },
+      {
+        "name": "numpy",
+        "version": "2.5.1",
+        "installed": true,
+        "license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0"
+      },
+      {
+        "name": "packaging",
+        "version": "26.2",
+        "installed": true,
+        "license": "Apache-2.0 OR BSD-2-Clause"
+      },
+      {
+        "name": "pluggy",
+        "version": "1.6.0",
+        "installed": true,
+        "license": "MIT"
+      },
+      {
+        "name": "pygments",
+        "version": "2.20.0",
+        "installed": true,
+        "license": "BSD-2-Clause"
+      },
+      {
+        "name": "pytest",
+        "version": "9.1.1",
+        "installed": true,
+        "license": "MIT"
+      },
+      {
+        "name": "pyyaml",
+        "version": "6.0.3",
+        "installed": true,
+        "license": "MIT"
+      },
+      {
+        "name": "ruff",
+        "version": "0.16.1",
+        "installed": true,
+        "license": "MIT"
+      },
+      {
+        "name": "scipy",
+        "version": "1.18.0",
+        "installed": true,
+        "license": "BSD classifier; distribution contains bundled-component notices"
+      },
+      {
+        "name": "ti26",
+        "version": "0.1.0",
+        "installed": true,
+        "license": "project license not yet declared"
+      }
+    ],
+    "disposition": "The selected MIT code license remains a code-only decision. Preserve dependency notices as required by their distributions and keep third-party data/text outside that grant."
+  },
+  "limits": [
+    "A zero-result scanner run is not proof that no secret exists.",
+    "The dedicated history scan covered local reachable history, not dangling objects, reflogs, remote hosting settings, forks, releases, CI logs, or developer machines.",
+    "No network vulnerability or license database consultation occurred.",
+    "No legal conclusion about OpenDota, Steam/Valve, external-analysis, or account-identifier redistribution is made."
+  ]
+}

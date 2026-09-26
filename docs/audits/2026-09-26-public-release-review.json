@@ -1,0 +1,370 @@
+{
+  "record_type": "Public-release planning audit; not a forecast or publication approval",
+  "generated_at_utc": "2026-09-26T09:51:42.969083+00:00",
+  "reviewed_source_revision": "56b653edc667c838bc8f6bbf86d6aef64af72d31",
+  "reviewed_source_tree": "33e206ed92b0f4fece2eba9506378ef707b422a9",
+  "tracked_source_diff_at_recording": "",
+  "audience": "Research/portfolio readers who should reproduce results",
+  "evidence_mode": "formal design docs plus repository and bounded offline verification",
+  "skills": [
+    "/Users/vitaliibabenko/.agents/skills/repo-professionalizer/SKILL.md",
+    "/Users/vitaliibabenko/.agents/skills/ml-system-design-review/SKILL.md",
+    "/Users/vitaliibabenko/.codex/plugins/cache/claude-plugins-official/superpowers/6.4.1/skills/brainstorming/SKILL.md",
+    "/Users/vitaliibabenko/.codex/plugins/cache/claude-plugins-official/superpowers/6.4.1/skills/verification-before-completion/SKILL.md"
+  ],
+  "scorecard": {
+    "grades": [
+      {
+        "dimension": "Problem framing, goals & antigoals",
+        "grade": "B+",
+        "points": 3.3
+      },
+      {
+        "dimension": "Cost of mistakes & risk",
+        "grade": "B",
+        "points": 3
+      },
+      {
+        "dimension": "Prior work, build/buy & baselines",
+        "grade": "A-",
+        "points": 3.7
+      },
+      {
+        "dimension": "Metrics, loss & measurement",
+        "grade": "B-",
+        "points": 2.7
+      },
+      {
+        "dimension": "Data, labels & features",
+        "grade": "C-",
+        "points": 1.7
+      },
+      {
+        "dimension": "Validation & leakage",
+        "grade": "B+",
+        "points": 3.3
+      },
+      {
+        "dimension": "Error analysis",
+        "grade": "B",
+        "points": 3
+      },
+      {
+        "dimension": "Training pipeline & reproducibility",
+        "grade": "B-",
+        "points": 2.7
+      },
+      {
+        "dimension": "Serving, integration & release",
+        "grade": "C",
+        "points": 2
+      },
+      {
+        "dimension": "Monitoring, ownership & maintenance",
+        "grade": "C+",
+        "points": 2.3
+      }
+    ],
+    "average": 2.77,
+    "verdict": "approve with concerns",
+    "scale": "A=4, B=3, C=2, D=1, F=0; +/-0.3. Mean >=3 approve; >=2.3 approve with concerns; otherwise needs improvement.",
+    "interpretation": "Subjective reviewer grades, computed aggregate; not predictive-performance measurements."
+  },
+  "source_files": [
+    {
+      "path": ".gitignore",
+      "sha256": "e524da8b4f46af77c001523a1333960cfe3f2e075b2a6748a38fe7b95ad82740"
+    },
+    {
+      "path": "README.md",
+      "sha256": "1332d9be367c0a41e91ec015cb81249983fb07307b09a8de39369338398540db"
+    },
+    {
+      "path": "data/raw/20260802T165535Z/manifest.json",
+      "sha256": "f19e180b563a1fd2c817bd3e1afb90aeb3d0201e7b9fc3252326b7f4aa002fdf"
+    },
+    {
+      "path": "data/raw/20260816T115509Z/manifest.json",
+      "sha256": "960ac2e09c22baa0575436b7dbe4c7b9eecf43fc33425e4b081e6cc2c0686e48"
+    },
+    {
+      "path": "data/ti2026_playoff_cards.yaml",
+      "sha256": "3a05d1e53726e8884341e8687daaa109672af49a31dfe87b2f3bdd4322a41d5d"
+    },
+    {
+      "path": "data/ti2026_playoff_outcome.yaml",
+      "sha256": "4a986f77deb0aec5878b7046687673608cf1595c11eeb2d1b7e0de5fcd7a3269"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-08-09-narrow-ci.md",
+      "sha256": "43ac47bd764f8d0bd11684ef9b11b21f671a0cf1e17508df98a93818503f7721"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-08-16-ti2026-playoff-bracket-prediction.md",
+      "sha256": "aeab84ae386ecfa66dd4ffd741730d3242c3af49419aa2b7f40ad90da8efef3e"
+    },
+    {
+      "path": "docs/ti26/2026-08-08-known-weaknesses.md",
+      "sha256": "22f39ecea4216fbb58a16ef4c856d0ce5fc6054fc490d6dc977c22d6211440c4"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "7f86e2fa2aa59a0201b5581bfa520d75582f0dce7b02a69db18214aa80ff572f"
+    },
+    {
+      "path": "reports/playoff_postmortem.md",
+      "sha256": "bd722d9724bdf6f06397e265cb1b182403e6d6646b18a48ac1181526dbe73928"
+    },
+    {
+      "path": "reports/series_score/series_score.md",
+      "sha256": "71d3ac4514ed7a8469e5d6065fa32dd9d3dfa0f798fc95bdcd0e52230382313b"
+    },
+    {
+      "path": "src/ti26/backtest.py",
+      "sha256": "2ac9c879386d3e8e6ad784c79b138169d2c954e5a7194f93d2797195ab0a3381"
+    },
+    {
+      "path": "src/ti26/calibrate.py",
+      "sha256": "8a9fb6bdfce47af327893ab99a91cce8e38a3a75d1642d48c69285ea51aa6d1b"
+    },
+    {
+      "path": "src/ti26/cli_card.py",
+      "sha256": "7a0e430a936fc7d0c4b16e0af504899eedb11e107f7358771a0fc1859baf5cf0"
+    },
+    {
+      "path": "src/ti26/cli_card_postmortem.py",
+      "sha256": "fbbc0fad38ad0321b1575ee795790f197ba9d0cbd6d0cba5a88830dad82417b4"
+    },
+    {
+      "path": "src/ti26/cli_ingest.py",
+      "sha256": "c5aa372fc35cfee71f0ac38ae83571870a032f5c6f6091e146b6ed547df8dcbf"
+    },
+    {
+      "path": "src/ti26/cli_playoff_cards.py",
+      "sha256": "61a36bdbf8538a41b93ca86d8b83e9edb200763b665b43666db5811c71b4b30e"
+    },
+    {
+      "path": "src/ti26/cli_playoff_postmortem.py",
+      "sha256": "9057bc2b51b30aa0d36359450dcf154132b6bb5cfc942b57369d24c14951001a"
+    },
+    {
+      "path": "src/ti26/cli_provenance.py",
+      "sha256": "25663233478d930dd63df261853fce45f18d624548b86aa34fe034f02d94bccf"
+    },
+    {
+      "path": "src/ti26/cli_release.py",
+      "sha256": "d2e773ac7733d23ab7e1c2cc12f96a9cf6f691d75a1564707d85a7ce6467d762"
+    },
+    {
+      "path": "src/ti26/data/snapshot.py",
+      "sha256": "812cd5e0fd2076d17b4e77655598f079874e9d4b1c2c0e407900c4e1af2a89a9"
+    },
+    {
+      "path": "src/ti26/data/steam_news.py",
+      "sha256": "0d7128a96b1dfed0fffe9a24268423a4cbb4408217e4c2ebeb34791f122b513c"
+    },
+    {
+      "path": "src/ti26/frozen_output_oracle.py",
+      "sha256": "98495fca2eaf5554f1e45e7c916e6ef9aef4629d195fe6f86e498bd73855b43c"
+    },
+    {
+      "path": "src/ti26/montecarlo.py",
+      "sha256": "b73b8b7f2a942185667dabc263b5efb1e1939f76c08a46db775e8ba883f637eb"
+    },
+    {
+      "path": "src/ti26/provenance.py",
+      "sha256": "6f4b79952b5b530a1d07cfd3c6702561ed35a8c5a4bbb0b88941a1899573fe97"
+    },
+    {
+      "path": "src/ti26/ratings/glicko.py",
+      "sha256": "fa068e8c95e7c61fc1998628d1ca30ac942f06879d87b6d51e70f308cdf5aa0a"
+    },
+    {
+      "path": "uv.lock",
+      "sha256": "fd9c83268b717ae525b26c4c5fceb6a5f51aa20e21e4eceabbd44eb138927805"
+    }
+  ],
+  "inventory": {
+    "tracked_root": [
+      ".gitignore",
+      "README.md",
+      "config",
+      "data",
+      "docs",
+      "predictions-from-llms",
+      "pyproject.toml",
+      "reports",
+      "src",
+      "tests",
+      "uv.lock"
+    ],
+    "local_tags": [],
+    "missing_public_files": [
+      "LICENSE",
+      "CONTRIBUTING.md",
+      "SECURITY.md",
+      "CITATION.cff",
+      ".github/workflows"
+    ]
+  },
+  "environment": {
+    "python": "3.13.5 | packaged by Anaconda, Inc. | (main, Jun 12 2025, 11:23:37) [Clang 14.0.6 ]",
+    "packages": {
+      "numpy": "2.5.1",
+      "scipy": "1.18.0",
+      "PyYAML": "6.0.3",
+      "pytest": "9.1.1",
+      "ruff": "0.16.1"
+    },
+    "installation_scope": "Existing local virtualenv; no fresh-clone uv sync or hosted runner executed."
+  },
+  "checks": {
+    "pytest": {
+      "command": ".venv/bin/python -m pytest -q",
+      "provenance": "captured terminal tool output from the original completed run; not reconstructed as a full log",
+      "exit_code": 0,
+      "summary": "1106 passed in 414.21s (0:06:54)",
+      "working_directory": "/Users/vitaliibabenko/babenko-dev/dota-2-analytics"
+    },
+    "ruff": {
+      "command": ".venv/bin/python -m ruff check .",
+      "exit_code": 0,
+      "stdout": "All checks passed!",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "format_observation": {
+      "command": ".venv/bin/python -m ruff format --check .",
+      "exit_code": 1,
+      "summary": "96 files would be reformatted, 96 files already formatted",
+      "log_sha256": "36517b862663348b37b0f3e01dc60d4e62e8824d37b7aa726659b7d131876433",
+      "required_project_gate": false
+    },
+    "historical_bundle_verification": {
+      "results": [
+        {
+          "bundle": "reports/runs/7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198",
+          "run_id": "7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198",
+          "source_revision": "d62fb41f4b9158928a79df76cd92e6c86ff4b866",
+          "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198 --repo-root . --at-source-revision",
+          "exit_code": 0,
+          "stdout_matches_committed_manifest": true,
+          "manifest_sha256": "73eeb33518502965b85ad843616105b6eeb4fcd08783dba041c0ed1e23dee5b5"
+        },
+        {
+          "bundle": "reports/runs/c118831c6f96242071b758fcc7948f9b9ee7e82c44f7ae11e9bb173c74a978ea",
+          "run_id": "c118831c6f96242071b758fcc7948f9b9ee7e82c44f7ae11e9bb173c74a978ea",
+          "source_revision": "247aba5f01a905f8e6226d9bdd4a3408ec3d247f",
+          "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/c118831c6f96242071b758fcc7948f9b9ee7e82c44f7ae11e9bb173c74a978ea --repo-root . --at-source-revision",
+          "exit_code": 0,
+          "stdout_matches_committed_manifest": true,
+          "manifest_sha256": "f523a6b381b24ad566e180361a3033446c2d6a975abc4b4c7d132c1dcb2ee362"
+        },
+        {
+          "bundle": "reports/runs/fa6ecd0836e7d6c78049c868486f0016f47d3577ae98162e19cd0457cab0e13a",
+          "run_id": "fa6ecd0836e7d6c78049c868486f0016f47d3577ae98162e19cd0457cab0e13a",
+          "source_revision": "f96fb0e5c99cb14ae9d92e9a37e6a1bbc8a7a006",
+          "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/fa6ecd0836e7d6c78049c868486f0016f47d3577ae98162e19cd0457cab0e13a --repo-root . --at-source-revision",
+          "exit_code": 0,
+          "stdout_matches_committed_manifest": true,
+          "manifest_sha256": "da710a1bffa34ce2818338b05505410601918dfb1f20e00d6f5b107af970f4c5"
+        },
+        {
+          "bundle": "reports/runs/frozen-output-oracle-baseline/61c63f4aa32c573cdbc7e4abe48e08308801f1ff3cb8e5629a4ae446d5d22b6b",
+          "run_id": "61c63f4aa32c573cdbc7e4abe48e08308801f1ff3cb8e5629a4ae446d5d22b6b",
+          "source_revision": "580e601c7bcdc5e9cc3e7d16d926f23a2508f655",
+          "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/frozen-output-oracle-baseline/61c63f4aa32c573cdbc7e4abe48e08308801f1ff3cb8e5629a4ae446d5d22b6b --repo-root . --at-source-revision",
+          "exit_code": 0,
+          "stdout_matches_committed_manifest": true,
+          "manifest_sha256": "1293c8e3d01ef576d81e464420b065c4fb0d40b63f340f0c384c8407f43dbdd0"
+        }
+      ],
+      "verified_bundle_count": 4,
+      "log_sha256": "3c3d89dd5732845f50082355db6ed8d5822fc83853c19440aea141648af7304e",
+      "limit": "Declared input Git blobs and current output bytes only; not a recomputed store, complete dependency closure, or execution attestation."
+    },
+    "postgroup_rebuild_and_postmortem": {
+      "scope": "offline diagnostic rebuild; no gates, release run, network, or source edits",
+      "snapshot": "20260816T115509Z",
+      "commands": [
+        {
+          "command": ".venv/bin/python -m ti26.cli_ingest --raw data/raw --snapshot 20260816T115509Z --store /private/tmp/ti26-public-release-postgroup-rebuild-20260926.sqlite",
+          "exit_code": 0,
+          "result": "loaded 40076 maps"
+        },
+        {
+          "command": ".venv/bin/python -m ti26.cli_provenance store-digest --store /private/tmp/ti26-public-release-postgroup-rebuild-20260926.sqlite",
+          "exit_code": 0,
+          "digest": {
+            "algorithm": "sha256",
+            "schema_version": 1,
+            "row_count": 40076,
+            "sha256": "63f41d67f580d29cf464280758abdf6c6aeef8a16288e62fa523577ae6fbdb2c"
+          }
+        },
+        {
+          "command": ".venv/bin/python -m ti26.cli_provenance store-digest --store data/processed/ti2026-postgroup.sqlite",
+          "exit_code": 0,
+          "digest": {
+            "algorithm": "sha256",
+            "schema_version": 1,
+            "row_count": 40076,
+            "sha256": "63f41d67f580d29cf464280758abdf6c6aeef8a16288e62fa523577ae6fbdb2c"
+          }
+        },
+        {
+          "command": ".venv/bin/python -m ti26.cli_playoff_postmortem --store /private/tmp/ti26-public-release-postgroup-rebuild-20260926.sqlite > /private/tmp/ti26-public-release-postgroup-rebuild-20260926.md",
+          "exit_code": 0
+        },
+        {
+          "command": "cmp -s /private/tmp/ti26-public-release-postgroup-rebuild-20260926.md reports/playoff_postmortem.md",
+          "exit_code": 1,
+          "result": "only rendered --store path differs"
+        }
+      ],
+      "sqlite_sha256": {
+        "rebuilt": "be01fd916b89484fa24e90a8913941519825e391fab12eecbefd4a59e704b7ad",
+        "existing": "be01fd916b89484fa24e90a8913941519825e391fab12eecbefd4a59e704b7ad",
+        "equal": true
+      },
+      "report_sha256": {
+        "rebuilt": "27786084d1cfe5d59a41ff59d3e816d685f13e9e4503ba37a8f492c58f9dd296",
+        "tracked": "bd722d9724bdf6f06397e265cb1b182403e6d6646b18a48ac1181526dbe73928",
+        "byte_equal": false,
+        "equal_after_store_path_normalization": true
+      },
+      "output_difference": "one line: Store path only",
+      "independent_report_comparison": {
+        "normalization": {
+          "from": "/private/tmp/ti26-public-release-postgroup-rebuild-20260926.sqlite",
+          "to": "data/processed/ti2026-postgroup.sqlite",
+          "occurrences": 1
+        },
+        "normalized_sha256": "bd722d9724bdf6f06397e265cb1b182403e6d6646b18a48ac1181526dbe73928",
+        "tracked_sha256": "bd722d9724bdf6f06397e265cb1b182403e6d6646b18a48ac1181526dbe73928",
+        "normalized_equal": true,
+        "scope": "Exact replacement of the single printed store path; no numeric or other normalization."
+      }
+    }
+  },
+  "coverage": {
+    "research": "Formal problem and reproducibility specs, later architecture plans, known weaknesses, backtest/calibration, ratings/identity, simulator, gates, series reports and later group/playoff postmortems.",
+    "release": "Tracked layout/ignore policy, environment metadata, snapshots/store/provenance, release and frozen oracle, postmortem inputs, public docs and planned CI.",
+    "not_performed": [
+      "Full frozen forecast replay",
+      "Fresh-clone dependency installation",
+      "Group postmortem rerun",
+      "Every historical diagnostic rerun",
+      "Exhaustive source/security audit",
+      "Full-history secret scan",
+      "Dependency advisory/license audit",
+      "External data redistribution approval",
+      "Remote visibility/branch protection inspection"
+    ]
+  },
+  "references": [
+    "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository",
+    "https://docs.github.com/en/actions/reference/security/secure-use",
+    "https://docs.astral.sh/uv/concepts/projects/sync/"
+  ],
+  "artifact_status": "Planning documents only; no source/test/config changes or publication actions."
+}

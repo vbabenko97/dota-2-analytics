@@ -1,0 +1,225 @@
+{
+  "attestation": "retrospective-replay-not-original-run-provenance",
+  "expected_store": {
+    "algorithm": "sha256",
+    "row_count": 40076,
+    "schema_version": 1,
+    "sha256": "63f41d67f580d29cf464280758abdf6c6aeef8a16288e62fa523577ae6fbdb2c"
+  },
+  "frozen_output": {
+    "path": "reports/playoff_postmortem.md",
+    "sha256": "bd722d9724bdf6f06397e265cb1b182403e6d6646b18a48ac1181526dbe73928"
+  },
+  "inputs": [
+    {
+      "path": "config/d2_gate.yaml",
+      "sha256": "34b19d18e83840d6a0a4aee4d23f119660065277709abce48a81a6b55d18d0b2"
+    },
+    {
+      "path": "config/team_aliases.yaml",
+      "sha256": "c3f3d2ce69f59ef85651014dab0d08ae04c907f97354b8e54ab16213b68f5ed0"
+    },
+    {
+      "path": "config/ti2026_teams.yaml",
+      "sha256": "f41f41a11b5db2032fe5986e3555d5c3193d587a456ecbde2fee5f8e5b6fd2ec"
+    },
+    {
+      "path": "data/raw/20260816T115509Z/manifest.json",
+      "sha256": "960ac2e09c22baa0575436b7dbe4c7b9eecf43fc33425e4b081e6cc2c0686e48"
+    },
+    {
+      "path": "data/ti2026_playoff_cards.yaml",
+      "sha256": "3a05d1e53726e8884341e8687daaa109672af49a31dfe87b2f3bdd4322a41d5d"
+    },
+    {
+      "path": "data/ti2026_playoff_outcome.yaml",
+      "sha256": "4a986f77deb0aec5878b7046687673608cf1595c11eeb2d1b7e0de5fcd7a3269"
+    },
+    {
+      "path": "predictions-from-llms/gemini-3-1-pro.md",
+      "sha256": "018ce4da34d3f409746b53ab09096ebd6f138a5e38e523879a16b112df5f4364"
+    },
+    {
+      "path": "predictions-from-llms/gpt-5-6-xhigh.md",
+      "sha256": "5e041d69f5c257b86553859587fa90bf6f4a59285ee10aebdae34e482adc50b1"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "e43ad4c235e969fdd2de7d32de9bdda7d8a9739cdc1663495c48ab6ea9689b6b"
+    },
+    {
+      "path": "uv.lock",
+      "sha256": "fd9c83268b717ae525b26c4c5fceb6a5f51aa20e21e4eceabbd44eb138927805"
+    }
+  ],
+  "invocation": [
+    "--store",
+    "{store}",
+    "--cards",
+    "data/ti2026_playoff_cards.yaml",
+    "--outcome",
+    "data/ti2026_playoff_outcome.yaml",
+    "--teams",
+    "config/ti2026_teams.yaml",
+    "--aliases",
+    "config/team_aliases.yaml",
+    "--gate-config",
+    "config/d2_gate.yaml",
+    "--min-train",
+    "500"
+  ],
+  "kind": "playoff",
+  "producer_source_files": [
+    {
+      "path": "src/ti26/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/ti26/backtest.py",
+      "sha256": "2ac9c879386d3e8e6ad784c79b138169d2c954e5a7194f93d2797195ab0a3381"
+    },
+    {
+      "path": "src/ti26/bracket.py",
+      "sha256": "175327bb4b31817f1c4173e53d6594a272477c7afdb41e21f9918b95fdb615c1"
+    },
+    {
+      "path": "src/ti26/cli.py",
+      "sha256": "ff49388d586ea0f98cc11042da4609ec3db849c029511d06c0675837a98c49f0"
+    },
+    {
+      "path": "src/ti26/cli_card.py",
+      "sha256": "7a0e430a936fc7d0c4b16e0af504899eedb11e107f7358771a0fc1859baf5cf0"
+    },
+    {
+      "path": "src/ti26/cli_card_postmortem.py",
+      "sha256": "fbbc0fad38ad0321b1575ee795790f197ba9d0cbd6d0cba5a88830dad82417b4"
+    },
+    {
+      "path": "src/ti26/cli_ingest.py",
+      "sha256": "c5aa372fc35cfee71f0ac38ae83571870a032f5c6f6091e146b6ed547df8dcbf"
+    },
+    {
+      "path": "src/ti26/cli_playoff_cards.py",
+      "sha256": "61a36bdbf8538a41b93ca86d8b83e9edb200763b665b43666db5811c71b4b30e"
+    },
+    {
+      "path": "src/ti26/cli_playoff_postmortem.py",
+      "sha256": "9057bc2b51b30aa0d36359450dcf154132b6bb5cfc942b57369d24c14951001a"
+    },
+    {
+      "path": "src/ti26/cli_playoff_score.py",
+      "sha256": "9750e3f443f7242dd4b63b17a594904f7220ddcde0d2197cd6c938fc0e4eaf36"
+    },
+    {
+      "path": "src/ti26/data/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/ti26/data/opendota.py",
+      "sha256": "59b04f6f71f719c7491c60f93febb12f94b57fa0ee4eed6ee06b2859f7fd9e40"
+    },
+    {
+      "path": "src/ti26/data/queries.py",
+      "sha256": "60f6936855ec714c6fd88357bd78452a40b41236ab1e3e7fd3c0cf5e91184149"
+    },
+    {
+      "path": "src/ti26/data/schema.py",
+      "sha256": "3d8942c70829ac2466d1e1b0e647b132e654996116ea16698bb4c2148ec84003"
+    },
+    {
+      "path": "src/ti26/data/snapshot.py",
+      "sha256": "812cd5e0fd2076d17b4e77655598f079874e9d4b1c2c0e407900c4e1af2a89a9"
+    },
+    {
+      "path": "src/ti26/data/store.py",
+      "sha256": "a785c32372f996f8c55cfe2795fddf8f597140b346a485a8c99149aa468153d3"
+    },
+    {
+      "path": "src/ti26/elimination.py",
+      "sha256": "c1fa804c15c9ae5f048f7411a2c23c01c4adf2d4221523cf8a320786398b8d6e"
+    },
+    {
+      "path": "src/ti26/gate_artifacts.py",
+      "sha256": "b28542ce17b685030209df4e67e8e8e3e271cd8ef025bd3ee3c1bb8b5a421caf"
+    },
+    {
+      "path": "src/ti26/groups.py",
+      "sha256": "62b534bca0ea1ad808434cd9cac1d4a4f076385bd4d6e652c2aa8de2ff48ce01"
+    },
+    {
+      "path": "src/ti26/identity.py",
+      "sha256": "1d81e4eb53a6d3aa88f64879254a7d80b327213659df3a6a65cb6cde2d05ed27"
+    },
+    {
+      "path": "src/ti26/montecarlo.py",
+      "sha256": "b73b8b7f2a942185667dabc263b5efb1e1939f76c08a46db775e8ba883f637eb"
+    },
+    {
+      "path": "src/ti26/optimize.py",
+      "sha256": "ce1cecbf4741a879b7feea0a231c4d83772fd914564e9a75c649f0e71890687e"
+    },
+    {
+      "path": "src/ti26/pairing.py",
+      "sha256": "c803b5b2b66f0c57e8eac1187755e564465d234d0b4f1eda7ef4100a2d2a1544"
+    },
+    {
+      "path": "src/ti26/proper_scores.py",
+      "sha256": "e71a3b1a1b28f75048d280df7c45be7b7bdaffc7c4ea2e3ab95527ad6a5b2583"
+    },
+    {
+      "path": "src/ti26/public_ratings.py",
+      "sha256": "64c8cee4e35854c04f5344cc5be3b38113c41d94ebaa336ecd7af57cc902d973"
+    },
+    {
+      "path": "src/ti26/ratings/__init__.py",
+      "sha256": "884f6db9f3147495c4b9a7d9793f7651bdb869c13bc5519a94426d8c7e745c75"
+    },
+    {
+      "path": "src/ti26/ratings/glicko.py",
+      "sha256": "fa068e8c95e7c61fc1998628d1ca30ac942f06879d87b6d51e70f308cdf5aa0a"
+    },
+    {
+      "path": "src/ti26/roster.py",
+      "sha256": "7a47fba0314c31798e9aa009032619772a49ae88dca7b3c9e5464b5b64a39aba"
+    },
+    {
+      "path": "src/ti26/rules.py",
+      "sha256": "7e19948b9cead53ef25af1f74844afca8d49140f2f9231876a69205fb9859bca"
+    },
+    {
+      "path": "src/ti26/series.py",
+      "sha256": "19b67ce2ad1a0b2aa7019aaa35e4d6ff7ac2dc452c5ab4e3ae6542639e360073"
+    },
+    {
+      "path": "src/ti26/swiss.py",
+      "sha256": "10bf9b8388b3d2f3c7f4ea48c6c8f8a6f6f72f39d1ff568034af4ed76dfe593a"
+    },
+    {
+      "path": "src/ti26/teams.py",
+      "sha256": "2ef2138e3afcb49d7ecde8863f86cedc91ac3ac4e13cd6020597c70841896b0f"
+    },
+    {
+      "path": "src/ti26/tiebreak.py",
+      "sha256": "1a445db078df5ab9842f9303597c8d0b7ede767fac2db393a4b1a7ba886953bc"
+    },
+    {
+      "path": "src/ti26/types.py",
+      "sha256": "c7de2b2779cb0cc392555836d6b300a2dc2304eacbaeb50b3ad90e5755d58450"
+    }
+  ],
+  "producer_source_revision": "56b653edc667c838bc8f6bbf86d6aef64af72d31",
+  "replay_tooling": [
+    {
+      "path": "src/ti26/cli_replay_postmortems.py",
+      "sha256": "272df25f6f1b78b11d49cfd8aa9d79a673db669adea9b673732053c4ab1b6ea4"
+    },
+    {
+      "path": "src/ti26/provenance.py",
+      "sha256": "6f4b79952b5b530a1d07cfd3c6702561ed35a8c5a4bbb0b88941a1899573fe97"
+    }
+  ],
+  "schema_version": 1,
+  "store_path_normalization": {
+    "frozen_path": "data/processed/ti2026-postgroup.sqlite"
+  }
+}

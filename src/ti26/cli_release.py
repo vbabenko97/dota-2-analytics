@@ -58,6 +58,11 @@ CONFIG_INPUTS = (
     "pyproject.toml",
 )
 
+# The environment lock is an input to every release producer even though it is
+# not configuration.  Keep it separate so the configuration completeness test
+# remains exactly about `config/*.yaml`.
+UV_LOCK_INPUT = "uv.lock"
+
 
 def declared_inputs(snapshot_manifest_path: str, groups: str | None) -> list[str]:
     """Every file whose BYTES the manifest binds this run to.
@@ -78,8 +83,14 @@ def declared_inputs(snapshot_manifest_path: str, groups: str | None) -> list[str
     return [
         snapshot_manifest_path,
         *CONFIG_INPUTS,
+        UV_LOCK_INPUT,
         *([groups] if groups else []),
     ]
+
+
+def input_manifest(paths: list[str]) -> list[dict[str, str]]:
+    """Hash declared inputs into the form persisted in a run descriptor."""
+    return [{"path": path, "sha256": sha256_file(Path(path))} for path in paths]
 
 
 def build_producers(args, store_path: Path) -> list[list[str]]:
@@ -258,10 +269,7 @@ def main(argv: list[str] | None = None) -> int:
             "manifest_sha256": sha256_file(snapshot_manifest),
         },
         "store": store_digest,
-        "inputs": [
-            {"path": path, "sha256": sha256_file(Path(path))}
-            for path in declared_inputs(snapshot_manifest.as_posix(), args.groups)
-        ],
+        "inputs": input_manifest(declared_inputs(snapshot_manifest.as_posix(), args.groups)),
         "runtime": _runtime(),
     }
     prefix = render_report_prefix(descriptor)
