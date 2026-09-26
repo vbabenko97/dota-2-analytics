@@ -7,7 +7,7 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
 - [x] Retrospective navigation, contributor rules, citation, and replay guide.
 - [x] Additive lock binding; historical manifests preserved.
 - [x] Pinned offline workflow and local test network guard.
-- [x] Complete local candidate verification and independent review; record [implementation evidence](audits/2026-09-26-public-release-implementation.json).
+- [x] Record implementation checks and independent review at the worktree hashes in [implementation evidence](audits/2026-09-26-public-release-implementation.json). This historical receipt predates the source-permission and identity updates; committed-candidate verification is tracked below.
 - [ ] Observe successful CI on a clean hosted runner; local checks cannot establish that result.
 
 ## Publication blockers
@@ -16,7 +16,7 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
 - [x] Owner approves retained player identifiers for reproducibility, subject to source permission.
 - [x] Owner reviews author-email exposure and chooses to preserve history, including the work email; new commits use the approved Gmail identity.
 - [x] Record the owner-confirmed private security email in SECURITY.md.
-- [x] Run history secret scans and locked-dependency advisory/license review; see the [history scan](audits/2026-09-26-publication-scan.json), [candidate scan](audits/2026-09-26-publication-candidate.json), and [supplement](audits/2026-09-26-publication-supplement.json). Rights and identity decisions remain open.
+- [x] Run history secret scans and locked-dependency advisory/license review; see the [history scan](audits/2026-09-26-publication-scan.json), [pre-commit scan](audits/2026-09-26-publication-candidate.json), and [supplement](audits/2026-09-26-publication-supplement.json). These receipts cover their recorded inputs; later edits need a new candidate receipt. Rights decisions remain open.
 - [ ] Review hosted branch protection and reporting settings at release time.
 - [ ] Verify a committed candidate in a clean full-history checkout; bind the receipt to its SHA.
 - [ ] Select the release version/tag after candidate verification and rights clearance.
