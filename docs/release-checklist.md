@@ -18,7 +18,7 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
 - [x] Record the owner-confirmed private security email in SECURITY.md.
 - [x] Run history secret scans and locked-dependency advisory/license review; see the [history scan](audits/2026-09-26-publication-scan.json), [pre-commit scan](audits/2026-09-26-publication-candidate.json), and [supplement](audits/2026-09-26-publication-supplement.json). These receipts cover their recorded inputs; later edits need a new candidate receipt. Rights decisions remain open.
 - [ ] Review hosted branch protection and reporting settings at release time.
-- [ ] Verify a committed candidate in a clean full-history checkout; bind the receipt to its SHA.
+- [x] Verify a committed candidate in a clean full-history checkout; see the [SHA-bound receipt](audits/2026-09-26-committed-candidate-verification.json). This receipt and checklist completion update are local follow-up documentation outside the verified candidate commit.
 - [ ] Select the release version/tag after candidate verification and rights clearance.
 - [ ] Explicitly authorize push, visibility change, and publication.
 
