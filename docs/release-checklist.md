@@ -19,7 +19,7 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
 - [x] Owner reviews author-email exposure and chooses to preserve history, including the work email; new commits use the approved Gmail identity.
 - [x] Record the owner-confirmed private security email in SECURITY.md.
 - [x] Run history secret scans and locked-dependency advisory/license review; see the [history scan](audits/2026-09-26-publication-scan.json), [pre-commit scan](audits/2026-09-26-publication-candidate.json), and [supplement](audits/2026-09-26-publication-supplement.json). These receipts cover their recorded inputs; later edits need a new candidate receipt. Rights decisions remain open.
-- [ ] Verify the final candidate (see the [completion plan](superpowers/plans/2026-09-27-public-release-completion.md), Task 5). Commits after the verified SHA may touch only the receipt and this checklist.
+- [x] Verify the final candidate: [receipt](audits/2026-09-27-release-candidate-verification.json) for 0186447. It covers unfiltered tests, Ruff, all bundles, the postmortem replay, the full forecast oracle, a full-history secret scan, dependency advisories and links. Commits after the verified SHA may touch only the receipt and this checklist.
 - [ ] Merge the release PR with "Create a merge commit". Squash or rebase would strand receipt-cited SHAs.
 - [ ] Before the flip: update the repository description and topics; require approval for fork pull-request workflows from outside collaborators.
 - [ ] After the flip: enable secret scanning with push protection, Dependabot alerts (no update PRs; `uv.lock` is replay-bound), private vulnerability reporting, and a ruleset on `main` requiring Offline CI.
