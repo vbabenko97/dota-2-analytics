@@ -159,7 +159,7 @@
           "CONTRIBUTING.md:15 (amended in b07023f) states the replay-bound-file exemption from repository-wide Ruff formatting.",
           "tests/conftest.py and tests/test_offline_policy.py (new since 56b653e) deny Python socket connections during tests and test that policy; CI additionally runs each verification command in a network namespace (.github/workflows/offline-ci.yml)."
         ],
-        "reason": "A versioned, tested replay attestation now exists where none did before (new module, new manifests already present since ce6f804, and a guard test added today that I independently confirmed fails under both of its named mutations and passes after reverting). This matches most of the A anchor ('versioned configs and artifacts... smoke/component tests'). Held at B+, not A, because the completion plan itself records that CI still never executes the replay -- only the byte-binding guard runs in CI via pytest -- and the expensive full forecast-oracle replay stays manual/optional (docs/reproduce.md 'Optional full forecast replay')."
+        "reason": "A versioned, tested replay attestation now exists where none did before (new module, new manifests already present since ce6f804, and a guard test added today; this review independently confirmed that its pyproject.toml mutation fails and passes after reverting, while the teams.py mutation is attested only by implementation commit b07023f). This matches most of the A anchor ('versioned configs and artifacts... smoke/component tests'). Held at B+, not A, because the completion plan itself records that CI still never executes the replay -- only the byte-binding guard runs in CI via pytest -- and the expensive full forecast-oracle replay stays manual/optional (docs/reproduce.md 'Optional full forecast replay')."
       },
       {
         "dimension": "Serving, integration & release",
@@ -316,7 +316,8 @@
       "An independent diff review found that docs/data-sources.md cited findings from an automated pre-screen of the two analyses without a committed receipt. 47b8a79 removed them. The 'Cost of mistakes & risk' evidence and reason now cite the remaining publication-decision text (no per-file hold under full-history publication). Grade unchanged.",
       "The adversarial verifier noted that the 'Serving, integration & release' reason did not state that hosted CI ran on 6ba2c0f, an ancestor of the reviewed revision. Clause added. Grade unchanged.",
       "The adversarial verifier noted that tests/conftest.py and tests/test_offline_policy.py were omitted from the reproducibility evidence. Added. Grade unchanged.",
-      "The top-fix wording follows the corrected publication-decision text."
+      "The top-fix wording follows the corrected publication-decision text.",
+      "A later independent review found that the 'Training pipeline & reproducibility' reason claimed independent confirmation of both guard mutations, while the evidence records only the pyproject.toml mutation. The reason now attributes the teams.py mutation to implementation commit b07023f. Grade unchanged."
     ]
   },
   "artifact_status": "Design re-review only; no source, test, or config file left changed by this review (pyproject.toml was mutated and reverted during independent verification, confirmed clean via `git status --short`). No publication action taken."
