@@ -56,7 +56,7 @@ Choose a new absent path. The wrapper refuses existing stores and symlinks.
   --store /private/tmp/ti26-postmortem-replay.sqlite
 ```
 
-The wrapper verifies manifest-bound inputs, reconstructs the store, checks its logical digest, and renders both reports. Group output must match exactly. Playoff output may differ only in the single printed database path, replaced with the recorded historical path before comparison. Any other difference fails. The rebuilt store is retained; frozen reports are never overwritten. The command prints nothing until it finishes; expect several minutes. It fails before rendering if any replay-bound file (producer source, replay tooling or input listed in the manifests) differs from its recorded bytes.
+The wrapper verifies manifest-bound inputs, reconstructs the store, checks its logical digest, and renders both reports. Group output must match exactly. Playoff output may differ only in the single printed database path, replaced with the recorded historical path before comparison. Any other difference fails. The rebuilt store is retained; frozen reports are never overwritten. After one ingest line, the command prints nothing until its JSON receipt; expect several minutes. It fails before ingesting if any replay-bound file (a producer source, replay tool or input listed in the manifests) differs from its recorded bytes.
 
 The JSON receipt reports comparison results and the store digest. A successful report comparison does not establish predictive skill. Both diagnostics share a tournament; group results inform playoff strengths.
 

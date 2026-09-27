@@ -36,7 +36,7 @@
 | A — public contract | Met, except five dead links to the private `gpt-pro-output.md` | [forecast design spec](../specs/2026-08-01-ti2026-forecast-design.md) lines 34, 339, 516, 591, 599; disclosed in [docs index](../../README.md) line 13 |
 | B — rights and exposure | Exposure re-scan of all local refs reported no findings; rights **held** | [source-permission register](../../data-sources.md); the re-scan is not yet in a receipt (Task 5) |
 | C — reproduction chain | Met. A fresh worktree reproduced every documented step, including corrupted-input rejection and the optional full forecast oracle | [committed-candidate receipt](../../audits/2026-09-26-committed-candidate-verification.json) covers `4e993a7`; the 2026-09-27 run is not yet in a receipt (Task 5) |
-| D — offline CI | Shipped, pinned and [green on `6ba2c0f`](https://github.com/vbabenko97/dota-2-analytics/actions/runs/36248550562). The accept criterion "rejects a deliberately broken test" has never been exercised | `ci_execution` in the [implementation receipt](../../audits/2026-09-26-public-release-implementation.json) |
+| D — offline CI | Shipped, pinned and green on `6ba2c0f`. The accept criterion "rejects a deliberately broken test" has never been exercised | [Hosted run](https://github.com/vbabenko97/dota-2-analytics/actions/runs/36248550562) (`gh run view 36248550562`; Task 5 records it in a receipt). `ci_execution` in the [implementation receipt](../../audits/2026-09-26-public-release-implementation.json) records that CI had not run at implementation time |
 | E — publish | Open: rights, merge, settings, version, authorization | [release checklist](../../release-checklist.md) lines 15–23 |
 
 ## Gaps
@@ -87,12 +87,12 @@
 |---|---|---|---|
 | D1 | Publication path under the rights hold | **A:** set a deadline for the OpenDota reply, repost the inquiry through a durable public channel, and after the deadline publish this repository with full history, attribution and a takedown-on-request statement. This is risk acceptance, not clearance. The alternatives are **B**, a fresh-history public repository without held materials (it loses `--at-source-revision` verification and the postmortem replay; medium-to-large effort), and **C**, staying private and publishing a write-up. | Task 7 |
 | D2 | Valve rules-page captures and the Steam news response under A | Keep them with a visible Valve/Steam name-and-link attribution in [data sources](../../data-sources.md), or ask Valve for permission. Removing them from HEAD alone changes nothing. | Task 7 |
-| D3 | The two analyses in `predictions-from-llms/` | Review both for verbatim third-party passages. Their bytes are replay inputs and digest-bound in `data/ti2026_playoff_cards.yaml`, so any edit requires a new attestation, and history keeps the old bytes. | Task 7 |
+| D3 | The two analyses in `predictions-from-llms/` | Review both for verbatim third-party passages. Under route A there is no per-file hold: approve them as they are, or switch to route B, before the D1 deadline. Their bytes are replay inputs and digest-bound in `data/ti2026_playoff_cards.yaml`, so any edit requires a new attestation, and history keeps the old bytes. | Task 7 |
 | D4 | Merge method | Create a merge commit, matching every earlier PR in this repository. Keep `codex/public-release` until the tag exists. | Task 7 |
 | D5 | Version | Tag `v0.1.0`, which equals the bound `pyproject.toml` version. Add `version` and `date-released` to `CITATION.cff`, which is not bound. | Task 7 |
 | D6 | Hosted settings | Before the flip: update description and topics, and require approval for fork PR workflows from all outside collaborators. After the flip: enable secret scanning with push protection, Dependabot **alerts** only (no update PRs), private vulnerability reporting, and a ruleset on `main` requiring Offline CI. | Task 7 |
 | D7 | DOI | Optional. Zenodo archives only public repositories, and only releases created after its toggle is enabled. | Task 7 |
-| D8 | Cleanup | Delete the eight merged remote branches after the tag. Discard the untracked compression outputs: their own scorecards report 0.51% and 2.14% word savings, too little to justify seven files. Remove this review's worktree and branch. | — |
+| D8 | Cleanup | Delete the eight merged remote branches after the tag. Discard the untracked compression outputs: their own scorecards reported negligible word savings. Remove this review's worktree and branch. | — |
 | D9 | Stage D evidence | Authorize a scratch branch carrying a deliberately failing test, observe red, then delete it. Otherwise, record the criterion as not exercised. | Task 6 |
 | D10 | Incident wording | Approve the checklist paragraph in Task 2. | Task 2 |
 

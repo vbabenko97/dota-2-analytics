@@ -30,11 +30,7 @@ Recorded 2026-09-27 by Vitalii Babenko. If no permission response arrives by 202
 
 - **Attribution:** match data comes from [OpenDota](https://www.opendota.com). Rules text and the Steam news response are Valve material from [dota2.com](https://www.dota2.com) and [Steam](https://store.steampowered.com). Dota 2, The International and Steam are trademarks of Valve Corporation. This repository is not affiliated with or endorsed by Valve or OpenDota.
 - **Takedown:** a rights holder may request removal through the contact in [SECURITY.md](../SECURITY.md). Removal happens in a new commit, per the [release checklist](release-checklist.md). Earlier public history, forks and clones are not retracted.
-- **Owner-generated analyses:** both stay on hold until the owner reviews them.
-  - An automated pre-screen on 2026-09-27 (not legal advice) found no copied third-party prose.
-  - The Gemini-named file's hero-statistics table closely mirrors a table from a GosuGamers source it cites.
-  - The GPT-named file's citation markers do not resolve, and one statistic spot-checked by the pre-screen could not be corroborated.
-  - Their bytes are digest-bound, so any change needs a new replay attestation, and history keeps the originals.
+- **Owner-generated analyses:** publishing full history publishes both files, so there is no per-file hold under this route. Before the deadline, the owner must either approve both files as they are or switch to a fresh-history repository. Their bytes are digest-bound, so any edit needs a new replay attestation, and history keeps the originals.
 
 ### OpenDota inquiry
 

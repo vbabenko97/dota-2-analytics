@@ -6,4 +6,4 @@ Changes add navigation, contributor/data policies, MIT code licensing, citation 
 
 The research conclusion is unchanged: temporal validation and provenance are strong; repeat-event predictive skill remains unproven. Postmortems share an event. External cards have incomplete generation provenance. Simulation conditions on point strengths without propagating rating-deviation uncertainty.
 
-Maintenance is retrospective only. See the [release checklist](release-checklist.md) for blockers and [reproduction guide](reproduce.md) for checks. No publication, tag, hosted CI success, or redistribution clearance is claimed.
+Maintenance is retrospective only. See the [release checklist](release-checklist.md) for blockers and [reproduction guide](reproduce.md) for checks. No publication, tag, or redistribution clearance is claimed; the release checklist tracks hosted CI status.
