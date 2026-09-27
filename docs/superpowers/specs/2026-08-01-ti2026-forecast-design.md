@@ -31,7 +31,7 @@ Claims fall into four provenance tiers. Treating them as equally solid is the fa
 - Sequential opponent selection by the five 3-2 teams from the five 2-3 teams.
 - Prediction lock: 2026-08-13 10:00 China Standard Time = **04:00 CEST**. Event is in Shanghai, which resolves the CST ambiguity to UTC+8 rather than US Central.
 
-**C. Sourced from [gpt-pro-output.md](../../../gpt-pro-output.md), not independently verified:**
+**C. Sourced from `gpt-pro-output.md` (private, unpublished), not independently verified:**
 - Roster aliases (Iron Wing / Team Vision / BoomBoys / HULIGANI).
 
 **D. Unknown:**
@@ -336,7 +336,7 @@ Python. `uv` for dependency management. No experiment-tracking service — a CSV
 
 **Reproducibility — kept:** explicit seeds on every random operation; immutable timestamped raw snapshots (`data/raw` never overwritten); the `as_of` leakage assertion.
 
-**Reproducibility — deliberately cut:** CI instruction-drift checks, config-SHA in every report, five lifecycle hook types, five subagent definitions. These cost roughly a day and a half and buy zero forecast accuracy on a one-shot personal prediction. This is a departure from [gpt-pro-output.md](../../../gpt-pro-output.md) §8 and it is intentional.
+**Reproducibility — deliberately cut:** CI instruction-drift checks, config-SHA in every report, five lifecycle hook types, five subagent definitions. These cost roughly a day and a half and buy zero forecast accuracy on a one-shot personal prediction. This is a departure from `gpt-pro-output.md` (private, unpublished) §8 and it is intentional.
 
 **Hyperparameters are set, not searched.** Paired per-map log-loss differences between two similar rating configurations are resolvable on a few thousand pro maps. Selecting the best of a twenty-configuration grid is not — that is winner's curse, and the expected out-of-sample gain lands well below the in-sample gain that motivated the choice. Budget: two or three candidate half-lives, one paired comparison, one hour. Not two days.
 
@@ -513,7 +513,7 @@ Try a lightweight fetch or search endpoint first; Playwright is the fallback for
 - **Data quality:** re-run the `as_of` leakage assertion and the simulator invariants on every re-run. Non-negotiable, blocking.
 - **Sanity:** compare the top-4 ordering against public ratings and market odds each run. A wild divergence is a bug signal, not an edge signal.
 
-**Schedule-sensitivity experiment (D4, 30 minutes).** [gpt-pro-output.md](../../../gpt-pro-output.md) §2 proposes four schedule families plus an adversarial search. Swiss self-corrects, so the prior here is that round-1 pairing barely moves final-category probabilities except at the 4-0 and 0-4 extremes. Test it: run uniform-legal vs seed-banded, measure `max|ΔP_{i,c}|`. Below ~2pp, delete the robust card and the adversarial search.
+**Schedule-sensitivity experiment (D4, 30 minutes).** `gpt-pro-output.md` (private, unpublished) §2 proposes four schedule families plus an adversarial search. Swiss self-corrects, so the prior here is that round-1 pairing barely moves final-category probabilities except at the 4-0 and 0-4 extremes. Test it: run uniform-legal vs seed-banded, measure `max|ΔP_{i,c}|`. Below ~2pp, delete the robust card and the adversarial search.
 
 ---
 
@@ -588,7 +588,7 @@ Provenance matters more than pretending every branch has textual authority. `inf
 | **D5** (Aug 6) | Meta work (§VIII). Hero contest rates + player sample counts + pool breadth → `reports/meta_scouting.md` (**ships unconditionally**). Then `patch_adaptation` only, backtested. | Report readable with sample counts stated. Pre-registered test on post-patch matches. **Card regenerates only on pass** |
 | **D6–11** | Slack. Re-run on new results. H2H market integration on schedule reveal. Remaining Tier 2 add-ons only if D2 justified them. | |
 
-Five build days and six slack days, against a hard deadline at 2026-08-13 04:00 CEST. [gpt-pro-output.md](../../../gpt-pro-output.md) §9 loads all eleven days with the final run on Aug 12 — any slip misses the lock.
+Five build days and six slack days, against a hard deadline at 2026-08-13 04:00 CEST. `gpt-pro-output.md` (private, unpublished) §9 loads all eleven days with the final run on Aug 12 — any slip misses the lock.
 
 **Build order is inverted relative to that plan, deliberately.** The rules engine is the highest-risk component (its bugs are deterministic and large, unlike model error, which is a rounding error next to Bo3 variance) and it needs zero data. Building it first yields a working end-to-end card generator on D2 with a fallback that always produces an answer.
 
@@ -596,7 +596,7 @@ Five build days and six slack days, against a hard deadline at 2026-08-13 04:00 
 
 ## Cut list
 
-Dropped from [gpt-pro-output.md](../../../gpt-pro-output.md) under Tier 1 scope:
+Dropped from `gpt-pro-output.md` (private, unpublished) under Tier 1 scope:
 
 - Adversarial schedule search and the robust card — pending the §XI sensitivity experiment.
 - Two-model ensemble as specified. Glicko-2 and dynamic Bradley-Terry are both logit-scale paired-comparison fits on identical data; blending them buys close to nothing. Diversity comes from the *information source*, not the fitting algorithm.

@@ -24,6 +24,18 @@ Owner approval records a release decision; it cannot supply missing third-party 
 | [Gemini-named analysis](../predictions-from-llms/gemini-3-1-pro.md) | Owner confirms generating the supplied analyses with AI services; filename is not verified model provenance. Retain AI-generation provenance disclosure and the works-cited list. [Google generative-AI terms](https://policies.google.com/terms/generative-ai) are a review starting point; account/product and applicable terms at generation remain unknown. | **Hold.** Record file-specific service/account provenance and whether prompts or outputs contain copied passages; review those sources separately. |
 | [GPT-named analysis](../predictions-from-llms/gpt-5-6-xhigh.md) | Owner confirms generating the supplied analyses with AI services. Opaque citation markers lack persisted source URLs. [OpenAI terms](https://openai.com/policies/row-terms-of-use/) distinguish consumer, regional, and business use; output ownership does not grant third-party rights. Applicable account/region/version remains unknown. | **Hold.** Resolve citation sources, file-specific service/account provenance, and copied-material status. Preserve AI-generation provenance disclosure. |
 
+### Publication decision
+
+Recorded 2026-09-27 by Vitalii Babenko. If no permission response arrives by 2026-10-11, the owner publishes the full repository history on the terms below. This accepts residual legal risk; it does not establish permission. The owner re-posts the inquiry in a durable public channel before the deadline. A reply before then supersedes this decision.
+
+- **Attribution:** match data comes from [OpenDota](https://www.opendota.com). Rules text and the Steam news response are Valve material from [dota2.com](https://www.dota2.com) and [Steam](https://store.steampowered.com). Dota 2, The International and Steam are trademarks of Valve Corporation. This repository is not affiliated with or endorsed by Valve or OpenDota.
+- **Takedown:** a rights holder may request removal through the contact in [SECURITY.md](../SECURITY.md). Removal happens in a new commit, per the [release checklist](release-checklist.md). Earlier public history, forks and clones are not retracted.
+- **Owner-generated analyses:** both stay on hold until the owner reviews them.
+  - An automated pre-screen on 2026-09-27 (not legal advice) found no copied third-party prose.
+  - The Gemini-named file's hero-statistics table closely mirrors a table from a GosuGamers source it cites.
+  - The GPT-named file's citation markers do not resolve, and one statistic spot-checked by the pre-screen could not be corroborated.
+  - Their bytes are digest-bound, so any change needs a new replay attestation, and history keeps the originals.
+
 ### OpenDota inquiry
 
 Sent by Vitalii Babenko through [OpenDota Discord — help](https://discord.com/channels/144629812982448128/421587769664471069), the contact server linked from the official core README. Delivery was observed in the channel; no permission response has been recorded.

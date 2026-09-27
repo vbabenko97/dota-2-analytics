@@ -1,6 +1,6 @@
 # ti26 — reproducible forecast retrospective
 
-Research pipeline for TI 2026 compendium forecasts, historical validation, and group/playoff postmortems. Its contribution is an auditable chain from inputs to decisions, including negative results. Maintenance is retrospective only.
+Research pipeline for forecasting the compendium prediction card of The International 2026 (TI, Dota 2's annual world championship): a one-shot, locked assignment of teams to placement categories. It covers the forecasts, historical validation, and group/playoff postmortems. Its contribution is an auditable chain from inputs to decisions, including negative results. Maintenance is retrospective only.
 
 ## Claims and limits
 

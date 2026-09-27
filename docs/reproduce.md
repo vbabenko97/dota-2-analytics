@@ -30,7 +30,7 @@ Postmortem manifests are **retrospective replay attestations**, not evidence of 
   --repo-root . --at-source-revision
 ```
 
-Repeat with each historical bundle directory containing a manifest. The workflow enumerates all tracked run manifests. This checks declared Git input blobs and current output hashes, not actual past execution or undeclared runtime dependencies. Use live-tree verification only for a bundle intended to describe the current checkout.
+Repeat with each historical bundle directory containing a manifest. List them with `git ls-files -- 'reports/runs/**/manifest.json'`; the workflow enumerates the same set. Success is exit status 0; the command prints the verified manifest as JSON. This checks declared Git input blobs and current output hashes, not actual past execution or undeclared runtime dependencies. Use live-tree verification only for a bundle intended to describe the current checkout.
 
 ## Input reconstruction
 
@@ -56,7 +56,7 @@ Choose a new absent path. The wrapper refuses existing stores and symlinks.
   --store /private/tmp/ti26-postmortem-replay.sqlite
 ```
 
-The wrapper verifies manifest-bound inputs, reconstructs the store, checks its logical digest, and renders both reports. Group output must match exactly. Playoff output may differ only in the single printed database path, replaced with the recorded historical path before comparison. Any other difference fails. The rebuilt store is retained; frozen reports are never overwritten.
+The wrapper verifies manifest-bound inputs, reconstructs the store, checks its logical digest, and renders both reports. Group output must match exactly. Playoff output may differ only in the single printed database path, replaced with the recorded historical path before comparison. Any other difference fails. The rebuilt store is retained; frozen reports are never overwritten. The command prints nothing until it finishes; expect several minutes. It fails before rendering if any replay-bound file (producer source, replay tooling or input listed in the manifests) differs from its recorded bytes.
 
 The JSON receipt reports comparison results and the store digest. A successful report comparison does not establish predictive skill. Both diagnostics share a tournament; group results inform playoff strengths.
 

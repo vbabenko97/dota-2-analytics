@@ -10,7 +10,7 @@ The [public release plan](public-release-plan.md) is the approved implementation
 
 [Known weaknesses](ti26/2026-08-08-known-weaknesses.md) describes historical validation limits. [Strengthening plan](ti26/2026-08-08-strengthening-plan.md) proposes future research. [Fetched rules](ti26/2026-08-08-ti2026-rules-fetched.md) and [format provenance](ti26/2026-08-08-published-format-rules.md) distinguish evidence from assumptions. The [near-lock runbook](ti26/near-lock-runbook.md) is historical guidance, not a request to rerun frozen decisions.
 
-The [audit archive](audits/) and [correction register](audits/2026-08-04-correction-register.md) retain corrections. Historical references to ignored `gpt-pro-output.md` identify unavailable local review context; that private file is not public evidence.
+The [audit archive](audits/) and [correction register](audits/2026-08-04-correction-register.md) retain corrections. Historical references to ignored `gpt-pro-output.md` identify unavailable local review context; that private file is not public evidence. The [external audit](audits/2026-08-04-external-audit-of-d0221dc.md) is verbatim; its absolute local-path links do not resolve outside the author's machine.
 
 ## Specifications
 
