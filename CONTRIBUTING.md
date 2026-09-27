@@ -12,7 +12,7 @@ uv sync --locked --python 3.13
 .venv/bin/python -m ruff check .
 ```
 
-Use the interpreter directly; `uv run` is blocked in this project's agent environment. Let uv update its lock. Run the full unfiltered suite, including slow tests, before claiming completion. Format changed code with Ruff; keep unrelated formatting debt separate.
+Use the interpreter directly; `uv run` is blocked in this project's agent environment. Let uv update its lock. Run the full unfiltered suite, including slow tests, before claiming completion. Format changed code with Ruff, except replay-bound files. The [postmortem replay manifests](reports/postmortems/) bind the current bytes of their producer sources, replay tooling and inputs, including `pyproject.toml` and `uv.lock`, and `tests/test_replay_postmortems.py` fails if any of them changes. Changing one requires a new replay attestation. Keep unrelated formatting debt separate.
 
 Tests must stay offline. Inject acquisition transports. OpenDota explorer and Steam news are separate query seams sharing HTTP transport.
 

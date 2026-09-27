@@ -64,3 +64,17 @@ def test_manifest_rejects_a_changed_bound_input(tmp_path):
 
     with pytest.raises(ReplayAttestationError, match="input sha256 mismatch"):
         load_and_verify_manifest(changed, repo_root)
+
+
+@pytest.mark.parametrize("kind", ["group", "playoff"])
+def test_committed_replay_manifests_match_the_tree(kind):
+    """Kills mutation: edit a replay-bound file (reformat teams.py, touch pyproject.toml).
+
+    The postmortem manifests bind producer sources, replay tooling and inputs by
+    their current bytes. CI does not run the replay itself, so without this check a
+    formatting pass or a lock bump would silently break the documented recipe.
+    """
+    repo_root = Path(__file__).parents[1]
+    load_and_verify_manifest(
+        repo_root / f"reports/postmortems/{kind}-replay.manifest.json", repo_root
+    )
