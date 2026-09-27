@@ -383,5 +383,39 @@
     "Commits after candidate_sha may touch only this receipt and docs/release-checklist.md.",
     "Historical receipts remain unchanged and do not attest later edits."
   ],
-  "recorded_at_utc": "2026-09-27T19:21:31Z"
+  "recorded_at_utc": "2026-09-27T19:21:31Z",
+  "addendum": {
+    "sha": "3b1cb7c7cfa41e9ea696d8455d2498fdbf856c4b",
+    "git_tree": "e97d897d04d26794c98f3f63a7f38e4705474963",
+    "reason": "Audit-record correction after verification of candidate_sha. A later independent review found that docs/audits/2026-09-27-release-design-rereview.json overclaimed independent confirmation of both guard mutations.",
+    "diff_from_candidate": {
+      "command": "git diff --name-only 0186447 3b1cb7c",
+      "paths": [
+        "docs/audits/2026-09-27-release-candidate-verification.json",
+        "docs/audits/2026-09-27-release-design-rereview.json",
+        "docs/release-checklist.md"
+      ]
+    },
+    "environment": "The existing checkout at 3b1cb7c with a clean working tree, not a fresh worktree. Hosted CI on the pushed head is the clean-runner check.",
+    "pytest": {"command": ".venv/bin/python -m pytest -q", "exit_code": 0, "summary_line": "1115 passed in 382.25s (0:06:22)"},
+    "ruff": {"command": ".venv/bin/python -m ruff check .", "exit_code": 0, "output": "All checks passed!"},
+    "historical_bundles": {
+      "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle <dir> --repo-root . --at-source-revision, once per bundle",
+      "bundles": ["7c0c5e97", "c118831c", "fa6ecd08", "frozen-output-oracle-baseline/61c63f4a"],
+      "exit_codes": [0, 0, 0, 0],
+      "note": "Each log is byte-identical to the corresponding candidate_sha log (same sha256)."
+    },
+    "links": {"scope": "Local relative links in all tracked markdown; external URLs not checked", "md_files": 85, "local_links_checked": 293, "broken": [], "known_accepted_in_external_audit": 65},
+    "not_rerun": "Postmortem replay and full forecast oracle. No code, test, config, data, report or replay-bound file changed, and the replay-bound guard test in the unfiltered suite passed.",
+    "logs": [
+      {"name": "pytest.log", "path": "/private/tmp/ti26-addendum/pytest.log", "sha256": "c2fbefad11b9308e858528b0b67681751c3c8dd1636b369b7ccffdf08dcee6fb"},
+      {"name": "ruff.log", "path": "/private/tmp/ti26-addendum/ruff.log", "sha256": "198d0a0ac9f74f0f5ef4ab66f2273ddcf41dfa9c0b324a3ae20b5db52a2893cb"},
+      {"name": "verify-7c0c5e97.log", "path": "/private/tmp/ti26-addendum/verify-7c0c5e97.log", "sha256": "73eeb33518502965b85ad843616105b6eeb4fcd08783dba041c0ed1e23dee5b5"},
+      {"name": "verify-c118831c.log", "path": "/private/tmp/ti26-addendum/verify-c118831c.log", "sha256": "f523a6b381b24ad566e180361a3033446c2d6a975abc4b4c7d132c1dcb2ee362"},
+      {"name": "verify-fa6ecd08.log", "path": "/private/tmp/ti26-addendum/verify-fa6ecd08.log", "sha256": "da710a1bffa34ce2818338b05505410601918dfb1f20e00d6f5b107af970f4c5"},
+      {"name": "verify-61c63f4a.log", "path": "/private/tmp/ti26-addendum/verify-61c63f4a.log", "sha256": "1293c8e3d01ef576d81e464420b065c4fb0d40b63f340f0c384c8407f43dbdd0"}
+    ],
+    "rule_after_addendum": "Commits after 3b1cb7c may touch only this receipt and docs/release-checklist.md.",
+    "recorded_at_utc": "2026-09-27T20:01:35Z"
+  }
 }
