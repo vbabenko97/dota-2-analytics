@@ -23,7 +23,7 @@
 
 **Top fix:** Close the third-party rights hold before publication ([data sources, publication decision](docs/data-sources.md#publication-decision), deadline 2026-10-11) — OpenDota permission is still pending, and the owner must approve both analyses in `predictions-from-llms/` (or switch to a fresh-history repository) before the deadline, because full-history publication leaves no per-file hold.
 
-**Status (2026-09-28):** the owner approved both analyses as they are. The OpenDota hold remains, with the inquiry re-posted as [odota/core#2989](https://github.com/odota/core/issues/2989). The grades above are unchanged.
+**Status (2026-09-28):** the owner approved both analyses as they are. OpenDota granted permission in [odota/core#2989](https://github.com/odota/core/issues/2989#issuecomment-5865765389). Valve/Steam material remains accepted risk with attribution and a takedown route. The grades above are unchanged.
 
 **Takeaway:** Reproducibility makes a forecast inspectable; repeated independent evaluation is still needed to establish predictive skill.
 

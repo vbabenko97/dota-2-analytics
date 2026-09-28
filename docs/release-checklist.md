@@ -14,7 +14,10 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
 
 ## Publication blockers
 
-- [ ] Establish redistribution basis for OpenDota snapshots, Valve/Steam material, and external analyses. The [source-permission register](data-sources.md) records source-specific holds and the sent OpenDota inquiry; owner approval cannot replace third-party rights. The owner's [publication decision](data-sources.md#publication-decision) sets a 2026-10-11 deadline. After it, the repository is published with attribution and a takedown route as accepted risk. The inquiry was re-posted as [odota/core#2989](https://github.com/odota/core/issues/2989). The owner approved the external analyses as they are on 2026-09-28.
+- [x] Establish a redistribution basis for each material; see the [source-permission register](data-sources.md). Owner approval cannot replace third-party rights, so each basis is stated separately:
+  - **OpenDota snapshots:** permission granted by an odota maintainer in [odota/core#2989](https://github.com/odota/core/issues/2989#issuecomment-5865765389) (2026-09-28).
+  - **External analyses:** approved as they are by the owner (2026-09-28).
+  - **Valve/Steam material:** no permission; published with attribution and a takedown route as accepted risk under the owner's [publication decision](data-sources.md#publication-decision). The 2026-10-11 deadline no longer gates publication.
 - [x] Owner approves retained player identifiers for reproducibility, subject to source permission.
 - [x] Owner reviews author-email exposure and chooses to preserve history, including the work email; new commits use the approved Gmail identity.
 - [x] Record the owner-confirmed private security email in SECURITY.md.

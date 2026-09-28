@@ -112,6 +112,7 @@
 - **D5:** `v0.1.0`.
 - **Change rule after verification:** replaced by a path-scoped rule that widens what may change to documentation only. Frozen paths are unchanged, and a pre-tag link check is added (see the release checklist).
 - **OpenDota inquiry:** re-posted as [odota/core#2989](https://github.com/odota/core/issues/2989).
+- **OpenDota reply:** `howardchung`, an odota member, replied "This sounds fine to me." Permission is recorded, and the D1 deadline no longer gates publication. Valve/Steam material stays accepted risk.
 - **Still open:** D7 and the D6 settings.
 
 Evidence for D1–D2 (non-authoritative; not legal advice):
