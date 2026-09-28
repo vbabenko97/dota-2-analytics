@@ -381,7 +381,8 @@
     "pip-audit resolved lock markers for this macOS host, so colorama (win32-only) was not queried; the 2026-09-26 supplement records it with no advisories.",
     "The frozen output oracle re-derives the historical gate refusals and failures as part of its replay; its final comparison is the result.",
     "Commits after candidate_sha may touch only this receipt and docs/release-checklist.md.",
-    "Historical receipts remain unchanged and do not attest later edits."
+    "Historical receipts remain unchanged and do not attest later edits.",
+    "Superseded on 2026-09-28 for commits after 3b1cb7c: see addendum.rule_revision."
   ],
   "recorded_at_utc": "2026-09-27T19:21:31Z",
   "addendum": {
@@ -416,6 +417,11 @@
       {"name": "verify-61c63f4a.log", "path": "/private/tmp/ti26-addendum/verify-61c63f4a.log", "sha256": "1293c8e3d01ef576d81e464420b065c4fb0d40b63f340f0c384c8407f43dbdd0"}
     ],
     "rule_after_addendum": "Commits after 3b1cb7c may touch only this receipt and docs/release-checklist.md.",
+    "rule_revision": {
+      "date": "2026-09-28",
+      "rule": "After 3b1cb7c, frozen paths must not change: `git diff --name-only 3b1cb7c HEAD -- src tests config data reports predictions-from-llms pyproject.toml uv.lock .github LICENSE .gitignore` stays empty. Documentation may change: README.md, CONTRIBUTING.md, SECURITY.md, CITATION.cff, mlsd-scorecard-ti26.md and docs/. Hosted CI must pass on every published or tagged commit, and the local-link check is re-run and recorded as an addendum before tagging.",
+      "reason": "The receipt-and-checklist-only rule contradicted the completion plan's release-docs step. This verification re-derives code, tests, config, data, reports, analyses, the lock and CI. Of documentation, it attests only local links, which the pre-tag check re-establishes. The revision widens what may change to documentation only."
+    },
     "recorded_at_utc": "2026-09-27T20:01:35Z"
   }
 }

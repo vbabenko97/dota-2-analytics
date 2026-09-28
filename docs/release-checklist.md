@@ -1,6 +1,6 @@
 # Release checklist
 
-Owner: Vitalii Babenko. Scope: source-repository retrospective with limited maintenance. MIT is selected for code and original documentation. The existing GitHub repository is the candidate destination; no release version/tag is selected.
+Owner: Vitalii Babenko. Scope: source-repository retrospective with limited maintenance. MIT is selected for code and original documentation. The existing GitHub repository is the candidate destination. The release version is `v0.1.0`; the tag is applied after the flip.
 
 ## Prepared work
 
@@ -14,18 +14,26 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
 
 ## Publication blockers
 
-- [ ] Establish redistribution basis for OpenDota snapshots, Valve/Steam material, and external analyses. The [source-permission register](data-sources.md) records source-specific holds and the sent OpenDota inquiry; owner approval cannot replace third-party rights. The owner's [publication decision](data-sources.md#publication-decision) sets a 2026-10-11 deadline. After it, the repository is published with attribution and a takedown route as accepted risk.
+- [x] Establish a redistribution basis for each material; see the [source-permission register](data-sources.md). Owner approval cannot replace third-party rights, so each basis is stated separately:
+  - **OpenDota snapshots:** permission granted by an odota maintainer in [odota/core#2989](https://github.com/odota/core/issues/2989#issuecomment-5865765389) (2026-09-28).
+  - **External analyses:** approved as they are by the owner (2026-09-28).
+  - **Valve/Steam material:** no permission; published with attribution and a takedown route as accepted risk under the owner's [publication decision](data-sources.md#publication-decision). The 2026-10-11 deadline no longer gates publication.
 - [x] Owner approves retained player identifiers for reproducibility, subject to source permission.
 - [x] Owner reviews author-email exposure and chooses to preserve history, including the work email; new commits use the approved Gmail identity.
 - [x] Record the owner-confirmed private security email in SECURITY.md.
 - [x] Run history secret scans and locked-dependency advisory/license review; see the [history scan](audits/2026-09-26-publication-scan.json), [pre-commit scan](audits/2026-09-26-publication-candidate.json), and [supplement](audits/2026-09-26-publication-supplement.json). These receipts cover their recorded inputs; later edits need a new candidate receipt. Rights decisions remain open.
-- [x] Verify the final candidate: [receipt](audits/2026-09-27-release-candidate-verification.json) for 0186447. It covers unfiltered tests, Ruff, all bundles, the postmortem replay, the full forecast oracle, a full-history secret scan, dependency advisories and local links (external URLs not checked). Its addendum verifies 3b1cb7c, an audit-record correction. Commits after 3b1cb7c may touch only the receipt and this checklist.
-- [ ] Merge the release PR with "Create a merge commit". Squash or rebase would strand receipt-cited SHAs.
+- [x] Verify the final candidate: [receipt](audits/2026-09-27-release-candidate-verification.json) for 0186447. It covers unfiltered tests, Ruff, all bundles, the postmortem replay, the full forecast oracle, a full-history secret scan, dependency advisories and local links (external URLs not checked). Its addendum verifies 3b1cb7c, an audit-record correction. Change rule after 3b1cb7c:
+  - **Frozen:** `git diff --name-only 3b1cb7c HEAD -- src tests config data reports predictions-from-llms pyproject.toml uv.lock .github LICENSE .gitignore` stays empty.
+  - **Documentation, may change:** README.md, CONTRIBUTING.md, SECURITY.md, CITATION.cff, mlsd-scorecard-ti26.md and docs/.
+  - **CI:** hosted CI must pass on every published or tagged commit.
+  - **History:** revised 2026-09-28. The earlier rule allowed only the receipt and this checklist to change, which contradicted the planned release-docs step. The revision widens what may change to documentation only.
+- [ ] Before tagging: re-run the local-link check over all tracked markdown and record the result as a receipt addendum.
+- [x] Merge the release PR with "Create a merge commit": [#38](https://github.com/vbabenko97/dota-2-analytics/pull/38) merged as 8cd4184, whose tree equals the PR head. Squash or rebase would have stranded receipt-cited SHAs.
 - [ ] Before the flip: update the repository description and topics; require approval for fork pull-request workflows from outside collaborators.
 - [ ] After the flip: enable secret scanning with push protection, Dependabot alerts (no update PRs; `uv.lock` is replay-bound), private vulnerability reporting, and a ruleset on `main` requiring Offline CI.
 - [ ] If a DOI is wanted: enable Zenodo after the flip and before the first GitHub Release.
 - [x] Verify a committed candidate in a clean full-history checkout; see the [SHA-bound receipt](audits/2026-09-26-committed-candidate-verification.json). This receipt and checklist completion update are local follow-up documentation outside the verified candidate commit.
-- [ ] Select the release version/tag after candidate verification and rights clearance.
+- [x] Select the release version: the owner chose `v0.1.0` on 2026-09-28, matching `pyproject.toml`. The tag is applied at release, after the flip.
 - [ ] Explicitly authorize push, visibility change, and publication.
 
 No history rewrite, deletion, push, tag, PR, visibility change, or publication is implied. The repository was private during read-only inspection. Redaction or history removal needs a separate impact review and owner decision.

@@ -9,7 +9,7 @@ Research pipeline for forecasting the compendium prediction card of The Internat
 | [Historical validation and weaknesses](docs/ti26/2026-08-08-known-weaknesses.md) | Raw rating models did not clear the constant baseline; calibrated Glicko cleared the narrowly registered D3b gate. Repeat-event card skill remains unproven. |
 | [Series scoring](reports/series_score/series_score.md) | Positive historical diagnostic; within-event dependence limits its nominal significance calculation. |
 | [Group postmortem](reports/card_postmortem.md) and [playoff postmortem](reports/playoff_postmortem.md) | Dependent diagnostics from the same tournament, not independent replications. Group results feed playoff strengths. |
-| [External playoff cards](data/ti2026_playoff_cards.yaml) | Owner-supplied comparisons with incomplete generation provenance, not a controlled model benchmark. Original [LLM evidence](predictions-from-llms/) is frozen. |
+| [External playoff cards](data/ti2026_playoff_cards.yaml) | Comparisons the owner generated with consumer AI apps (Gemini and ChatGPT, Deep Research), not a controlled model benchmark. Prompts and settings are not recorded; see [data sources](docs/data-sources.md). Original [LLM evidence](predictions-from-llms/) is frozen. |
 | Simulated category marginals | Conditional on point strengths and assumed rules. Glicko rating-deviation uncertainty is not propagated. Map calibration does not establish card calibration. |
 
 Registered gates remain immutable. Diagnostics cannot promote, demote, or change the shipping card. Measurements live in producer artifacts rather than copied headline numbers.
