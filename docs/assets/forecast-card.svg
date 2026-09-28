@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Frozen corrected TI 2026 Swiss-stage forecast card</title>
+  <desc id="desc">Compendium category assignments from the frozen corrected TI 2026 Swiss-stage forecast card.</desc>
+  <metadata>source-path=reports/card_ti2026_rules/recommended_card.json; source-sha256=c9785fa619a1fc3a51d094cbfb29e420d5712f9cbaf793bb81fbec9f40554fb6; attestation-path=reports/postmortems/group-replay.manifest.json; attestation=retrospective-replay-not-original-run-provenance</metadata>
+  <rect width="1280" height="640" fill="#0b1523"/>
+  <text x="48" y="45" fill="#82dfc6" font-family="system-ui, sans-serif" font-size="24" font-weight="700">DOTA 2 / TI 2026</text>
+  <text x="48" y="92" fill="#f4eddd" font-family="system-ui, sans-serif" font-size="40" font-weight="700">Frozen corrected forecast</text>
+  <text x="48" y="122" fill="#c7d0d8" font-family="system-ui, sans-serif" font-size="20">Compendium category assignments</text>
+  <g font-family="system-ui, sans-serif">
+    <rect x="48" y="150" width="380" height="190" rx="16" fill="#122238" stroke="#82dfc6" stroke-opacity="0.45"/>
+    <text x="72" y="187" fill="#82dfc6" font-size="18" font-weight="700">4-0</text>
+    <text x="404" y="187" fill="#f4eddd" font-size="16" text-anchor="end">1 team</text>
+    <text x="72" y="227" fill="#f4eddd" font-size="21">Team Vision</text>
+    <rect x="450" y="150" width="380" height="190" rx="16" fill="#122238" stroke="#82dfc6" stroke-opacity="0.45"/>
+    <text x="474" y="187" fill="#82dfc6" font-size="18" font-weight="700">4-1</text>
+    <text x="806" y="187" fill="#f4eddd" font-size="16" text-anchor="end">2 teams</text>
+    <text x="474" y="227" fill="#f4eddd" font-size="21">Team Spirit</text>
+    <text x="474" y="252" fill="#f4eddd" font-size="21">Team Yandex</text>
+    <rect x="852" y="150" width="380" height="190" rx="16" fill="#122238" stroke="#82dfc6" stroke-opacity="0.45"/>
+    <text x="876" y="187" fill="#82dfc6" font-size="18" font-weight="700">Elimination round winner</text>
+    <text x="1208" y="187" fill="#f4eddd" font-size="16" text-anchor="end">5 teams</text>
+    <text x="876" y="227" fill="#f4eddd" font-size="21">Aurora Gaming</text>
+    <text x="876" y="252" fill="#f4eddd" font-size="21">BoomBoys</text>
+    <text x="876" y="277" fill="#f4eddd" font-size="21">Nigma Galaxy</text>
+    <text x="876" y="302" fill="#f4eddd" font-size="21">Team Falcons</text>
+    <text x="876" y="327" fill="#f4eddd" font-size="21">Team Liquid</text>
+    <rect x="48" y="357" width="380" height="190" rx="16" fill="#122238" stroke="#d5a56b" stroke-opacity="0.45"/>
+    <text x="72" y="394" fill="#d5a56b" font-size="18" font-weight="700">Elimination round loser</text>
+    <text x="404" y="394" fill="#f4eddd" font-size="16" text-anchor="end">5 teams</text>
+    <text x="72" y="434" fill="#f4eddd" font-size="21">Iron Wing</text>
+    <text x="72" y="459" fill="#f4eddd" font-size="21">LGD Gaming</text>
+    <text x="72" y="484" fill="#f4eddd" font-size="21">OG</text>
+    <text x="72" y="509" fill="#f4eddd" font-size="21">Vici Gaming</text>
+    <text x="72" y="534" fill="#f4eddd" font-size="21">Xtreme Gaming</text>
+    <rect x="450" y="357" width="380" height="190" rx="16" fill="#122238" stroke="#d5a56b" stroke-opacity="0.45"/>
+    <text x="474" y="394" fill="#d5a56b" font-size="18" font-weight="700">1-4</text>
+    <text x="806" y="394" fill="#f4eddd" font-size="16" text-anchor="end">2 teams</text>
+    <text x="474" y="434" fill="#f4eddd" font-size="21">GamerLegion</text>
+    <text x="474" y="459" fill="#f4eddd" font-size="21">HULIGANI</text>
+    <rect x="852" y="357" width="380" height="190" rx="16" fill="#122238" stroke="#d5a56b" stroke-opacity="0.45"/>
+    <text x="876" y="394" fill="#d5a56b" font-size="18" font-weight="700">0-4</text>
+    <text x="1208" y="394" fill="#f4eddd" font-size="16" text-anchor="end">1 team</text>
+    <text x="876" y="434" fill="#f4eddd" font-size="21">Team Resilience</text>
+  </g>
+  <text x="48" y="591" fill="#f4eddd" font-family="system-ui, sans-serif" font-size="22">Frozen corrected forecast · not tournament results</text>
+  <text x="48" y="620" fill="#c7d0d8" font-family="system-ui, sans-serif" font-size="16">Source: reports/card_ti2026_rules/recommended_card.json</text>
+</svg>
