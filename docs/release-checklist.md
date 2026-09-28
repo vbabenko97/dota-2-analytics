@@ -27,7 +27,7 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
   - **Documentation, may change:** README.md, CONTRIBUTING.md, SECURITY.md, CITATION.cff, mlsd-scorecard-ti26.md and docs/.
   - **CI:** hosted CI must pass on every published or tagged commit.
   - **History:** revised 2026-09-28. The earlier rule allowed only the receipt and this checklist to change, which contradicted the planned release-docs step. The revision widens what may change to documentation only.
-- [ ] Before tagging: re-run the local-link check over all tracked markdown and record the result as a receipt addendum.
+- [x] Before tagging: re-run the local-link check over all tracked markdown and record the result as a receipt addendum. Done at b1693b8, with no broken local links, under `addendum.pre_tag_link_check`.
 - [x] Merge the release PR with "Create a merge commit": [#38](https://github.com/vbabenko97/dota-2-analytics/pull/38) merged as 8cd4184, whose tree equals the PR head. Squash or rebase would have stranded receipt-cited SHAs.
 - [x] Before the flip: the repository description and topics were updated. GitHub allows the fork pull-request approval policy only on public repositories, so it was set immediately after the flip, to all external contributors.
 - [x] After the flip, confirmed by reading each setting back through the API:

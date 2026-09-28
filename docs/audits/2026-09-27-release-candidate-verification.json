@@ -422,6 +422,16 @@
       "rule": "After 3b1cb7c, frozen paths must not change: `git diff --name-only 3b1cb7c HEAD -- src tests config data reports predictions-from-llms pyproject.toml uv.lock .github LICENSE .gitignore` stays empty. Documentation may change: README.md, CONTRIBUTING.md, SECURITY.md, CITATION.cff, mlsd-scorecard-ti26.md and docs/. Hosted CI must pass on every published or tagged commit, and the local-link check is re-run and recorded as an addendum before tagging.",
       "reason": "The receipt-and-checklist-only rule contradicted the completion plan's release-docs step. This verification re-derives code, tests, config, data, reports, analyses, the lock and CI. Of documentation, it attests only local links, which the pre-tag check re-establishes. The revision widens what may change to documentation only."
     },
-    "recorded_at_utc": "2026-09-27T20:01:35Z"
+    "recorded_at_utc": "2026-09-27T20:01:35Z",
+    "pre_tag_link_check": {
+      "sha": "b1693b83214eb4207b0ff5ed4dfb4de41d859783",
+      "git_tree": "834d1f925ad112aaaa5bc3279b9ffa9d39f72fb6",
+      "rule": "rule_revision requires the local-link check to be re-run and recorded before tagging.",
+      "method": "Same method as the links field: tracked markdown from git ls-files, fenced and inline code stripped, each relative link resolved against its file's directory. External URLs not checked.",
+      "result": {"md_files": 85, "local_links_checked": 296, "broken": [], "known_accepted_in_external_audit": 65},
+      "log": {"path": "/private/tmp/ti26-addendum/linkcheck-pretag.json", "sha256": "3b3af3ffdf668b9541111ee6c3bac47e89d5597d2c69161ea2e36d72ec9b9a83"},
+      "note": "The commit recording this entry changes only this receipt and one checklist line, and adds no markdown links. The result therefore holds for that commit.",
+      "frozen_paths_unchanged_vs_3b1cb7c": true
+    }
   }
 }
