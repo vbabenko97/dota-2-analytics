@@ -1,22 +1,14 @@
 # ti26 — reproducible forecast retrospective
 
-Research pipeline for forecasting the compendium prediction card of The International 2026 (TI, Dota 2's annual world championship): a one-shot, locked assignment of teams to placement categories. It covers the forecasts, historical validation, and group/playoff postmortems. Its contribution is an auditable chain from inputs to decisions, including negative results. Maintenance is retrospective only.
+Research pipeline for The International 2026, Dota 2's annual world championship. It traces a compendium prediction card—a one-shot, locked assignment of teams to placement categories—from match data through ratings and simulation to tournament postmortems. Its contribution is an auditable chain from inputs to decisions, including negative results. Maintenance is retrospective only; repeat-event predictive skill remains unproven.
 
-## Claims and limits
+[![Frozen corrected TI 2026 Swiss-stage forecast card, showing every team assigned to a prediction category.](docs/assets/forecast-card.svg)](reports/card_ti2026_rules/recommended_card.json)
 
-| Evidence | Interpretation |
-|---|---|
-| [Historical validation and weaknesses](docs/ti26/2026-08-08-known-weaknesses.md) | Raw rating models did not clear the constant baseline; calibrated Glicko cleared the narrowly registered D3b gate. Repeat-event card skill remains unproven. |
-| [Series scoring](reports/series_score/series_score.md) | Positive historical diagnostic; within-event dependence limits its nominal significance calculation. |
-| [Group postmortem](reports/card_postmortem.md) and [playoff postmortem](reports/playoff_postmortem.md) | Dependent diagnostics from the same tournament, not independent replications. Group results feed playoff strengths. |
-| [External playoff cards](data/ti2026_playoff_cards.yaml) | Comparisons the owner generated with consumer AI apps (Gemini and ChatGPT, Deep Research), not a controlled model benchmark. Prompts and settings are not recorded; see [data sources](docs/data-sources.md). Original [LLM evidence](predictions-from-llms/) is frozen. |
-| Simulated category marginals | Conditional on point strengths and assumed rules. Glicko rating-deviation uncertainty is not propagated. Map calibration does not establish card calibration. |
+*The frozen corrected card matches a plain strength sort, and some assignments change across simulation seeds; see [card provenance](reports/card_ti2026_rules/card_provenance.md) for both diagnostics.*
 
-Registered gates remain immutable. Diagnostics cannot promote, demote, or change the shipping card. Measurements live in producer artifacts rather than copied headline numbers.
+## Verify a retained run
 
-## Start here
-
-Install from the lock, then call the interpreter directly. Setup may download packages; analysis and verification use committed inputs offline. Release verification targets Python 3.13; the package floor is declared in [pyproject.toml](pyproject.toml).
+Use a full-history checkout. Setup may download the locked dependencies; the verification command reads committed inputs offline. Release verification targets Python 3.13, while the package floor is declared in [pyproject.toml](pyproject.toml).
 
 ```bash
 uv sync --locked --python 3.13
@@ -25,43 +17,54 @@ uv sync --locked --python 3.13
   --repo-root . --at-source-revision
 ```
 
-Use a clone with full Git history. Historical verification checks declared source-revision input blobs and current output bytes. It does not attest original execution or bind undeclared dependencies.
+This checks the bundle's declared inputs as Git blobs at its recorded source revision and checks the current output bytes. It does not attest original execution or undeclared runtime dependencies. The [reproduction guide](docs/reproduce.md) covers store reconstruction, postmortem replay, artifact bindings, and the optional full forecast replay.
 
-The [reproduction guide](docs/reproduce.md) covers store reconstruction, postmortems, artifact bindings, and optional expensive forecast replay.
+## Evidence and limits
 
-## Research and artifact map
+| Evidence | What it supports |
+|---|---|
+| [Frozen corrected forecast](reports/card_ti2026_rules/recommended_card.json) and [card provenance](reports/card_ti2026_rules/card_provenance.md) | The retained Swiss-stage assignment and the assumptions used to generate it. Map calibration does not establish card calibration. The [group replay manifest](reports/postmortems/group-replay.manifest.json) binds this card for retrospective evaluation, not original-run provenance. |
+| [Historical bundles](reports/runs/) | Source revisions, declared inputs, output hashes, producer arguments, and recorded randomness. New descriptors bind the lock; older manifests retain their original scope. |
+| [Group postmortem](reports/card_postmortem.md), [playoff postmortem](reports/playoff_postmortem.md), and [replay manifests](reports/postmortems/) | Retrospective diagnostics. Group results feed playoff strengths, so they are not independent replications; replay manifests do not prove original execution. |
+| [External playoff cards](data/ti2026_playoff_cards.yaml) and frozen [LLM evidence](predictions-from-llms/) | Owner-generated comparisons with consumer AI apps, not a controlled model benchmark. Prompts and settings are not recorded; see [data sources](docs/data-sources.md). |
+| [Known weaknesses](docs/ti26/2026-08-08-known-weaknesses.md) | Raw ratings did not clear the constant baseline; calibrated Glicko cleared the narrowly registered D3b gate. Simulated category marginals condition on point strengths and assumed rules, without propagating Glicko rating-deviation uncertainty. |
+| [Series scoring](reports/series_score/series_score.md) | Positive historical diagnostic; shared tournament conditions limit its nominal significance calculation. |
 
-- [Corrected Swiss forecast](reports/card_ti2026_rules/recommended_card.json) and [provenance](reports/card_ti2026_rules/card_provenance.md).
-- [Historical bundles](reports/runs/): manifests bind source revisions, snapshots, store digests, declared inputs, and outputs. New descriptors also bind the lock; old manifests retain their original scope.
-- [Group evaluation](reports/card_postmortem.md), [playoff cards](data/ti2026_playoff_cards.yaml), and [playoff evaluation](reports/playoff_postmortem.md). [Replay manifests](reports/postmortems/) are retrospective attestations, not original run provenance.
-- [Documentation index](docs/README.md): implemented work, historical registrations, and future plans.
-- [Correction register](docs/audits/2026-08-04-correction-register.md): corrections to earlier unsupported claims.
+Registered gates remain immutable. Diagnostics cannot promote, demote, or change the shipping card.
 
-## Architecture
+## How the group forecast artifacts connect
 
-```text
-OpenDota acquisition → hashed raw snapshot → rebuilt SQLite store
-                                             ↓
-                                  roster ratings → calibration
-                                             ↓
-                              simulation → constrained card assignment
-                                             ↓
-                                  frozen forecast → postmortem
+```mermaid
+flowchart TD
+  A[Hashed OpenDota snapshots] --> B[Rebuilt SQLite store]
+  B --> C[Roster ratings and calibration]
+  T[Team and alias configuration] --> C
+  D[Rules configuration] --> E[Simulation and constrained assignment]
+  C --> E
+  E --> F[Frozen corrected forecast card]
+  F --> G[Group postmortem]
+  H[Observed tournament outcomes] --> G
 ```
 
-Acquisition uses injectable [OpenDota explorer](src/ti26/data/opendota.py) and [Steam news](src/ti26/data/steam_news.py) query seams sharing HTTP transport. Analysis uses pinned inputs. Local tests deny Python socket connections and transmissions; CI additionally isolates each verification command in a network namespace.
+The [OpenDota explorer](src/ti26/data/opendota.py) and [Steam news](src/ti26/data/steam_news.py) take injectable transports; release runs read pinned bytes. Roster identity follows the five-player roster rather than the organisation, internal simulation labels follow strength rank, and producers write reports before release orchestration adds bundle references.
 
-Statistical identity follows the roster, not the organisation. Internal simulation labels follow strength rank. Producers emit reports independently; release orchestration attaches bundle references afterwards.
+The project layout keeps implementation in `src/ti26/`, registrations in `config/`, inputs in `data/`, generated evidence in `reports/`, and research history in `docs/`.
 
-Layout is preserved: `src/ti26/` for implementation, `config/` for registrations, `data/` for inputs, `reports/` for evidence, and `docs/` for research history.
+## Navigate the record
+
+- [Documentation index](docs/README.md) distinguishes current guides, research evidence, specifications, and plans.
+- [Correction register](docs/audits/2026-08-04-correction-register.md) records corrections to earlier unsupported claims.
+- [Release checklist](docs/release-checklist.md) records the release history and continuing verification conditions.
 
 ## Contributing and reuse
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for mutation evidence, bound measurements, and offline checks.
+
+Local tests deny Python socket connections and transmissions; CI isolates verification commands from the network. See the [reproduction guide](docs/reproduce.md#verification-and-limits) for details.
 
 ```bash
 .venv/bin/python -m pytest -q
 .venv/bin/python -m ruff check .
 ```
 
-Code and original documentation use [MIT](LICENSE). Third-party data/text retain separate rights; see [data sources](docs/data-sources.md). Player identifiers are not anonymous. See [security policy](SECURITY.md), [citation](CITATION.cff), and [release checklist](docs/release-checklist.md). Publication remains conditional on unresolved checklist items.
+Code and original documentation use [MIT](LICENSE). Third-party data and text retain separate rights; see [data sources](docs/data-sources.md). Player identifiers are not anonymous. See the [security policy](SECURITY.md) and [citation](CITATION.cff).
