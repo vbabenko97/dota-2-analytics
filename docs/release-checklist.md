@@ -19,7 +19,12 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
 - [x] Owner reviews author-email exposure and chooses to preserve history, including the work email; new commits use the approved Gmail identity.
 - [x] Record the owner-confirmed private security email in SECURITY.md.
 - [x] Run history secret scans and locked-dependency advisory/license review; see the [history scan](audits/2026-09-26-publication-scan.json), [pre-commit scan](audits/2026-09-26-publication-candidate.json), and [supplement](audits/2026-09-26-publication-supplement.json). These receipts cover their recorded inputs; later edits need a new candidate receipt. Rights decisions remain open.
-- [x] Verify the final candidate: [receipt](audits/2026-09-27-release-candidate-verification.json) for 0186447. It covers unfiltered tests, Ruff, all bundles, the postmortem replay, the full forecast oracle, a full-history secret scan, dependency advisories and local links (external URLs not checked). Its addendum verifies 3b1cb7c, an audit-record correction. Commits after 3b1cb7c may touch only the receipt and this checklist.
+- [x] Verify the final candidate: [receipt](audits/2026-09-27-release-candidate-verification.json) for 0186447. It covers unfiltered tests, Ruff, all bundles, the postmortem replay, the full forecast oracle, a full-history secret scan, dependency advisories and local links (external URLs not checked). Its addendum verifies 3b1cb7c, an audit-record correction. Change rule after 3b1cb7c:
+  - **Frozen:** `git diff --name-only 3b1cb7c HEAD -- src tests config data reports predictions-from-llms pyproject.toml uv.lock .github LICENSE .gitignore` stays empty.
+  - **Documentation, may change:** README.md, CONTRIBUTING.md, SECURITY.md, CITATION.cff, mlsd-scorecard-ti26.md and docs/.
+  - **CI:** hosted CI must pass on every published or tagged commit.
+  - **History:** revised 2026-09-28. The earlier rule allowed only the receipt and this checklist to change, which contradicted the planned release-docs step. The revision widens what may change to documentation only.
+- [ ] Before tagging: re-run the local-link check over all tracked markdown and record the result as a receipt addendum.
 - [ ] Merge the release PR with "Create a merge commit". Squash or rebase would strand receipt-cited SHAs.
 - [ ] Before the flip: update the repository description and topics; require approval for fork pull-request workflows from outside collaborators.
 - [ ] After the flip: enable secret scanning with push protection, Dependabot alerts (no update PRs; `uv.lock` is replay-bound), private vulnerability reporting, and a ruleset on `main` requiring Offline CI.
