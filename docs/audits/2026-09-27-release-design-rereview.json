@@ -1,0 +1,324 @@
+{
+  "record_type": "Public-release design re-review; not a forecast or publication approval",
+  "generated_at_utc": "2026-09-27T18:12:02.095759+00:00",
+  "reviewed_source_revision": "b23a418ec1554391f9b98f889776a2883b8911c4",
+  "reviewed_source_tree": "a6f34824d9268bd82ed32b17096e74db1a498cfc",
+  "supersedes": "docs/audits/2026-09-26-public-release-review.json (reviewed 56b653edc667c838bc8f6bbf86d6aef64af72d31; not edited by this record)",
+  "compared_against_revision": "56b653edc667c838bc8f6bbf86d6aef64af72d31",
+  "tracked_source_diff_at_recording": "Clean at b23a418 except this record's own two authorized outputs (this file and mlsd-scorecard-ti26.md), which are excluded from source_files below because they did not exist at hash time.",
+  "audience": "Research/portfolio readers who should reproduce results",
+  "evidence_mode": "formal design docs plus repository, a full git diff of every rubric-relevant path across the span reviewed 56b653e..b23a418, one independently re-executed mutation check, and one read-only hosted-CI status query",
+  "task_basis": "Task 3 of docs/superpowers/plans/2026-09-27-public-release-completion.md",
+  "skills": [
+    "/Users/vitaliibabenko/.claude/skills/ml-system-design-review/SKILL.md",
+    "/Users/vitaliibabenko/.claude/skills/ml-system-design-review/references/rubrics.md",
+    "/Users/vitaliibabenko/.claude/skills/ml-system-design-review/references/output-templates.md",
+    "/Users/vitaliibabenko/.claude/skills/ml-system-design-review/references/praise-patterns.md",
+    "/Users/vitaliibabenko/.claude/skills/ml-system-design-review/references/red-flags-and-fixes.md",
+    "/Users/vitaliibabenko/.claude/skills/ml-system-design-review/references/repo-and-doc-audit.md"
+  ],
+  "method": "For each rubric dimension, diffed every file the prior review or this repository's own completion plan names as relevant, across 56b653e..b23a418. A dimension is graded unchanged when that diff is empty; a dimension is re-graded only when the diff contains content that bears on the rubric anchor, cited by path:line.",
+  "scorecard": {
+    "grade_points": {
+      "A": 4.0,
+      "A-": 3.7,
+      "B+": 3.3,
+      "B": 3.0,
+      "B-": 2.7,
+      "C+": 2.3,
+      "C": 2.0,
+      "C-": 1.7,
+      "D": 1.0,
+      "F": 0.0
+    },
+    "grades": [
+      {
+        "dimension": "Problem framing, goals & antigoals",
+        "old_grade": "B+",
+        "old_points": 3.3,
+        "new_grade": "A-",
+        "new_points": 3.7,
+        "changed": true,
+        "plan_proposal": "B+ -> A-",
+        "verdict_on_proposal": "supported",
+        "evidence": [
+          "git diff 56b653e b23a418 --stat -- README.md shows a full rewrite (238 changed lines), not a wording pass.",
+          "README.md:3 states the audience and scope in one glossed sentence ('Research pipeline for forecasting the compendium prediction card of The International 2026 ... a one-shot, locked assignment of teams to placement categories'), edited again in b23a418 to spell out TI and the compendium card.",
+          "README.md:5-15 'Claims and limits' table pairs every headline artifact (validation, series scoring, group/playoff postmortems, external cards, simulated marginals) with its interpretation limit -- this is the antigoals/scope table the prior B+ reasoning said the public narrative still needed.",
+          "README.md:15 states a hard antigoal: 'Registered gates remain immutable. Diagnostics cannot promote, demote, or change the shipping card.'",
+          "docs/public-release-plan.md:11-15 is an explicit tradeoff table (reproducible retrospective vs. general toolkit vs. hosted product) with a recorded decision and reason to defer the alternatives.",
+          "docs/public-release-plan.md:17 states a minimum-viable-target definition of done: 'a fresh clone can follow the README to a bounded offline verification, then reproduce each highlighted result using identified inputs.'"
+        ],
+        "reason": "The retrospective scope, antigoals and a tradeoffs/MVP-target framing that the prior review found missing from the public narrative are now in the primary README and release plan. Held at A-, not A, because there is still no 'why now' or quantified-pain framing -- reasonably inapplicable to a research retrospective, but the anchor asks for it explicitly."
+      },
+      {
+        "dimension": "Cost of mistakes & risk",
+        "old_grade": "B",
+        "old_points": 3.0,
+        "new_grade": "B+",
+        "new_points": 3.3,
+        "changed": true,
+        "plan_proposal": "B -> B+",
+        "verdict_on_proposal": "supported",
+        "evidence": [
+          "docs/data-sources.md:27-37 'Publication decision' (recorded 2026-09-27) names a concrete asymmetric-cost tradeoff: wait indefinitely for a rights reply vs. accept residual legal risk on a deadline, with attribution and a takedown route as the mitigation.",
+          "Corrected after review (see post_review_corrections): at 47b8a79, the docs/data-sources.md 'Publication decision' states that full-history publication leaves no per-file hold for the two owner-generated analyses, forcing an explicit owner decision before the deadline -- a named second-order consequence of the chosen route.",
+          "docs/release-checklist.md:39-41 'If sensitive material is found after publication' (new in b23a418) is a mitigation path with a named second-order effect: 'A visibility change does not retract existing forks, clones or third-party copies.'",
+          "git diff 56b653e b23a418 -- docs/data-sources.md SECURITY.md shows both files as new; at 56b653e neither the rights register nor the incident path existed."
+        ],
+        "reason": "Second-order effects (forks/clones surviving a takedown) and a mitigation path (attribution, takedown contact, incident note) are now explicit and tied to a named real risk (full-history publication of the analyses without a per-file hold), matching most of the A anchor. Held at B+, not A, because the asymmetric-cost reasoning is a single binary choice (wait vs. accept) rather than a reasoned range of alternatives with estimated severity."
+      },
+      {
+        "dimension": "Prior work, build/buy & baselines",
+        "old_grade": "A-",
+        "old_points": 3.7,
+        "new_grade": "A-",
+        "new_points": 3.7,
+        "changed": false,
+        "plan_proposal": "not proposed for change",
+        "verdict_on_proposal": "n/a",
+        "evidence": [
+          "git diff 56b653e b23a418 --stat -- src/ti26/backtest.py src/ti26/calibrate.py src/ti26/montecarlo.py src/ti26/ratings/ reports/series_score/ -- empty output; no baseline-relevant source or report changed.",
+          "docs/public-release-plan.md:11-15 adds a release-approach tradeoff table, which is about publication strategy, not modeling baselines, so it does not bear on this dimension."
+        ],
+        "reason": "No file that implements or reports a baseline changed. Unchanged."
+      },
+      {
+        "dimension": "Metrics, loss & measurement",
+        "old_grade": "B-",
+        "old_points": 2.7,
+        "new_grade": "B-",
+        "new_points": 2.7,
+        "changed": false,
+        "plan_proposal": "B- -> B+ (challenged and rejected)",
+        "verdict_on_proposal": "rejected",
+        "evidence": [
+          "git diff 56b653e b23a418 --stat -- src/ti26/backtest.py src/ti26/calibrate.py src/ti26/montecarlo.py src/ti26/ratings/ reports/series_score/series_score.md -- empty output across the entire reviewed span, including today's two commits.",
+          "README.md:10 now states the series-score caveat in the primary narrative ('within-event dependence limits its nominal significance calculation'), but this sentence restates what reports/series_score/series_score.md already said before 56b653e; the p-value computation itself is byte-identical.",
+          "No change to clustered-inference code, confidence-interval reporting, segment-effect analysis, or experiment controls anywhere in the diff."
+        ],
+        "reason": "This is the dimension the task asked to challenge directly, and the evidence supports rejecting the plan's proposal: the measurement design (splits, clustering treatment, CI/MDE reporting) is byte-identical to what B- already graded. The README changes are a presentation improvement -- moving an existing caveat to a more visible location -- not a change to how the metric is computed, tested, or reported. Grading this B+ would reward wording, not measurement. Unchanged."
+      },
+      {
+        "dimension": "Data, labels & features",
+        "old_grade": "C-",
+        "old_points": 1.7,
+        "new_grade": "C-",
+        "new_points": 1.7,
+        "changed": false,
+        "plan_proposal": "not proposed for change",
+        "verdict_on_proposal": "n/a",
+        "evidence": [
+          "git diff 56b653e b23a418 --stat -- src/ti26/roster.py src/ti26/identity.py src/ti26/data/ config/ -- empty output (data/raw and data/evidence snapshots excluded from this check since they are frozen inputs, not code)."
+        ],
+        "reason": "No data source, label, identity, or feature-generation file changed. Unchanged."
+      },
+      {
+        "dimension": "Validation & leakage",
+        "old_grade": "B+",
+        "old_points": 3.3,
+        "new_grade": "B+",
+        "new_points": 3.3,
+        "changed": false,
+        "plan_proposal": "not proposed for change",
+        "verdict_on_proposal": "n/a",
+        "evidence": [
+          "git diff 56b653e b23a418 --stat -- src/ti26/backtest.py -- empty output; split/fold construction is unchanged."
+        ],
+        "reason": "No change to split or fold construction. Unchanged."
+      },
+      {
+        "dimension": "Error analysis",
+        "old_grade": "B",
+        "old_points": 3.0,
+        "new_grade": "B",
+        "new_points": 3.0,
+        "changed": false,
+        "plan_proposal": "not proposed for change",
+        "verdict_on_proposal": "n/a",
+        "evidence": [
+          "git diff 56b653e b23a418 --stat -- src/ti26/cli_card_postmortem.py src/ti26/cli_playoff_postmortem.py reports/playoff_postmortem.md reports/card_postmortem.md -- empty output."
+        ],
+        "reason": "No postmortem producer or its frozen report changed. Unchanged."
+      },
+      {
+        "dimension": "Training pipeline & reproducibility",
+        "old_grade": "B-",
+        "old_points": 2.7,
+        "new_grade": "B+",
+        "new_points": 3.3,
+        "changed": true,
+        "plan_proposal": "B- -> B+",
+        "verdict_on_proposal": "supported",
+        "evidence": [
+          "src/ti26/cli_replay_postmortems.py (new, 253 lines) is a one-command retrospective replay: reconstructs the store, checks its logical digest, renders both postmortem reports, and normalizes only the one permitted store-path difference (see _normalise_store_path).",
+          "src/ti26/cli_release.py:64,86,91-93 binds uv.lock into every newly produced run descriptor (UV_LOCK_INPUT, declared_inputs, input_manifest), closing the gap the prior review's own evidence flagged ('uv.lock is tracked but omitted from the release descriptor's declared inputs', docs/public-release-plan.md:29).",
+          "tests/test_replay_postmortems.py:69-80 test_committed_replay_manifests_match_the_tree (added in b07023f, today) verifies both committed manifests against the tree bytes.",
+          "Independently re-executed this review: appended a blank line to pyproject.toml with the Edit tool, ran `.venv/bin/python -m pytest -q tests/test_replay_postmortems.py::test_committed_replay_manifests_match_the_tree`, observed both parametrized cases FAIL with 'ReplayAttestationError: input sha256 mismatch: pyproject.toml', then reverted with `git checkout -- pyproject.toml` and re-ran the file to confirm all 5 tests pass again. This matches the mutation evidence recorded in the b07023f commit message.",
+          "docs/reproduce.md:49-61 documents the replay recipe, its failure mode, and its multi-minute runtime for a public reader.",
+          "CONTRIBUTING.md:15 (amended in b07023f) states the replay-bound-file exemption from repository-wide Ruff formatting.",
+          "tests/conftest.py and tests/test_offline_policy.py (new since 56b653e) deny Python socket connections during tests and test that policy; CI additionally runs each verification command in a network namespace (.github/workflows/offline-ci.yml)."
+        ],
+        "reason": "A versioned, tested replay attestation now exists where none did before (new module, new manifests already present since ce6f804, and a guard test added today; this review independently confirmed that its pyproject.toml mutation fails and passes after reverting, while the teams.py mutation is attested only by implementation commit b07023f). This matches most of the A anchor ('versioned configs and artifacts... smoke/component tests'). Held at B+, not A, because the completion plan itself records that CI still never executes the replay -- only the byte-binding guard runs in CI via pytest -- and the expensive full forecast-oracle replay stays manual/optional (docs/reproduce.md 'Optional full forecast replay')."
+      },
+      {
+        "dimension": "Serving, integration & release",
+        "old_grade": "C",
+        "old_points": 2.0,
+        "new_grade": "B-",
+        "new_points": 2.7,
+        "changed": true,
+        "plan_proposal": "C -> B-",
+        "verdict_on_proposal": "supported",
+        "evidence": [
+          "git diff 56b653e b23a418 --stat shows .github/workflows/offline-ci.yml, LICENSE, CONTRIBUTING.md, SECURITY.md, docs/release-checklist.md, docs/release-notes.md, CITATION.cff as new; none of this release tooling existed at 56b653e, which is what the prior C graded.",
+          ".github/workflows/offline-ci.yml pins every third-party Action to a release-tag-annotated commit SHA and runs pytest, ruff check, and verify-run for every bundle inside a network namespace.",
+          "Independently queried (read-only, no settings touched): `gh api repos/vbabenko97/dota-2-analytics/actions/runs/36248550562 --jq '{status,conclusion,head_sha,name}'` returned `{\"conclusion\":\"success\",\"head_sha\":\"6ba2c0f0a9175b30cd32768093b409d0776353b7\",\"name\":\"Offline CI\",\"status\":\"completed\"}`.",
+          "docs/release-checklist.md:11-13 (amended in b23a418) records the hosted CI observation, the replay guard, and the stage D rejection criterion as an explicit owner decision ('not exercised on hosted CI, by owner decision').",
+          "docs/release-checklist.md:22-26 constrains the merge method ('Create a merge commit... Squash or rebase would strand receipt-cited SHAs') and lists concrete before/after-flip settings.",
+          "docs/release-checklist.md:39-41 'If sensitive material is found after publication' (new in b23a418) is the rollback/incident plan."
+        ],
+        "reason": "Fallback/rollback is now considered (incident section, merge-method constraint against orphaning receipt-cited commits) and hosted CI is verified green by an independent read-only check on 6ba2c0f, an ancestor of the reviewed revision (re-observation on the merge commit is pending), matching the B anchor's defining feature. Held at B-, not B, because the plan's own gap list still holds at b23a418: CI never executes the replay itself (only the byte-guard), the version tag and the before/after-flip settings are still open checklist items, and the actual merge/publish has not happened."
+      },
+      {
+        "dimension": "Monitoring, ownership & maintenance",
+        "old_grade": "C+",
+        "old_points": 2.3,
+        "new_grade": "B-",
+        "new_points": 2.7,
+        "changed": true,
+        "plan_proposal": "C+ -> B-",
+        "verdict_on_proposal": "supported",
+        "evidence": [
+          "SECURITY.md (new since 56b653e) names an owner, two reporting channels (email now, GitHub private vulnerability reporting at publication), an explicit support-scope disclaimer, and a rights-holder removal path.",
+          "CONTRIBUTING.md:1,3 (new since 56b653e) states the maintenance scope in one line: 'Maintenance covers retrospective reproducibility, provenance, documentation, and defects. New tournament forecasts and stable public APIs are not promised.'",
+          "docs/release-checklist.md:1 names the owner and scope directly: 'Owner: Vitalii Babenko. Scope: source-repository retrospective with limited maintenance.'",
+          "docs/release-checklist.md:39-41 is a minimal runbook (make private, redact and record, ask GitHub Support about cached views, note the forks/clones limitation).",
+          "docs/data-sources.md:15-45 is an ownership/decision register (dated decisions, who approved what, what remains open) that functions as an audit trail for maintenance decisions."
+        ],
+        "reason": "A named owner, a documented maintenance scope, two escalation channels and a minimal incident runbook now exist where 56b653e had none of this. Held at B-, not B, because there are no thresholds of any kind (this is a static artifact with no live model to instrument), and the runbook has no defined trigger beyond an external report -- there is no monitoring, drift, or bus-factor mitigation, which the B anchor's 'runbooks and escalation mostly clear' still implies some proactive detection for a graded B."
+      }
+    ],
+    "average": 3.01,
+    "verdict": "approve",
+    "scale": "A=4, B=3, C=2, D=1, F=0; +/-0.3. Mean >=3 approve; >=2.3 approve with concerns; otherwise needs improvement.",
+    "interpretation": "Subjective reviewer grades, computed aggregate; not predictive-performance measurements.",
+    "aggregate_computation": {
+      "command": "python3 -c \"\nimport json\nd = json.load(open('docs/audits/2026-09-27-release-design-rereview.json'))\ngrades = d['scorecard']['grades']\npts = [g['new_points'] for g in grades]\navg = sum(pts) / len(pts)\navg_r = round(avg, 2)\nverdict = 'approve' if avg_r >= 3.0 else ('approve with concerns' if avg_r >= 2.3 else 'needs improvement')\nprint(f'n={len(pts)} sum={sum(pts)} avg={avg} avg_rounded={avg_r} verdict={verdict}')\n\"",
+      "stdout": "n=10 sum=30.1 avg=3.0100000000000002 avg_rounded=3.01 verdict=approve"
+    }
+  },
+  "critical_findings": {
+    "count": 0,
+    "note": "None under the ml-system-design-review critical red-flag list at the current (still-private) repository state. The unresolved third-party rights hold (docs/data-sources.md, 'Publication decision') is a release blocker with an owner-recorded deadline and mitigation, not an undesigned or unsafe-publication finding."
+  },
+  "top_fix_candidates": [
+    "Close the third-party rights hold before publication (docs/data-sources.md#publication-decision, deadline 2026-10-11): OpenDota permission is still pending, and the owner must approve both predictions-from-llms/ analyses (or switch to a fresh-history repository) before the deadline, since full-history publication leaves no per-file hold.",
+    "Have CI execute cli_replay_postmortems, not only the byte-binding guard, so a future regression is caught by running the replay rather than only by hashing its inputs.",
+    "Add a real threshold or trigger to the post-publication incident runbook (docs/release-checklist.md:39-41) beyond an external report."
+  ],
+  "checks": {
+    "pytest": {
+      "command": ".venv/bin/python -m pytest -q",
+      "exit_code": 0,
+      "summary": "1115 passed in 409.77s (0:06:49)",
+      "working_directory": "repository root",
+      "tree_state": "b23a418, no uncommitted changes"
+    },
+    "ruff": {
+      "command": ".venv/bin/python -m ruff check .",
+      "exit_code": 0,
+      "stdout": "All checks passed!"
+    },
+    "reproducibility_mutation_reverification": {
+      "scope": "Independent re-execution of the b07023f guard test's own named mutation, not a new mutation",
+      "steps": [
+        {
+          "action": "baseline",
+          "command": ".venv/bin/python -m pytest -q tests/test_replay_postmortems.py",
+          "exit_code": 0,
+          "result": "5 passed"
+        },
+        {
+          "action": "mutate",
+          "detail": "Appended one blank line to pyproject.toml with the Edit tool",
+          "command": ".venv/bin/python -m pytest -q tests/test_replay_postmortems.py::test_committed_replay_manifests_match_the_tree",
+          "exit_code": 1,
+          "result": "2 failed: ReplayAttestationError: input sha256 mismatch: pyproject.toml (both group and playoff parametrizations)"
+        },
+        {
+          "action": "revert",
+          "command": "git checkout -- pyproject.toml",
+          "verified_clean": true
+        },
+        {
+          "action": "confirm",
+          "command": ".venv/bin/python -m pytest -q tests/test_replay_postmortems.py",
+          "exit_code": 0,
+          "result": "5 passed"
+        }
+      ]
+    },
+    "hosted_ci_status": {
+      "command": "gh api repos/vbabenko97/dota-2-analytics/actions/runs/36248550562 --jq '{status,conclusion,head_sha,name}'",
+      "stdout": "{\"conclusion\":\"success\",\"head_sha\":\"6ba2c0f0a9175b30cd32768093b409d0776353b7\",\"name\":\"Offline CI\",\"status\":\"completed\"}",
+      "note": "Read-only query; no repository setting was viewed or changed."
+    }
+  },
+  "environment": {
+    "python": "3.13.5",
+    "packages": {
+      "numpy": "2.5.1",
+      "scipy": "1.18.0",
+      "PyYAML": "6.0.3",
+      "pytest": "9.1.1",
+      "ruff": "0.16.1"
+    },
+    "installation_scope": "Existing local virtualenv; no fresh-clone uv sync executed by this review (that is Task 5's scope)."
+  },
+  "source_files": [
+    {"path": "README.md", "sha256": "531793bf0fe1d30cfc8fa0c115ef83bb5779916766392e1a2d263b01adf43368"},
+    {"path": "CONTRIBUTING.md", "sha256": "8b5a68a38029e075868c3170920d9f4033315a12599362d9442e27aecff8e765"},
+    {"path": "SECURITY.md", "sha256": "b7f008ecec9f56c1d463ee57e7f8e64eb286715f8be2b637da5659b5f64e64ab"},
+    {"path": "docs/data-sources.md", "sha256": "63001a63a98c87a80f12a0016a96e2c6f5e85ec6649a47c60b40c4f4ed4316cc"},
+    {"path": "docs/release-checklist.md", "sha256": "63df030291a84590537eeadb772bb464b3d26ba4bd1980fafd6e9783728546b0"},
+    {"path": "docs/reproduce.md", "sha256": "3ade474eabee41bdc1a3fd22920030632b25f6cad246362102b188b36014b6a8"},
+    {"path": "docs/public-release-plan.md", "sha256": "948c29ff080016c3762561dab399993009a5804504c69974a5dc12d686814381"},
+    {"path": "docs/README.md", "sha256": "deaf0d9cf6edc72b6e411d707bf4657f379ca36db984e0b80be6ff00caed88b6"},
+    {"path": ".github/workflows/offline-ci.yml", "sha256": "fac164cd73532a6423e0672994c3a05fbbb637e9f8afaaf0c7940be8e1e4674b"},
+    {"path": "src/ti26/cli_release.py", "sha256": "705a8305c33bb0fc00e7d5cf451ba636b17b30212f307f6645007ec6a318ae89"},
+    {"path": "src/ti26/cli_replay_postmortems.py", "sha256": "272df25f6f1b78b11d49cfd8aa9d79a673db669adea9b673732053c4ab1b6ea4"},
+    {"path": "tests/test_replay_postmortems.py", "sha256": "cb7b71c9682789a55a48386957374bedf4804201cb6f4361062bfeea563ca2fc"},
+    {"path": "pyproject.toml", "sha256": "e43ad4c235e969fdd2de7d32de9bdda7d8a9739cdc1663495c48ab6ea9689b6b"},
+    {"path": "docs/superpowers/plans/2026-09-27-public-release-completion.md", "sha256": "6ae5acdace51f9691864f606941e961ebdd15881e8ad469807dd2a8c42e5671f"},
+    {"path": "docs/superpowers/specs/2026-08-01-ti2026-forecast-design.md", "sha256": "3b016b355a7faf0415232b415bcf5bd5dca92bf825b06c7305cb59c0e73c0f15"},
+    {"path": "docs/audits/2026-09-26-public-release-review.json", "sha256": "cc11055bb138c879ccd6fe964b4eef247faea2fbdee16397e36194a1244e92ed"}
+  ],
+  "coverage": {
+    "performed": "Diffed every rubric-relevant path across 56b653e..b23a418; re-graded a dimension only when that diff bore on its anchor; independently re-ran the Task 1 guard test's own named mutation; independently queried hosted CI status read-only.",
+    "not_performed": [
+      "Full-tree source_files hash inventory (scoped to this review's cited evidence files only; see docs/audits/2026-09-26-public-release-review.json for the fuller prior inventory)",
+      "Re-running historical_bundle_verification or the postgroup rebuild (unchanged since the prior receipt; Task 5's scope)",
+      "Full-history secret scan or dependency advisory re-run (Task 5's scope)",
+      "Fresh-clone `uv sync --locked` installation",
+      "Any new mutation beyond re-executing the one already recorded in the b07023f commit message",
+      "Grading a Modern AI systems row: external LLM cards remain frozen inputs, not a live LLM/RAG/agent system"
+    ]
+  },
+  "references": [
+    "https://github.com/vbabenko97/dota-2-analytics/actions/runs/36248550562"
+  ],
+  "post_review_corrections": {
+    "correcting_commit": "47b8a79",
+    "grades_changed": false,
+    "aggregate_recomputed": "not needed; no grade points changed",
+    "items": [
+      "An independent diff review found that docs/data-sources.md cited findings from an automated pre-screen of the two analyses without a committed receipt. 47b8a79 removed them. The 'Cost of mistakes & risk' evidence and reason now cite the remaining publication-decision text (no per-file hold under full-history publication). Grade unchanged.",
+      "The adversarial verifier noted that the 'Serving, integration & release' reason did not state that hosted CI ran on 6ba2c0f, an ancestor of the reviewed revision. Clause added. Grade unchanged.",
+      "The adversarial verifier noted that tests/conftest.py and tests/test_offline_policy.py were omitted from the reproducibility evidence. Added. Grade unchanged.",
+      "The top-fix wording follows the corrected publication-decision text.",
+      "A later independent review found that the 'Training pipeline & reproducibility' reason claimed independent confirmation of both guard mutations, while the evidence records only the pyproject.toml mutation. The reason now attributes the teams.py mutation to implementation commit b07023f. Grade unchanged."
+    ]
+  },
+  "artifact_status": "Design re-review only; no source, test, or config file left changed by this review (pyproject.toml was mutated and reverted during independent verification, confirmed clean via `git status --short`). No publication action taken."
+}

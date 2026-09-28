@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "Please cite the repository and the exact commit and artifact manifest used."
+title: "ti26: Reproducible forecast retrospective"
+type: software
+authors:
+  - family-names: Babenko
+    given-names: Vitalii
+repository-code: "https://github.com/vbabenko97/dota-2-analytics"
+license: MIT

@@ -1,8 +1,15 @@
 [project]
 name = "ti26"
 version = "0.1.0"
+description = "Reproducible retrospective of TI 2026 forecasts and postmortems"
+readme = "README.md"
+license = "MIT"
+authors = [{name = "Vitalii Babenko"}]
 requires-python = ">=3.12"
 dependencies = ["numpy>=2.0", "scipy>=1.14", "PyYAML>=6.0"]
+
+[project.urls]
+Repository = "https://github.com/vbabenko97/dota-2-analytics"
 
 [dependency-groups]
 dev = ["pytest>=8.0", "ruff>=0.6"]

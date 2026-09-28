@@ -6,11 +6,21 @@ import pytest
 from ti26.cli_release import (
     CONFIG_INPUTS,
     GATE_PRODUCERS,
+    UV_LOCK_INPUT,
     _prefix_markdown,
     build_producers,
     card_producer,
     declared_inputs,
+    input_manifest,
     non_gate_failures,
+)
+from ti26.provenance import (
+    RUN_MANIFEST_SCHEMA_VERSION,
+    RunManifestError,
+    render_report_prefix,
+    run_id,
+    verify_run_bundle,
+    write_run_manifest,
 )
 
 
@@ -72,6 +82,74 @@ def test_declared_inputs_all_exist():
     """
     missing = [path for path in CONFIG_INPUTS if not Path(path).is_file()]
     assert not missing, f"declared manifest inputs do not exist: {missing}"
+
+
+def _descriptor(inputs):
+    return {
+        "schema_version": RUN_MANIFEST_SCHEMA_VERSION,
+        "run_kind": "test",
+        "source_revision": "a" * 40,
+        "invocation": {},
+        "snapshot": {},
+        "store": {},
+        "inputs": inputs,
+        "runtime": {},
+    }
+
+
+def test_changed_lock_bytes_change_the_new_release_descriptor_identity(tmp_path, monkeypatch):
+    """Kills mutation: omit UV_LOCK_INPUT from declared_inputs.
+
+    The lock selects the Python environment that runs every producer. If it is
+    absent from a new descriptor, a dependency update can reuse a run identity
+    while changing the executable environment and its scientific outputs.
+    """
+    from ti26 import cli_release
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli_release, "CONFIG_INPUTS", ())
+    (tmp_path / "snapshot.json").write_text("snapshot\n")
+    lock = tmp_path / UV_LOCK_INPUT
+    lock.write_text("first lock\n")
+
+    first_inputs = input_manifest(declared_inputs("snapshot.json", None))
+    first_id = run_id(_descriptor(first_inputs))
+
+    lock.write_text("second lock\n")
+    second_inputs = input_manifest(declared_inputs("snapshot.json", None))
+    second_id = run_id(_descriptor(second_inputs))
+
+    assert UV_LOCK_INPUT in declared_inputs("snapshot.json", None)
+    assert first_inputs != second_inputs
+    assert first_id != second_id
+
+
+def test_verifier_rejects_tampered_lock_declared_by_a_new_release(tmp_path, monkeypatch):
+    """Kills mutation: omit UV_LOCK_INPUT from declared_inputs.
+
+    A completed new bundle must fail verification after its declared lockfile
+    changes. Historical bundles retain their original input lists and remain
+    readable because the verifier accepts the manifest schema unchanged.
+    """
+    from ti26 import cli_release
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli_release, "CONFIG_INPUTS", ())
+    (tmp_path / "snapshot.json").write_text("snapshot\n")
+    lock = tmp_path / UV_LOCK_INPUT
+    lock.write_text("locked environment\n")
+    descriptor = _descriptor(input_manifest(declared_inputs("snapshot.json", None)))
+
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    report = bundle / "report.md"
+    report.write_text(f"{render_report_prefix(descriptor)}\nreport\n")
+    write_run_manifest(bundle, descriptor, ["report.md"])
+
+    assert verify_run_bundle(bundle, repo_root=tmp_path)
+    lock.write_text("tampered environment\n")
+    with pytest.raises(RunManifestError, match="input sha256 mismatch: uv.lock"):
+        verify_run_bundle(bundle, repo_root=tmp_path)
 
 
 def test_the_group_draw_is_hashed_into_the_manifest_when_one_is_supplied():

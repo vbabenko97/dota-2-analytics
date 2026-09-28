@@ -1,0 +1,421 @@
+{
+  "candidate_sha": "0186447892c2935a39a5d3987caae309a0b944a7",
+  "git_tree": "c06991de8fbdb06f1f365297ff1bc09601f9a580",
+  "full_history": true,
+  "clean_checkout": true,
+  "worktree_note": "Verification ran in an existing git worktree (not a fresh clone); HEAD was detached to the candidate commit with `git checkout --detach 0186447892c2935a39a5d3987caae309a0b944a7`. Initial HEAD before detach was 56b653edc667c838bc8f6bbf86d6aef64af72d31.",
+  "environment": {
+    "python_version": "3.13.5 | packaged by Anaconda, Inc. | (main, Jun 12 2025, 11:23:37) [Clang 14.0.6 ]",
+    "platform": "macOS-15.7.9-arm64-arm-64bit-Mach-O",
+    "uv_version": "uv 0.9.12 (0fb123336 2025-11-24)",
+    "git_version": "git version 2.50.1 (Apple Git-155)",
+    "log": "/private/tmp/ti26-final-verify/environment.log"
+  },
+  "setup": {
+    "command": "uv sync --locked --python 3.13 --offline",
+    "mode": "offline",
+    "exit_code": 0,
+    "note": "Offline mode succeeded on first attempt; non-offline fallback was not needed. Installed ti26==0.1.0 plus numpy 2.5.1, scipy 1.18.0, pyyaml 6.0.3, pytest 9.1.1, ruff 0.16.1 into new .venv (CPython 3.13.5).",
+    "started_utc": "2026-09-27T18:33:24Z",
+    "finished_utc": "2026-09-27T18:33:24Z",
+    "log": "/private/tmp/ti26-final-verify/sync.log"
+  },
+  "ruff": {
+    "command": ".venv/bin/python -m ruff check .",
+    "exit_code": 0,
+    "output": "All checks passed!",
+    "started_utc": "2026-09-27T18:34:04Z",
+    "finished_utc": "2026-09-27T18:34:05Z",
+    "log": "/private/tmp/ti26-final-verify/ruff.log"
+  },
+  "pytest": {
+    "command": ".venv/bin/python -m pytest -q",
+    "exit_code": 0,
+    "summary_line": "1115 passed in 548.87s (0:09:08)",
+    "started_utc": "2026-09-27T18:34:20Z",
+    "finished_utc": "2026-09-27T18:43:36Z",
+    "log": "/private/tmp/ti26-final-verify/pytest.log"
+  },
+  "historical_bundles": [
+    {
+      "bundle": "reports/runs/7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198",
+      "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198 --repo-root . --at-source-revision",
+      "exit_code": 0,
+      "log": "/private/tmp/ti26-final-verify/verify-7c0c5e97.log"
+    },
+    {
+      "bundle": "reports/runs/c118831c6f96242071b758fcc7948f9b9ee7e82c44f7ae11e9bb173c74a978ea",
+      "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/c118831c6f96242071b758fcc7948f9b9ee7e82c44f7ae11e9bb173c74a978ea --repo-root . --at-source-revision",
+      "exit_code": 0,
+      "log": "/private/tmp/ti26-final-verify/verify-c118831c.log"
+    },
+    {
+      "bundle": "reports/runs/fa6ecd0836e7d6c78049c868486f0016f47d3577ae98162e19cd0457cab0e13a",
+      "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/fa6ecd0836e7d6c78049c868486f0016f47d3577ae98162e19cd0457cab0e13a --repo-root . --at-source-revision",
+      "exit_code": 0,
+      "log": "/private/tmp/ti26-final-verify/verify-fa6ecd08.log"
+    },
+    {
+      "bundle": "reports/runs/frozen-output-oracle-baseline/61c63f4aa32c573cdbc7e4abe48e08308801f1ff3cb8e5629a4ae446d5d22b6b",
+      "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle reports/runs/frozen-output-oracle-baseline/61c63f4aa32c573cdbc7e4abe48e08308801f1ff3cb8e5629a4ae446d5d22b6b --repo-root . --at-source-revision",
+      "exit_code": 0,
+      "log": "/private/tmp/ti26-final-verify/verify-61c63f4a.log"
+    }
+  ],
+  "postmortem_replay": {
+    "command": ".venv/bin/python -m ti26.cli_replay_postmortems --snapshot 20260816T115509Z --store /private/tmp/ti26-final-replay.sqlite",
+    "exit_code": 0,
+    "receipt": {
+      "group": "byte-equal",
+      "playoff": "equal-after-exact-store-path-normalization",
+      "snapshot": "20260816T115509Z",
+      "store": {
+        "algorithm": "sha256",
+        "row_count": 40076,
+        "schema_version": 1,
+        "sha256": "63f41d67f580d29cf464280758abdf6c6aeef8a16288e62fa523577ae6fbdb2c"
+      }
+    },
+    "load_line": "snapshot 20260816T115509Z: loaded 40076 maps into /private/tmp/ti26-final-replay.sqlite",
+    "store_removed_after": true,
+    "log": "/private/tmp/ti26-final-verify/replay.log"
+  },
+  "frozen_output_oracle": {
+    "command": "git rev-parse HEAD | xargs .venv/bin/python -m ti26.frozen_output_oracle --replay-root /private/tmp/ti26-final-oracle --repo-root . --source-revision",
+    "exit_code": 0,
+    "final_line": "frozen output replay: match",
+    "outputs_compared": 23,
+    "started_utc": "2026-09-27T18:33:53Z",
+    "finished_utc": "2026-09-27T19:09:30Z",
+    "log": "/private/tmp/ti26-final-verify/oracle.log"
+  },
+  "logs": [
+    {
+      "name": "sync.log",
+      "path": "/private/tmp/ti26-final-verify/sync.log",
+      "sha256": "de1146ba180a3932131c3e89821994928efe52a74cea0fbf0cfbfc925fc7f822"
+    },
+    {
+      "name": "ruff.log",
+      "path": "/private/tmp/ti26-final-verify/ruff.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "name": "pytest.log",
+      "path": "/private/tmp/ti26-final-verify/pytest.log",
+      "sha256": "169a46a168fdc8af7140ece6681c23c95f77818a6c097c78000929f52cb697fd"
+    },
+    {
+      "name": "verify-7c0c5e97.log",
+      "path": "/private/tmp/ti26-final-verify/verify-7c0c5e97.log",
+      "sha256": "73eeb33518502965b85ad843616105b6eeb4fcd08783dba041c0ed1e23dee5b5"
+    },
+    {
+      "name": "verify-c118831c.log",
+      "path": "/private/tmp/ti26-final-verify/verify-c118831c.log",
+      "sha256": "f523a6b381b24ad566e180361a3033446c2d6a975abc4b4c7d132c1dcb2ee362"
+    },
+    {
+      "name": "verify-fa6ecd08.log",
+      "path": "/private/tmp/ti26-final-verify/verify-fa6ecd08.log",
+      "sha256": "da710a1bffa34ce2818338b05505410601918dfb1f20e00d6f5b107af970f4c5"
+    },
+    {
+      "name": "verify-61c63f4a.log",
+      "path": "/private/tmp/ti26-final-verify/verify-61c63f4a.log",
+      "sha256": "1293c8e3d01ef576d81e464420b065c4fb0d40b63f340f0c384c8407f43dbdd0"
+    },
+    {
+      "name": "replay.log",
+      "path": "/private/tmp/ti26-final-verify/replay.log",
+      "sha256": "1074a1157567f64c74096d046a7dc7c2c4692b142133c7165da487560acbeb5a"
+    },
+    {
+      "name": "environment.log",
+      "path": "/private/tmp/ti26-final-verify/environment.log",
+      "sha256": "308bc863ec87f9656ff351897cdea0bf53dea4daedfe888c8a76ff393b38a6de"
+    },
+    {
+      "name": "oracle.log",
+      "path": "/private/tmp/ti26-final-verify/oracle.log",
+      "sha256": "af70835de5826311ae55404a33fb1ed34fe873e067b73ba4251d03440c3de6bb"
+    },
+    {
+      "name": "trufflehog.jsonl",
+      "path": "/private/tmp/ti26-final-verify/trufflehog.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "trufflehog.err",
+      "path": "/private/tmp/ti26-final-verify/trufflehog.err",
+      "sha256": "7a2226b9ef955ba117664500637574466d78da3fd599a153e041c7283953507b"
+    },
+    {
+      "name": "trufflehog-version.txt",
+      "path": "/private/tmp/ti26-final-verify/trufflehog-version.txt",
+      "sha256": "72de97b4607f1531575a5ce6ac1e826baeeb6a6875f1e2d4ef9dd349f744c0b6"
+    },
+    {
+      "name": "trufflehog-git-help.txt",
+      "path": "/private/tmp/ti26-final-verify/trufflehog-git-help.txt",
+      "sha256": "4ab0f81eeffb312c74328328cb78b5c05fa4ec4ad91afb3dd246d6817c544374"
+    },
+    {
+      "name": "requirements.txt",
+      "path": "/private/tmp/ti26-final-verify/requirements.txt",
+      "sha256": "d9dde09d373822f3adafc1fe396065c4ee61af69aeb9139221849adede86a9b1"
+    },
+    {
+      "name": "uv-export.log",
+      "path": "/private/tmp/ti26-final-verify/uv-export.log",
+      "sha256": "c021905a09d387ec148d2190c9f5a7b25c4593231abf9001fa514a623e26ec65"
+    },
+    {
+      "name": "uv-export-help.txt",
+      "path": "/private/tmp/ti26-final-verify/uv-export-help.txt",
+      "sha256": "a348bab2ac2110847c637e4495faaf76dcecb440877fbab0dd0ff734b1b626ac"
+    },
+    {
+      "name": "pip-audit.json",
+      "path": "/private/tmp/ti26-final-verify/pip-audit.json",
+      "sha256": "8b677a3d3b68bc838ba6a98ac91fa524ae81a94a31d3166242166bbd83d21c8b"
+    },
+    {
+      "name": "pip-audit.err",
+      "path": "/private/tmp/ti26-final-verify/pip-audit.err",
+      "sha256": "020bca39060a4c3b59b162526c193f9f012328268c87634dcc1c523ce83ab961"
+    },
+    {
+      "name": "linkcheck.json",
+      "path": "/private/tmp/ti26-final-verify/linkcheck.json",
+      "sha256": "1ae567145005501660fb5e91dbe00d02c633c33400741ae4d95b387ab5fae038"
+    },
+    {
+      "name": "linkcheck.err",
+      "path": "/private/tmp/ti26-final-verify/linkcheck.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "gh-auth-switch.log",
+      "path": "/private/tmp/ti26-final-verify/gh-auth-switch.log",
+      "sha256": "f908675c04b06af9a049972eb7576d5461a339149d96c85c6f0a88895d9deeca"
+    },
+    {
+      "name": "gh-run-36248550562.json",
+      "path": "/private/tmp/ti26-final-verify/gh-run-36248550562.json",
+      "sha256": "674e398431662f70628ab4c27f3b76079543cf6c0b5b18669ca7e7c78e53b5eb"
+    },
+    {
+      "name": "gh-run-36248550562.err",
+      "path": "/private/tmp/ti26-final-verify/gh-run-36248550562.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "gh-run-list.json",
+      "path": "/private/tmp/ti26-final-verify/gh-run-list.json",
+      "sha256": "4ac62ad5eea7c3bea8fd5c8f1afcb75fba40915e200eb1a70efda3a8f1267bb8"
+    },
+    {
+      "name": "gh-run-list.err",
+      "path": "/private/tmp/ti26-final-verify/gh-run-list.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "scratch_local_heads.txt",
+      "path": "/private/tmp/ti26-final-verify/scratch_local_heads.txt",
+      "sha256": "d1e246e21791a8ca6238935b8bcb7f15abc57a091ab7c1d0c2619a5a75b1f6c4",
+      "description": "sorted commit ids reachable from all local branch heads (233 commits)"
+    },
+    {
+      "name": "scratch_public_all.txt",
+      "path": "/private/tmp/ti26-final-verify/scratch_public_all.txt",
+      "sha256": "d1e246e21791a8ca6238935b8bcb7f15abc57a091ab7c1d0c2619a5a75b1f6c4",
+      "description": "sorted commit ids reachable from every public ref (233 commits, identical set to local heads)"
+    },
+    {
+      "name": "scratch_pubrelease_only.txt",
+      "path": "/private/tmp/ti26-final-verify/scratch_pubrelease_only.txt",
+      "sha256": "d1e246e21791a8ca6238935b8bcb7f15abc57a091ab7c1d0c2619a5a75b1f6c4",
+      "description": "sorted commit ids reachable from codex/public-release alone (233 commits, identical set)"
+    },
+    {
+      "name": "scratch_export_pkgs.txt",
+      "path": "/private/tmp/ti26-final-verify/scratch_export_pkgs.txt",
+      "sha256": "dab5e32210277b213b86889ed246ba02f1e1db7ff0d38376cbda020a581b9d1e",
+      "description": "sorted marker-stripped package==version lines from our uv export; hash matches supplement's recorded requirements_sha256"
+    },
+    {
+      "name": "scratch_supplement_pkgs.txt",
+      "path": "/private/tmp/ti26-final-verify/scratch_supplement_pkgs.txt",
+      "sha256": "dab5e32210277b213b86889ed246ba02f1e1db7ff0d38376cbda020a581b9d1e",
+      "description": "sorted package==version list extracted from docs/audits/2026-09-26-publication-supplement.json"
+    }
+  ],
+  "secret_scans": {
+    "tool": "trufflehog",
+    "version": "3.96.0",
+    "command": "trufflehog git --no-update --no-verification --json --results=unverified,unknown file://<repo> > /private/tmp/ti26-final-verify/trufflehog.jsonl 2> /private/tmp/ti26-final-verify/trufflehog.err",
+    "refs_covered": {
+      "method": "One full-history scan of file://<repo>; public-ref coverage checked by commit-set equality instead of per-ref reruns.",
+      "commands": [
+        "git rev-list refs/heads/codex/public-release | sort",
+        "git rev-list --branches --remotes --tags | sort"
+      ],
+      "result": "Identical commit sets (scratch_pubrelease_only.txt and scratch_public_all.txt have one sha256); both 0186447 and 6ba2c0f are in the set; no tags exist."
+    },
+    "findings": 0,
+    "notes": "trufflehog.jsonl is empty (sha256 of the empty file); exit code 0."
+  },
+  "dependency_advisories": {
+    "command": "uv export --locked --all-groups --no-hashes --no-emit-project -o /private/tmp/ti26-final-verify/requirements.txt; uvx pip-audit --disable-pip --no-deps --requirement /private/tmp/ti26-final-verify/requirements.txt --format json > /private/tmp/ti26-final-verify/pip-audit.json",
+    "requirements_sha256": "d9dde09d373822f3adafc1fe396065c4ee61af69aeb9139221849adede86a9b1",
+    "matches_supplement_requirements": true,
+    "notes_on_match": "The 10 package==version pairs exported by `uv export` (colorama, iniconfig, numpy, packaging, pluggy, pygments, pytest, pyyaml, ruff, scipy) are byte-identical, set-for-set, to the 'requirements' array in docs/audits/2026-09-26-publication-supplement.json (diff of sorted, marker-stripped lists is empty). Independent confirmation: sha256 of the sorted marker-stripped package list is dab5e32210277b213b86889ed246ba02f1e1db7ff0d38376cbda020a581b9d1e, which is byte-identical to the 'requirements_sha256' value already recorded in the supplement document -- the raw exported requirements.txt file hash differs (d9dde093...) only because of a different header/output path comment, not a different package set.",
+    "vulnerabilities": {
+      "packages_in_lock": 10,
+      "packages_audited": 9,
+      "packages_skipped": [
+        {
+          "name": "colorama",
+          "version": "0.4.6",
+          "reason": "pip-audit resolved it out because its lock marker is sys_platform == 'win32', which does not match this macOS audit host"
+        }
+      ],
+      "per_package": [
+        {
+          "name": "iniconfig",
+          "version": "2.3.0",
+          "vulns": []
+        },
+        {
+          "name": "numpy",
+          "version": "2.5.1",
+          "vulns": []
+        },
+        {
+          "name": "packaging",
+          "version": "26.2",
+          "vulns": []
+        },
+        {
+          "name": "pluggy",
+          "version": "1.6.0",
+          "vulns": []
+        },
+        {
+          "name": "pygments",
+          "version": "2.20.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest",
+          "version": "9.1.1",
+          "vulns": []
+        },
+        {
+          "name": "pyyaml",
+          "version": "6.0.3",
+          "vulns": []
+        },
+        {
+          "name": "ruff",
+          "version": "0.16.1",
+          "vulns": []
+        },
+        {
+          "name": "scipy",
+          "version": "1.18.0",
+          "vulns": []
+        }
+      ],
+      "total_vulnerabilities": 0,
+      "fixes_recommended": 0
+    }
+  },
+  "links": {
+    "scope": "All 85 tracked markdown files at commit 0186447 (working tree confirmed clean at HEAD=0186447 via git status --porcelain), file list from `git ls-files`, piped into a read-only .venv/bin/python -c one-liner. Fenced code blocks and inline code spans were stripped before extracting inline `[text](target)` links and `[ref]: target` reference definitions. Targets with a URL scheme (http:, https:, mailto:, etc.) or pure `#fragment` anchors were treated as external and excluded from the count. Each remaining relative target was resolved with os.path.normpath against the directory of the linking file and checked against the full tracked-file set and the set of directories that contain at least one tracked file. Absolute (leading '/') targets were checked against the real filesystem, except inside the one known file where they are recorded separately regardless of resolution. Method self-tested first against synthetic good/bad/dir cases and a fenced-code-stripping case (all 7 assertions passed) before being trusted on the real corpus.",
+    "checked_count": 293,
+    "broken": [],
+    "known_accepted": {
+      "count": 65,
+      "file": "docs/audits/2026-08-04-external-audit-of-d0221dc.md",
+      "description": "Absolute local-path links quoted verbatim inside this one external-audit document; none appear in any other markdown file."
+    }
+  },
+  "hosted_ci": {
+    "auth_switch_command": "gh auth switch --user vbabenko97",
+    "auth_switch_result": "Switched active account for github.com to vbabenko97",
+    "run_lookup": {
+      "command": "gh api repos/vbabenko97/dota-2-analytics/actions/runs/36248550562 --jq '{id,status,conclusion,head_sha,name,event,created_at,html_url}'",
+      "output": {
+        "id": 36248550562,
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": "6ba2c0f0a9175b30cd32768093b409d0776353b7",
+        "name": "Offline CI",
+        "event": "push",
+        "created_at": "2026-09-26T14:27:12Z",
+        "html_url": "https://github.com/vbabenko97/dota-2-analytics/actions/runs/36248550562"
+      }
+    },
+    "run_list": {
+      "command": "gh run list --branch codex/public-release --limit 5 --json databaseId,headSha,conclusion,status",
+      "output": [
+        {
+          "databaseId": 36248550562,
+          "headSha": "6ba2c0f0a9175b30cd32768093b409d0776353b7",
+          "conclusion": "success",
+          "status": "completed"
+        }
+      ]
+    },
+    "note": "Only one CI run exists for codex/public-release, and it ran against 6ba2c0f (the current origin/codex/public-release tip), not against 0186447 (the local release-candidate HEAD, which is a newer descendant of 6ba2c0f and has not yet been pushed). No hosted CI run exists yet for 0186447 itself."
+  },
+  "review": {
+    "cross_check": "An adversarial cross-check re-derived every log digest, the candidate SHA and tree, the bundle list, one bundle verification, the pytest collection count, the replay and oracle outcomes, the advisory set and the link results. It found two defects in the lane-B data: a public-ref count that was self-inconsistent and not backed by any log, and absolute home-directory paths. This receipt drops the count in favour of the commit-set equality check and redacts the paths.",
+    "earlier_reviews": "The design re-review (docs/audits/2026-09-27-release-design-rereview.json) and an independent diff review of 6ba2c0f..b23a418; their fixes are in 47b8a79 and 0186447."
+  },
+  "scope_notes": [
+    "Verification ran in a new git worktree detached to the candidate commit, not a fresh clone; the tree was clean before and after.",
+    "Hosted CI has not yet run on the candidate; the recorded run is on its ancestor 6ba2c0f. Pushing the candidate triggers the workflow.",
+    "pip-audit resolved lock markers for this macOS host, so colorama (win32-only) was not queried; the 2026-09-26 supplement records it with no advisories.",
+    "The frozen output oracle re-derives the historical gate refusals and failures as part of its replay; its final comparison is the result.",
+    "Commits after candidate_sha may touch only this receipt and docs/release-checklist.md.",
+    "Historical receipts remain unchanged and do not attest later edits."
+  ],
+  "recorded_at_utc": "2026-09-27T19:21:31Z",
+  "addendum": {
+    "sha": "3b1cb7c7cfa41e9ea696d8455d2498fdbf856c4b",
+    "git_tree": "e97d897d04d26794c98f3f63a7f38e4705474963",
+    "reason": "Audit-record correction after verification of candidate_sha. A later independent review found that docs/audits/2026-09-27-release-design-rereview.json overclaimed independent confirmation of both guard mutations.",
+    "diff_from_candidate": {
+      "command": "git diff --name-only 0186447 3b1cb7c",
+      "paths": [
+        "docs/audits/2026-09-27-release-candidate-verification.json",
+        "docs/audits/2026-09-27-release-design-rereview.json",
+        "docs/release-checklist.md"
+      ]
+    },
+    "environment": "The existing checkout at 3b1cb7c with a clean working tree, not a fresh worktree. Hosted CI on the pushed head is the clean-runner check.",
+    "pytest": {"command": ".venv/bin/python -m pytest -q", "exit_code": 0, "summary_line": "1115 passed in 382.25s (0:06:22)"},
+    "ruff": {"command": ".venv/bin/python -m ruff check .", "exit_code": 0, "output": "All checks passed!"},
+    "historical_bundles": {
+      "command": ".venv/bin/python -m ti26.cli_provenance verify-run --bundle <dir> --repo-root . --at-source-revision, once per bundle",
+      "bundles": ["7c0c5e97", "c118831c", "fa6ecd08", "frozen-output-oracle-baseline/61c63f4a"],
+      "exit_codes": [0, 0, 0, 0],
+      "note": "Each log is byte-identical to the corresponding candidate_sha log (same sha256)."
+    },
+    "links": {"scope": "Local relative links in all tracked markdown; external URLs not checked", "md_files": 85, "local_links_checked": 293, "broken": [], "known_accepted_in_external_audit": 65},
+    "not_rerun": "Postmortem replay and full forecast oracle. No code, test, config, data, report or replay-bound file changed, and the replay-bound guard test in the unfiltered suite passed.",
+    "logs": [
+      {"name": "pytest.log", "path": "/private/tmp/ti26-addendum/pytest.log", "sha256": "c2fbefad11b9308e858528b0b67681751c3c8dd1636b369b7ccffdf08dcee6fb"},
+      {"name": "ruff.log", "path": "/private/tmp/ti26-addendum/ruff.log", "sha256": "198d0a0ac9f74f0f5ef4ab66f2273ddcf41dfa9c0b324a3ae20b5db52a2893cb"},
+      {"name": "verify-7c0c5e97.log", "path": "/private/tmp/ti26-addendum/verify-7c0c5e97.log", "sha256": "73eeb33518502965b85ad843616105b6eeb4fcd08783dba041c0ed1e23dee5b5"},
+      {"name": "verify-c118831c.log", "path": "/private/tmp/ti26-addendum/verify-c118831c.log", "sha256": "f523a6b381b24ad566e180361a3033446c2d6a975abc4b4c7d132c1dcb2ee362"},
+      {"name": "verify-fa6ecd08.log", "path": "/private/tmp/ti26-addendum/verify-fa6ecd08.log", "sha256": "da710a1bffa34ce2818338b05505410601918dfb1f20e00d6f5b107af970f4c5"},
+      {"name": "verify-61c63f4a.log", "path": "/private/tmp/ti26-addendum/verify-61c63f4a.log", "sha256": "1293c8e3d01ef576d81e464420b065c4fb0d40b63f340f0c384c8407f43dbdd0"}
+    ],
+    "rule_after_addendum": "Commits after 3b1cb7c may touch only this receipt and docs/release-checklist.md.",
+    "recorded_at_utc": "2026-09-27T20:01:35Z"
+  }
+}

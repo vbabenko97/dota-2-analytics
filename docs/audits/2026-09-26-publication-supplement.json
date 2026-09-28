@@ -1,0 +1,101 @@
+{
+  "scope": "Supplement to publication scan; locked package advisory query and hosted read-only inspection",
+  "date": "2026-09-26",
+  "uv_lock_sha256": "fd9c83268b717ae525b26c4c5fceb6a5f51aa20e21e4eceabbd44eb138927805",
+  "requirements_sha256": "dab5e32210277b213b86889ed246ba02f1e1db7ff0d38376cbda020a581b9d1e",
+  "requirements": [
+    "colorama==0.4.6",
+    "iniconfig==2.3.0",
+    "numpy==2.5.1",
+    "packaging==26.2",
+    "pluggy==1.6.0",
+    "pygments==2.20.0",
+    "pytest==9.1.1",
+    "pyyaml==6.0.3",
+    "ruff==0.16.1",
+    "scipy==1.18.0"
+  ],
+  "advisory_result": {
+    "dependencies": [
+      {
+        "name": "colorama",
+        "version": "0.4.6",
+        "vulns": []
+      },
+      {
+        "name": "iniconfig",
+        "version": "2.3.0",
+        "vulns": []
+      },
+      {
+        "name": "numpy",
+        "version": "2.5.1",
+        "vulns": []
+      },
+      {
+        "name": "packaging",
+        "version": "26.2",
+        "vulns": []
+      },
+      {
+        "name": "pluggy",
+        "version": "1.6.0",
+        "vulns": []
+      },
+      {
+        "name": "pygments",
+        "version": "2.20.0",
+        "vulns": []
+      },
+      {
+        "name": "pytest",
+        "version": "9.1.1",
+        "vulns": []
+      },
+      {
+        "name": "pyyaml",
+        "version": "6.0.3",
+        "vulns": []
+      },
+      {
+        "name": "ruff",
+        "version": "0.16.1",
+        "vulns": []
+      },
+      {
+        "name": "scipy",
+        "version": "1.18.0",
+        "vulns": []
+      }
+    ],
+    "fixes": []
+  },
+  "command": "uvx --cache-dir /private/tmp/ti26-audit-uv-cache pip-audit --disable-pip --no-deps --requirement /private/tmp/ti26-all-lock-requirements.txt --format json",
+  "limits": [
+    "Known advisories only at query time; not proof of security",
+    "All registry lock entries included independent of platform markers",
+    "Build-system requirements and audit-tool dependencies are outside the project lock audit"
+  ],
+  "hosting": {
+    "visibility": "private",
+    "default_branch": "main",
+    "private_vulnerability_reporting": "GET returned 404; not verified",
+    "main_branch_protection": "GET returned 403: feature requires plan upgrade or public visibility; not verified",
+    "changes_made": false
+  },
+  "owner_choices": {
+    "license": "MIT for original code/documentation",
+    "author": "Vitalii Babenko",
+    "security_email": "vbabenko2191@gmail.com",
+    "maintenance": "retrospective only"
+  },
+  "license_supplement": {
+    "colorama": {
+      "version": "0.4.6",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/tartley/colorama/blob/0.4.6/LICENSE.txt"
+    },
+    "ti26": "MIT declared in current pyproject.toml and LICENSE; supersedes initial installed metadata inventory",
+    "redistribution": "Source repository does not vendor dependency distributions; downstream bundling must preserve upstream notices."
+  }
+}

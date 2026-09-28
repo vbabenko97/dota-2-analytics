@@ -1,0 +1,360 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-26",
+  "scope": "Local implementation and verification of the public release plan; publication remains unapproved.",
+  "base_revision": "56b653edc667c838bc8f6bbf86d6aef64af72d31",
+  "candidate": "Uncommitted intended working-tree files, identified below; candidate commit/version not selected.",
+  "environment": {
+    "python": "3.13.5",
+    "platform": "macOS-15.7.9-arm64-arm-64bit-Mach-O",
+    "packages": {
+      "numpy": "2.5.1",
+      "scipy": "1.18.0",
+      "PyYAML": "6.0.3",
+      "pytest": "9.1.1",
+      "ruff": "0.16.1"
+    }
+  },
+  "setup": {
+    "commands": [
+      "uv lock --offline",
+      "uv sync --locked --offline --python 3.13"
+    ],
+    "result": "passed; uv.lock bytes unchanged"
+  },
+  "verification": {
+    "pytest": {
+      "command": ".venv/bin/python -m pytest -q",
+      "result": "1113 passed in 378.30s (0:06:18)",
+      "log_sha256": "b0d38e1b9db75a9dc56dbe5f8c464aa7c47b1fed9b1f2dbe903cd27c11a11b82",
+      "filters": []
+    },
+    "ruff": {
+      "command": ".venv/bin/python -m ruff check .",
+      "result": "All checks passed!",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "formatting": {
+      "new_python_files": "Ruff format check passed",
+      "existing_debt": "Unchanged cli_release.py formatting hunks predate implementation; introduced formatting was corrected without reformatting unrelated code."
+    },
+    "links": {
+      "checked": 98,
+      "missing": [],
+      "scope": [
+        "README.md",
+        "CONTRIBUTING.md",
+        "SECURITY.md",
+        "docs/README.md",
+        "docs/reproduce.md",
+        "docs/data-sources.md",
+        "docs/release-checklist.md",
+        "docs/release-notes.md",
+        "docs/public-release-plan.md",
+        "mlsd-scorecard-ti26.md"
+      ],
+      "method": "Resolve local file/directory targets against intended files, including forthcoming audit receipts; anchors not checked"
+    },
+    "frozen": {
+      "file_count": 209,
+      "all_equal_to_head": true,
+      "inventory_sha256": "660e9b82bf0e77ea341d6860031ad2f1bd6f01236f14bdeceb2b61f4833e69f1"
+    },
+    "historical_bundles": [
+      {
+        "command": [
+          ".venv/bin/python",
+          "-m",
+          "ti26.cli_provenance",
+          "verify-run",
+          "--bundle",
+          "reports/runs/7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198",
+          "--repo-root",
+          ".",
+          "--at-source-revision"
+        ],
+        "exit_code": 0,
+        "stdout": "{\"inputs\":[{\"path\":\"data/raw/20260802T165535Z/manifest.json\",\"sha256\":\"f19e180b563a1fd2c817bd3e1afb90aeb3d0201e7b9fc3252326b7f4aa002fdf\"},{\"path\":\"config/d2_gate.yaml\",\"sha256\":\"34b19d18e83840d6a0a4aee4d23f119660065277709abce48a81a6b55d18d0b2\"},{\"path\":\"config/team_aliases.yaml\",\"sha256\":\"c3f3d2ce69f59ef85651014dab0d08ae04c907f97354b8e54ab16213b68f5ed0\"},{\"path\":\"config/ti2026_rules.yaml\",\"sha256\":\"93873ca090381e8ecaa2a615b6a791b6d5bc496dc9baaa7f5ce33b5366f63960\"},{\"path\":\"config/ti2026_teams.yaml\",\"sha256\":\"f41f41a11b5db2032fe5986e3555d5c3193d587a456ecbde2fee5f8e5b6fd2ec\"},{\"path\":\"config/ti2025_backtest.yaml\",\"sha256\":\"027840b9ff600582338e0b2023f9876f6e632c79f07d39560756b0aceb88cc58\"},{\"path\":\"pyproject.toml\",\"sha256\":\"7f86e2fa2aa59a0201b5581bfa520d75582f0dce7b02a69db18214aa80ff572f\"}],\"invocation\":{\"card_seed\":1,\"card_sims\":250000,\"min_train\":500,\"producers\":[[\"ti26.cli_d2\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_d3\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_d3b\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_card\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\",\"--card-sims\",\"250000\",\"--card-seed\",\"1\"],[\"ti26.cli_d4\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\",\"--card-sims\",\"250000\",\"--card-seed\",\"1\",\"--sweep-sims\",\"2000,20000,250000\",\"--sweep-seeds\",\"1,2,3\",\"--random-samples\",\"200000\",\"--random-seed\",\"1\"]],\"random_samples\":200000,\"random_seed\":1,\"sweep_seeds\":\"1,2,3\",\"sweep_sims\":\"2000,20000,250000\"},\"outputs\":[{\"path\":\"card/card_provenance.md\",\"sha256\":\"45d81dbcc1c97e376370c08046badd48e0207c0fe2910514d854670ebe99db19\"},{\"path\":\"card/category_probabilities.csv\",\"sha256\":\"e51a6427f69b635b5aa4a8797c9973154c41bd52d2000c57f60f4f18c77d39b8\"},{\"path\":\"card/recommended_card.json\",\"sha256\":\"7c2a2e24d89c9d4e2d80f63a1d95326b32bf6d07b662308c194eb0a7f2474075\"},{\"path\":\"card/strengths_calibrated.csv\",\"sha256\":\"faa70fe7cc452793b75289826a11abe86392fdcf6f4d4b835d6f71e5a95c30f4\"},{\"path\":\"d2/backtest_metrics.csv\",\"sha256\":\"433cc110446174df9a91308c4d3c1b1b6c64f48b8e397a4bf1cdadf1570fdeb5\"},{\"path\":\"d2/d2_gate.json\",\"sha256\":\"e4237c1c33996d90738f0165ff50c735fea4e10ed5d94bd157897e99410d6497\"},{\"path\":\"d2/d2_gate.md\",\"sha256\":\"7c1fe93aa0a5320f00a2aed4d6e79326db3646cd8dee5c827f7d99832e036c41\"},{\"path\":\"d2/duration_fit.json\",\"sha256\":\"975ddec77d98f04ab883ea05bc9328be343bd7a8adb85509054e86b5b17b610b\"},{\"path\":\"d2/duration_sensitivity.json\",\"sha256\":\"f588ba0f73a0f036ac9d256ac06a50100f3ed27b735865a37e001c18a1b6c430\"},{\"path\":\"d3/d3_gate.json\",\"sha256\":\"4da88e52b7ffb55ac05f486b1add80766d61b9915d88480e9e69ec5a7e84b7b4\"},{\"path\":\"d3/d3_gate.md\",\"sha256\":\"b2947bca9eb97d1d439ec69a067ca2041c813a458ce38e3ab09fd4b83a1b1132\"},{\"path\":\"d3/d3_metrics.csv\",\"sha256\":\"1af47d66867e573088842bc487e3f4b169b9f464843807ff3b67b0055deb3706\"},{\"path\":\"d3b/d3b_gate.json\",\"sha256\":\"a9aa9d9bff7ac27dbb7586601eca4895c9d3dd9090edd48724d46f6719a21939\"},{\"path\":\"d3b/d3b_gate.md\",\"sha256\":\"337d68f4ac10c5475c32bea7d73433c1075d568176f8e73ab836e0ba21b04878\"},{\"path\":\"d4/d4_card_backtest.json\",\"sha256\":\"3176bf0374fda0dacaaec54ca481438cdafc8e35b531789bb7b29656a8ecddfa\"},{\"path\":\"d4/d4_card_backtest.md\",\"sha256\":\"e06c0c4a8d8cb54c6d2261669cb2bd0aceede6cee151710971d2845d4452ae7c\"},{\"path\":\"d4/d4_per_slot.csv\",\"sha256\":\"7b7e5b12bb0ebc35d2e332fb6db651719436c07a4ccd33d45ea76264d07194d7\"},{\"path\":\"frozen_gate_results.json\",\"sha256\":\"a5b86ec6c324e00954a168bbe227f5ec2d83462dc0662c8e796fb37f0e882ad3\"},{\"path\":\"producer_exits.json\",\"sha256\":\"05c25cc671d9d0e33ad2d6bc73151f4d9c72a0a67c75060ff2f33c3ee53a2865\"}],\"run_id\":\"7c0c5e97a9acadce5e42fe8032df440ff88358c2db5b6f7c80dcc97fb5e2d198\",\"run_kind\":\"historical\",\"runtime\":{\"numpy\":\"2.5.1\",\"platform\":\"macOS-15.7.7-arm64-arm-64bit-Mach-O\",\"python\":\"3.13.5\",\"scipy\":\"1.18.0\",\"yaml\":\"6.0.3\"},\"schema_version\":1,\"snapshot\":{\"manifest_path\":\"data/raw/20260802T165535Z/manifest.json\",\"manifest_sha256\":\"f19e180b563a1fd2c817bd3e1afb90aeb3d0201e7b9fc3252326b7f4aa002fdf\",\"snapshot_id\":\"20260802T165535Z\"},\"source_revision\":\"d62fb41f4b9158928a79df76cd92e6c86ff4b866\",\"store\":{\"algorithm\":\"sha256\",\"row_count\":41140,\"schema_version\":1,\"sha256\":\"8b3f2bb715d0f75e92f1e039594b06835f5f87d85639bdd86e7cb596f8dc8cf9\"}}\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          ".venv/bin/python",
+          "-m",
+          "ti26.cli_provenance",
+          "verify-run",
+          "--bundle",
+          "reports/runs/c118831c6f96242071b758fcc7948f9b9ee7e82c44f7ae11e9bb173c74a978ea",
+          "--repo-root",
+          ".",
+          "--at-source-revision"
+        ],
+        "exit_code": 0,
+        "stdout": "{\"inputs\":[{\"path\":\"data/raw/20260802T165535Z/manifest.json\",\"sha256\":\"f19e180b563a1fd2c817bd3e1afb90aeb3d0201e7b9fc3252326b7f4aa002fdf\"},{\"path\":\"config/d2_gate.yaml\",\"sha256\":\"34b19d18e83840d6a0a4aee4d23f119660065277709abce48a81a6b55d18d0b2\"},{\"path\":\"config/team_aliases.yaml\",\"sha256\":\"c3f3d2ce69f59ef85651014dab0d08ae04c907f97354b8e54ab16213b68f5ed0\"},{\"path\":\"config/ti2026_rules.yaml\",\"sha256\":\"25e1a1c0aa750fa7ee9d0037a72dbd57d191d6ce43e9e1bca93310a8514a53f3\"},{\"path\":\"config/ti2026_teams.yaml\",\"sha256\":\"f41f41a11b5db2032fe5986e3555d5c3193d587a456ecbde2fee5f8e5b6fd2ec\"},{\"path\":\"config/ti2025_backtest.yaml\",\"sha256\":\"027840b9ff600582338e0b2023f9876f6e632c79f07d39560756b0aceb88cc58\"},{\"path\":\"pyproject.toml\",\"sha256\":\"7f86e2fa2aa59a0201b5581bfa520d75582f0dce7b02a69db18214aa80ff572f\"}],\"invocation\":{\"card_seed\":1,\"card_sims\":250000,\"min_train\":500,\"producers\":[[\"ti26.cli_d2\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_d3\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_d3b\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_card\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\",\"--card-sims\",\"250000\",\"--card-seed\",\"1\"],[\"ti26.cli_d4\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\",\"--card-sims\",\"250000\",\"--card-seed\",\"1\",\"--sweep-sims\",\"2000,20000,250000\",\"--sweep-seeds\",\"1,2,3\",\"--random-samples\",\"200000\",\"--random-seed\",\"1\"]],\"random_samples\":200000,\"random_seed\":1,\"sweep_seeds\":\"1,2,3\",\"sweep_sims\":\"2000,20000,250000\"},\"outputs\":[{\"path\":\"card/card_provenance.md\",\"sha256\":\"79ed11cabd0681bce67592ee54c3882c76ef98c4564dd7a1b22abeb4a7678550\"},{\"path\":\"card/category_probabilities.csv\",\"sha256\":\"19e824e666aa1232d3e1ec0e55c1e1a6afe5d4062bb1af1cb523ec1f1303e4c9\"},{\"path\":\"card/recommended_card.json\",\"sha256\":\"ed3c9564162a85bd14e0caf223d36c488f14d80a4fb1f551ed609bbede6e632a\"},{\"path\":\"card/strengths_calibrated.csv\",\"sha256\":\"13d831ba2142c7366b55d1684389322a00e63d49b650943239de2fb12e342a6f\"},{\"path\":\"d2/backtest_metrics.csv\",\"sha256\":\"ecf2d4f5fafb6ef8ee0f6968f7e38556d6ecfc74c8f26bca386554bc845bfed4\"},{\"path\":\"d2/d2_gate.json\",\"sha256\":\"94caada3ad3e3e1b9aa2f91174470b265ceb404bf98f9f0c8650ab8ff60245c5\"},{\"path\":\"d2/d2_gate.md\",\"sha256\":\"18d059ec6494e8284d668528843036adedd205c4a245199eab477b16b3e9dbc2\"},{\"path\":\"d2/duration_fit.json\",\"sha256\":\"975ddec77d98f04ab883ea05bc9328be343bd7a8adb85509054e86b5b17b610b\"},{\"path\":\"d2/duration_sensitivity.json\",\"sha256\":\"f588ba0f73a0f036ac9d256ac06a50100f3ed27b735865a37e001c18a1b6c430\"},{\"path\":\"d3/d3_gate.json\",\"sha256\":\"4da88e52b7ffb55ac05f486b1add80766d61b9915d88480e9e69ec5a7e84b7b4\"},{\"path\":\"d3/d3_gate.md\",\"sha256\":\"546fd687fd02053840a0abdcd7b116562881b7e80fe9357e4500964f0b689286\"},{\"path\":\"d3/d3_metrics.csv\",\"sha256\":\"89f49e5c061b770e8cbcd21fec5446de3c8f2873814097c4becf4bde9fa2c5da\"},{\"path\":\"d3b/d3b_gate.json\",\"sha256\":\"a180049ec676b9f5f22ac2379e4218c03ecc5d3c1ee4900e2b8917f88dd7fd1d\"},{\"path\":\"d3b/d3b_gate.md\",\"sha256\":\"5f90dbed4834c0f5c02dbe99aa2208757b72c0b87f441496e8b297f2eb35619f\"},{\"path\":\"d4/d4_card_backtest.json\",\"sha256\":\"eca4a351dd041afc653eb6b1447190f17998c9068fb299e020233732b9f06ea3\"},{\"path\":\"d4/d4_card_backtest.md\",\"sha256\":\"c637f09b90611bb9cb3bedf5a9e30fd010286ebff700d5dec956af23316fe7d1\"},{\"path\":\"d4/d4_per_slot.csv\",\"sha256\":\"7b7e5b12bb0ebc35d2e332fb6db651719436c07a4ccd33d45ea76264d07194d7\"},{\"path\":\"frozen_gate_results.json\",\"sha256\":\"d5458dbb3f18311307e0558ed5e1640c3a714965cb6e21855e485f076e25344d\"},{\"path\":\"producer_exits.json\",\"sha256\":\"05c25cc671d9d0e33ad2d6bc73151f4d9c72a0a67c75060ff2f33c3ee53a2865\"}],\"run_id\":\"c118831c6f96242071b758fcc7948f9b9ee7e82c44f7ae11e9bb173c74a978ea\",\"run_kind\":\"historical\",\"runtime\":{\"numpy\":\"2.5.1\",\"platform\":\"macOS-15.7.7-arm64-arm-64bit-Mach-O\",\"python\":\"3.13.5\",\"scipy\":\"1.18.0\",\"yaml\":\"6.0.3\"},\"schema_version\":1,\"snapshot\":{\"manifest_path\":\"data/raw/20260802T165535Z/manifest.json\",\"manifest_sha256\":\"f19e180b563a1fd2c817bd3e1afb90aeb3d0201e7b9fc3252326b7f4aa002fdf\",\"snapshot_id\":\"20260802T165535Z\"},\"source_revision\":\"247aba5f01a905f8e6226d9bdd4a3408ec3d247f\",\"store\":{\"algorithm\":\"sha256\",\"row_count\":41140,\"schema_version\":1,\"sha256\":\"8b3f2bb715d0f75e92f1e039594b06835f5f87d85639bdd86e7cb596f8dc8cf9\"}}\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          ".venv/bin/python",
+          "-m",
+          "ti26.cli_provenance",
+          "verify-run",
+          "--bundle",
+          "reports/runs/fa6ecd0836e7d6c78049c868486f0016f47d3577ae98162e19cd0457cab0e13a",
+          "--repo-root",
+          ".",
+          "--at-source-revision"
+        ],
+        "exit_code": 0,
+        "stdout": "{\"inputs\":[{\"path\":\"data/raw/20260802T165535Z/manifest.json\",\"sha256\":\"f19e180b563a1fd2c817bd3e1afb90aeb3d0201e7b9fc3252326b7f4aa002fdf\"},{\"path\":\"config/d2_gate.yaml\",\"sha256\":\"34b19d18e83840d6a0a4aee4d23f119660065277709abce48a81a6b55d18d0b2\"},{\"path\":\"config/team_aliases.yaml\",\"sha256\":\"c3f3d2ce69f59ef85651014dab0d08ae04c907f97354b8e54ab16213b68f5ed0\"},{\"path\":\"config/ti2026_rules.yaml\",\"sha256\":\"24c84e11cd8cc8439160373895b64a953e7f4fdc2e54109b8d64d5aa110a28a0\"},{\"path\":\"config/ti2026_teams.yaml\",\"sha256\":\"f41f41a11b5db2032fe5986e3555d5c3193d587a456ecbde2fee5f8e5b6fd2ec\"},{\"path\":\"config/ti2025_backtest.yaml\",\"sha256\":\"027840b9ff600582338e0b2023f9876f6e632c79f07d39560756b0aceb88cc58\"},{\"path\":\"pyproject.toml\",\"sha256\":\"7f86e2fa2aa59a0201b5581bfa520d75582f0dce7b02a69db18214aa80ff572f\"}],\"invocation\":{\"card_seed\":1,\"card_sims\":250000,\"min_train\":500,\"producers\":[[\"ti26.cli_d2\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_d3\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_d3b\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_card\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\",\"--card-sims\",\"250000\",\"--card-seed\",\"1\"],[\"ti26.cli_d4\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\",\"--card-sims\",\"250000\",\"--card-seed\",\"1\",\"--sweep-sims\",\"2000,20000,250000\",\"--sweep-seeds\",\"1,2,3\",\"--random-samples\",\"200000\",\"--random-seed\",\"1\"]],\"random_samples\":200000,\"random_seed\":1,\"sweep_seeds\":\"1,2,3\",\"sweep_sims\":\"2000,20000,250000\"},\"outputs\":[{\"path\":\"card/card_provenance.md\",\"sha256\":\"e682a32feeb1d6535e8cb29bf47f0bfc68248cde0b9d71533d451e7095feaeb7\"},{\"path\":\"card/category_probabilities.csv\",\"sha256\":\"cd642ced17707e3d5fde90c74bb4715064e7dff01bf953c8b09f48d2c8f62183\"},{\"path\":\"card/recommended_card.json\",\"sha256\":\"463296c4e70290d1ad26cb4c0cb10ca5558ab957a92c0c94ab0a43c6cc4eeeb6\"},{\"path\":\"card/strengths_calibrated.csv\",\"sha256\":\"faa70fe7cc452793b75289826a11abe86392fdcf6f4d4b835d6f71e5a95c30f4\"},{\"path\":\"d2/backtest_metrics.csv\",\"sha256\":\"433cc110446174df9a91308c4d3c1b1b6c64f48b8e397a4bf1cdadf1570fdeb5\"},{\"path\":\"d2/d2_gate.json\",\"sha256\":\"e4237c1c33996d90738f0165ff50c735fea4e10ed5d94bd157897e99410d6497\"},{\"path\":\"d2/d2_gate.md\",\"sha256\":\"e20ff050620170efe990c87010948549f5532a66b5532b4e04c9fdb89ca9ee1f\"},{\"path\":\"d2/duration_fit.json\",\"sha256\":\"975ddec77d98f04ab883ea05bc9328be343bd7a8adb85509054e86b5b17b610b\"},{\"path\":\"d2/duration_sensitivity.json\",\"sha256\":\"45644b52d4d6ea120a7ff5c8e3d8f3e9668b0dfb79ff76d08a51306799b14775\"},{\"path\":\"d3/d3_gate.json\",\"sha256\":\"4da88e52b7ffb55ac05f486b1add80766d61b9915d88480e9e69ec5a7e84b7b4\"},{\"path\":\"d3/d3_gate.md\",\"sha256\":\"9855dda6fb07d2e4247b189e83a8337bce7430008ce461b4d007cc8d4e4dfde1\"},{\"path\":\"d3/d3_metrics.csv\",\"sha256\":\"1af47d66867e573088842bc487e3f4b169b9f464843807ff3b67b0055deb3706\"},{\"path\":\"d3b/d3b_gate.json\",\"sha256\":\"a9aa9d9bff7ac27dbb7586601eca4895c9d3dd9090edd48724d46f6719a21939\"},{\"path\":\"d3b/d3b_gate.md\",\"sha256\":\"d30bd0de294233800dd44c56fbe4ddee639136172578d6e69a9cb57039dc79e1\"},{\"path\":\"d4/d4_card_backtest.json\",\"sha256\":\"0cf1bed34df35c5c741fbcb5afc96754fe07170e6d15c9dcd501012b8be3e6a2\"},{\"path\":\"d4/d4_card_backtest.md\",\"sha256\":\"6d8c8171e8535ffc6b2cdc745af74970540bfdc441ee480cb435fe64583825f1\"},{\"path\":\"d4/d4_per_slot.csv\",\"sha256\":\"d292d3677ed90b8e762a137975981684f728517b5bb63a8a5ee5bb2864ea6ad3\"},{\"path\":\"frozen_gate_results.json\",\"sha256\":\"822801162c8fdcd075ad4d35670d40d291c0830983fe4cc6e20383b02729ff3d\"},{\"path\":\"producer_exits.json\",\"sha256\":\"05c25cc671d9d0e33ad2d6bc73151f4d9c72a0a67c75060ff2f33c3ee53a2865\"}],\"run_id\":\"fa6ecd0836e7d6c78049c868486f0016f47d3577ae98162e19cd0457cab0e13a\",\"run_kind\":\"historical\",\"runtime\":{\"numpy\":\"2.5.1\",\"platform\":\"macOS-15.7.7-arm64-arm-64bit-Mach-O\",\"python\":\"3.13.5\",\"scipy\":\"1.18.0\",\"yaml\":\"6.0.3\"},\"schema_version\":1,\"snapshot\":{\"manifest_path\":\"data/raw/20260802T165535Z/manifest.json\",\"manifest_sha256\":\"f19e180b563a1fd2c817bd3e1afb90aeb3d0201e7b9fc3252326b7f4aa002fdf\",\"snapshot_id\":\"20260802T165535Z\"},\"source_revision\":\"f96fb0e5c99cb14ae9d92e9a37e6a1bbc8a7a006\",\"store\":{\"algorithm\":\"sha256\",\"row_count\":41140,\"schema_version\":1,\"sha256\":\"8b3f2bb715d0f75e92f1e039594b06835f5f87d85639bdd86e7cb596f8dc8cf9\"}}\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          ".venv/bin/python",
+          "-m",
+          "ti26.cli_provenance",
+          "verify-run",
+          "--bundle",
+          "reports/runs/frozen-output-oracle-baseline/61c63f4aa32c573cdbc7e4abe48e08308801f1ff3cb8e5629a4ae446d5d22b6b",
+          "--repo-root",
+          ".",
+          "--at-source-revision"
+        ],
+        "exit_code": 0,
+        "stdout": "{\"inputs\":[{\"path\":\"data/raw/20260802T165535Z/manifest.json\",\"sha256\":\"f19e180b563a1fd2c817bd3e1afb90aeb3d0201e7b9fc3252326b7f4aa002fdf\"},{\"path\":\"config/d2_gate.yaml\",\"sha256\":\"34b19d18e83840d6a0a4aee4d23f119660065277709abce48a81a6b55d18d0b2\"},{\"path\":\"config/team_aliases.yaml\",\"sha256\":\"c3f3d2ce69f59ef85651014dab0d08ae04c907f97354b8e54ab16213b68f5ed0\"},{\"path\":\"config/ti2026_rules.yaml\",\"sha256\":\"93924e22c40dd4846de0df4902185d882ebafc5cfd880fcc6f18f1a8a8b92825\"},{\"path\":\"config/ti2026_teams.yaml\",\"sha256\":\"f41f41a11b5db2032fe5986e3555d5c3193d587a456ecbde2fee5f8e5b6fd2ec\"},{\"path\":\"config/ti2025_backtest.yaml\",\"sha256\":\"027840b9ff600582338e0b2023f9876f6e632c79f07d39560756b0aceb88cc58\"},{\"path\":\"config/ti2025_external_cards.yaml\",\"sha256\":\"5d9bad58f9fca758a63301c0e2e81230d13d0a39a39d5ed0ac9383e22ff23c75\"},{\"path\":\"pyproject.toml\",\"sha256\":\"7f86e2fa2aa59a0201b5581bfa520d75582f0dce7b02a69db18214aa80ff572f\"}],\"invocation\":{\"card_seed\":1,\"card_sims\":250000,\"min_train\":500,\"producers\":[[\"ti26.cli_d2\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_d3\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_d3b\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\"],[\"ti26.cli_card\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\",\"--card-sims\",\"250000\",\"--card-seed\",\"1\"],[\"ti26.cli_d4\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\",\"--min-train\",\"500\",\"--card-sims\",\"250000\",\"--card-seed\",\"1\",\"--sweep-sims\",\"2000,20000,250000\",\"--sweep-seeds\",\"1,2,3\",\"--random-samples\",\"200000\",\"--random-seed\",\"1\"],[\"ti26.cli_data_health\",\"--store\",\"data/processed/release-20260802T165535Z.sqlite\"],[\"ti26.cli_external_cards\"]],\"random_samples\":200000,\"random_seed\":1,\"sweep_seeds\":\"1,2,3\",\"sweep_sims\":\"2000,20000,250000\"},\"outputs\":[{\"path\":\"card/card_provenance.md\",\"sha256\":\"9d77d823f94cf5a0076c85ef96eaed39e428a3d691814253932dc0ec28afc244\"},{\"path\":\"card/category_probabilities.csv\",\"sha256\":\"e51a6427f69b635b5aa4a8797c9973154c41bd52d2000c57f60f4f18c77d39b8\"},{\"path\":\"card/recommended_card.json\",\"sha256\":\"c9785fa619a1fc3a51d094cbfb29e420d5712f9cbaf793bb81fbec9f40554fb6\"},{\"path\":\"card/strengths_calibrated.csv\",\"sha256\":\"faa70fe7cc452793b75289826a11abe86392fdcf6f4d4b835d6f71e5a95c30f4\"},{\"path\":\"d2/backtest_metrics.csv\",\"sha256\":\"433cc110446174df9a91308c4d3c1b1b6c64f48b8e397a4bf1cdadf1570fdeb5\"},{\"path\":\"d2/d2_gate.json\",\"sha256\":\"e4237c1c33996d90738f0165ff50c735fea4e10ed5d94bd157897e99410d6497\"},{\"path\":\"d2/d2_gate.md\",\"sha256\":\"55f4f5675284bab424801e37c090a19171ccc83b52b7c5f922b14ee05debc3a5\"},{\"path\":\"d2/duration_fit.json\",\"sha256\":\"975ddec77d98f04ab883ea05bc9328be343bd7a8adb85509054e86b5b17b610b\"},{\"path\":\"d2/duration_sensitivity.json\",\"sha256\":\"f588ba0f73a0f036ac9d256ac06a50100f3ed27b735865a37e001c18a1b6c430\"},{\"path\":\"d3/d3_gate.json\",\"sha256\":\"4da88e52b7ffb55ac05f486b1add80766d61b9915d88480e9e69ec5a7e84b7b4\"},{\"path\":\"d3/d3_gate.md\",\"sha256\":\"601662be91bd76c84eca19639f7c45ed0b332299395f27fb3556dd00a6f38969\"},{\"path\":\"d3/d3_metrics.csv\",\"sha256\":\"1af47d66867e573088842bc487e3f4b169b9f464843807ff3b67b0055deb3706\"},{\"path\":\"d3b/d3b_gate.json\",\"sha256\":\"a9aa9d9bff7ac27dbb7586601eca4895c9d3dd9090edd48724d46f6719a21939\"},{\"path\":\"d3b/d3b_gate.md\",\"sha256\":\"24fac1b0f1024987bc9fede58ac51619917f765d11888b81a9b2c637fa28cf51\"},{\"path\":\"d4/d4_card_backtest.json\",\"sha256\":\"5d3bc3ce9826b1ce3c20419bcc177f8e909bee839b12c59420195ecd252c04ba\"},{\"path\":\"d4/d4_card_backtest.md\",\"sha256\":\"5bc376d43b6226e00fc631c0d260119d9603b3e3bb5291f96871795956604641\"},{\"path\":\"d4/d4_per_slot.csv\",\"sha256\":\"7b7e5b12bb0ebc35d2e332fb6db651719436c07a4ccd33d45ea76264d07194d7\"},{\"path\":\"data_health/data_health.json\",\"sha256\":\"0a00aedabafa5c493dac3df87dad259322e97c41e5f98cfd9eb58345a8a3c6a4\"},{\"path\":\"data_health/data_health.md\",\"sha256\":\"f97c03c540562211c15bbcd993fd319c137203371c8f4c27a2393af1e331f591\"},{\"path\":\"external_cards/external_cards.json\",\"sha256\":\"388d744daf1065fc8c3b1c8bc13dac5b977054a406f3f4b2d6b9c75f563ca8a4\"},{\"path\":\"external_cards/external_cards.md\",\"sha256\":\"7294338718f5050791b053230f2fe7b390778cae3719e6a78587d6e02695c833\"},{\"path\":\"frozen_gate_results.json\",\"sha256\":\"335aac44e7a95752a9d32f2b50ba36b6db799ae6b885124c2adb0aaad599ffe6\"},{\"path\":\"producer_exits.json\",\"sha256\":\"a9f45d9ca8d8e0434db52356ae65d4a187b216325bddfd5c4519147d9033f796\"}],\"run_id\":\"61c63f4aa32c573cdbc7e4abe48e08308801f1ff3cb8e5629a4ae446d5d22b6b\",\"run_kind\":\"ti2026-frozen-output-oracle-baseline\",\"runtime\":{\"numpy\":\"2.5.1\",\"platform\":\"macOS-15.7.7-arm64-arm-64bit-Mach-O\",\"python\":\"3.13.5\",\"scipy\":\"1.18.0\",\"yaml\":\"6.0.3\"},\"schema_version\":1,\"snapshot\":{\"manifest_path\":\"data/raw/20260802T165535Z/manifest.json\",\"manifest_sha256\":\"f19e180b563a1fd2c817bd3e1afb90aeb3d0201e7b9fc3252326b7f4aa002fdf\",\"snapshot_id\":\"20260802T165535Z\"},\"source_revision\":\"580e601c7bcdc5e9cc3e7d16d926f23a2508f655\",\"store\":{\"algorithm\":\"sha256\",\"row_count\":41140,\"schema_version\":1,\"sha256\":\"8b3f2bb715d0f75e92f1e039594b06835f5f87d85639bdd86e7cb596f8dc8cf9\"}}\n",
+        "stderr": ""
+      }
+    ],
+    "clean_postmortem_replay": {
+      "checkout": "Separate full-history checkout at base_revision; intended wrapper, manifests, and project metadata copied; no pre-existing processed database used.",
+      "command": "PYTHONPATH=<clean-checkout>/src <locked-environment>/bin/python -m ti26.cli_replay_postmortems --snapshot 20260816T115509Z --store <new-external-store>",
+      "working_directory": "<clean-checkout>",
+      "exit_code": 0,
+      "receipt": {
+        "group": "byte-equal",
+        "playoff": "equal-after-exact-store-path-normalization",
+        "snapshot": "20260816T115509Z",
+        "store": {
+          "algorithm": "sha256",
+          "row_count": 40076,
+          "schema_version": 1,
+          "sha256": "63f41d67f580d29cf464280758abdf6c6aeef8a16288e62fa523577ae6fbdb2c"
+        }
+      },
+      "log_sha256": "8d028015bcb0ae78820164ae9f8e94d9078dce8a90ff5ce64666364073b6d8d5",
+      "comparison": "Byte equality; only the single playoff printed database path is normalized. Final formatted wrapper and manifest hashes used."
+    },
+    "full_forecast_oracle": "Not run; documented optional expensive check. Historical integrity verification does not claim forecast execution.",
+    "hosted_ci": "Not run; push requires owner authorization."
+  },
+  "mutation_evidence": {
+    "lock_provenance": {
+      "applied": "removed UV_LOCK_INPUT from declared_inputs",
+      "command": ".venv/bin/python -m pytest -q tests/test_cli_release.py::test_changed_lock_bytes_change_the_new_release_descriptor_identity tests/test_cli_release.py::test_verifier_rejects_tampered_lock_declared_by_a_new_release",
+      "result": "2 failed: the descriptor no longer declared uv.lock and lock tampering no longer raised RunManifestError",
+      "restored": true
+    },
+    "postmortem_replay": [
+      {
+        "mutation": "disable unique rendered store-path count check",
+        "result": "normalization test failed: DID NOT RAISE ReplayAttestationError; restored"
+      },
+      {
+        "mutation": "allow an existing store",
+        "result": "existing-store test failed; restored"
+      },
+      {
+        "mutation": "skip bound input sha256 check",
+        "result": "changed-input test failed: DID NOT RAISE ReplayAttestationError; restored"
+      }
+    ],
+    "network_guard": [
+      {
+        "mutation": "remove socket.socket.connect denial",
+        "result": "policy test failed, restored and passed"
+      },
+      {
+        "mutation": "remove socket.socket.sendmsg denial",
+        "result": "policy test failed with PermissionError, restored; policy tests passed"
+      }
+    ]
+  },
+  "ci": {
+    "scope": "Offline CI implementation evidence",
+    "workflow": {
+      "path": ".github/workflows/offline-ci.yml",
+      "parse": "PyYAML safe_load",
+      "result": "passed",
+      "network_namespace": "Each verification command runs in its own sudo-created network namespace, then nested sudo drops to the job's original user before repository code runs.",
+      "namespace_sources": [
+        "https://github.com/actions/runner-images/issues/10443",
+        "https://github.com/actions/runner-images/blob/main/docs/create-image-and-azure-resources.md"
+      ]
+    },
+    "action_sources": [
+      {
+        "action": "actions/checkout",
+        "release": "v4.2.2",
+        "commit": "11bd71901bbe5b1630ceea73d27597364c9af683",
+        "source": "https://github.com/actions/checkout/releases/tag/v4.2.2"
+      },
+      {
+        "action": "actions/setup-python",
+        "release": "v5.6.0",
+        "commit": "a26af69be951a213d495a4c3e4e4022e16d87065",
+        "source": "https://github.com/actions/setup-python/releases/tag/v5.6.0"
+      },
+      {
+        "action": "astral-sh/setup-uv",
+        "release": "v9.0.0",
+        "commit": "c771a70e6277c0a99b617c7a806ffedaca235ff9",
+        "uv_version": "0.9.12",
+        "source": "https://github.com/astral-sh/setup-uv/releases/tag/v9.0.0"
+      }
+    ],
+    "local_verification": {
+      "network_guard": "passed; removing socket.socket.connect denial made the policy test fail, then the denial was restored",
+      "broken_input": "test_verify_run_bundle_rejects_a_changed_declared_input passed",
+      "affected_tests": "offline policy, OpenDota transport, evidence import, and changed declared input tests passed",
+      "lint": "Ruff passed for changed Python files",
+      "historical_bundles": "all tracked run manifests verified at their source revisions using local Git blobs"
+    },
+    "ci_execution": "not run: hosted workflow execution requires a pushed workflow, which is outside this task's authorization",
+    "local_network_namespace": "not checked: unshare is unavailable on this macOS development host; the workflow targets Ubuntu"
+  },
+  "independent_review": {
+    "disposition": "Reviewed; identified implementation issues corrected; baseline formatter debt retained.",
+    "resolved": [
+      "byte equality instead of newline-normalizing text reads",
+      "bind implicit package initializers in replay source closure",
+      "remove misleading replay --repo-root option",
+      "create CI network namespaces with sudo, then drop to job user",
+      "deny sendmsg and describe local guard scope precisely",
+      "scan actual intended candidate files in addition to history",
+      "remove local ref identifiers from public audit",
+      "format introduced code"
+    ],
+    "candidate_scan": "2026-09-26-publication-candidate.json records final candidate coverage; its own generated receipt is excluded from its self-referential hash inventory."
+  },
+  "compression": {
+    "skill": ".codex/skills/lossless-doc-compress/SKILL.md",
+    "scope": "Final implementation prose drafts; original plan/scorecard have separate prior records. Machine-readable metadata and legal text unchanged by compression.",
+    "result": "All spans KEEP; no forced cuts or meaning changes. Per-run artifacts remain ignored and uncommitted.",
+    "index_sha256": "b0f9710bb6043fc1aabe5715cba4c949865c9a9f263f915f69a3e1d455fa414e"
+  },
+  "publication": {
+    "license": "MIT for repository-authored code and original documentation",
+    "author": "Vitalii Babenko",
+    "security_contact": "vbabenko2191@gmail.com",
+    "maintenance": "retrospective only",
+    "remaining": "Rights, identifier/history identity approval, hosted controls and CI, candidate/version selection, explicit publication authorization; see release-checklist.md."
+  },
+  "changed_file_hashes": [
+    {
+      "path": ".github/workflows/offline-ci.yml",
+      "sha256": "fac164cd73532a6423e0672994c3a05fbbb637e9f8afaaf0c7940be8e1e4674b"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "5cbd2b06f1a7f9b216c98ab47d4b3b130b0b5c1b0de9ff04918ec1523a04ba7e"
+    },
+    {
+      "path": "CITATION.cff",
+      "sha256": "d0a7eb09c5d2801f751b7f464632cf61da094d15e5bb08e87cdc2feb5cfcffec"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "sha256": "4426407190635517315399433a6d039226c4993a0dff8163b5a1e4955a170783"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "9472d83aa118978be372e78c1c56ab49611e2f5d75810ff5aa9e18c1bed7799b"
+    },
+    {
+      "path": "README.md",
+      "sha256": "0c704077ec6ddef2e6a5c8d484ad215b8cf1bc1e7f96afc70392311922a37d6c"
+    },
+    {
+      "path": "SECURITY.md",
+      "sha256": "6c6f779555e50b51cff5549904b29a65156cb0d2ce1b2f276633e7b70f514aab"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "c71a23c2e724c16aa20c9b95c377f80be9754e2ea4615d389b21ae456368cf3e"
+    },
+    {
+      "path": "docs/audits/2026-09-26-public-release-review.json",
+      "sha256": "cc11055bb138c879ccd6fe964b4eef247faea2fbdee16397e36194a1244e92ed"
+    },
+    {
+      "path": "docs/audits/2026-09-26-publication-scan.json",
+      "sha256": "fa3740ee1732b319c5ea718f848a5d6298ab45350c41f983de8220de0a8bb11d"
+    },
+    {
+      "path": "docs/audits/2026-09-26-publication-supplement.json",
+      "sha256": "c1ad896330ae8dabf6f302775ff0439a4d8fd104c05cdda27b34e487cd648c0c"
+    },
+    {
+      "path": "docs/data-sources.md",
+      "sha256": "09099213d01a81c74cda386a7ecaee7c66a8e86a6693e1df252a34541cc11987"
+    },
+    {
+      "path": "docs/public-release-plan.md",
+      "sha256": "948c29ff080016c3762561dab399993009a5804504c69974a5dc12d686814381"
+    },
+    {
+      "path": "docs/release-checklist.md",
+      "sha256": "1ba029e72564e4676d6d9d93770e8861889e5064735a1d727ce5fa0b3cc623d4"
+    },
+    {
+      "path": "docs/release-notes.md",
+      "sha256": "2a7fc2213bda747e7c3f79002f2e49bcb1c84e3ce5823f13c7da6819e933c6e7"
+    },
+    {
+      "path": "docs/reproduce.md",
+      "sha256": "aa3bf18ba763b23e03ed89e2b6f67ab0f407b5930a1e8d1528c32d4be3fb9f42"
+    },
+    {
+      "path": "mlsd-scorecard-ti26.md",
+      "sha256": "a715016dcf01b5d15471670ab655b8d96366f92ec365e0d670f9e7fe1371aeb4"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "e43ad4c235e969fdd2de7d32de9bdda7d8a9739cdc1663495c48ab6ea9689b6b"
+    },
+    {
+      "path": "reports/postmortems/group-replay.manifest.json",
+      "sha256": "84f6c8de535c89ba763e51a38ff5cb0623a2e037a8719b2b821da3760eee193f"
+    },
+    {
+      "path": "reports/postmortems/playoff-replay.manifest.json",
+      "sha256": "b261d6043294fc8c0afda27945ba042bc23ea8e97d197c5ccc86e04a3ef019b6"
+    },
+    {
+      "path": "src/ti26/cli_release.py",
+      "sha256": "705a8305c33bb0fc00e7d5cf451ba636b17b30212f307f6645007ec6a318ae89"
+    },
+    {
+      "path": "src/ti26/cli_replay_postmortems.py",
+      "sha256": "272df25f6f1b78b11d49cfd8aa9d79a673db669adea9b673732053c4ab1b6ea4"
+    },
+    {
+      "path": "tests/conftest.py",
+      "sha256": "d61f87cf9ef84dd74bbefe06e97c14f054c948dd024134df11c3cab29c0ebcbf"
+    },
+    {
+      "path": "tests/test_cli_release.py",
+      "sha256": "fdc7ef7f75a81bfaaa094e25611fed7624eb88ec4266e9deb0004797edbc2069"
+    },
+    {
+      "path": "tests/test_offline_policy.py",
+      "sha256": "5ede2237d3c5de98484b3d76faa31969eb76e2ccb3f59349506d3015d29bdd23"
+    },
+    {
+      "path": "tests/test_replay_postmortems.py",
+      "sha256": "40b7259004af4971944a48e7695ab610b57cec0b066655de2e0e382e9e5f17df"
+    }
+  ],
+  "self_reference_policy": "This receipt and the final candidate scan receipt are excluded from changed_file_hashes. The candidate scan covers this completed receipt; neither receipt claims to hash itself."
+}
