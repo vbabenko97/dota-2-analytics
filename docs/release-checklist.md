@@ -8,7 +8,7 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
 - [x] Additive lock binding; historical manifests preserved.
 - [x] Pinned offline workflow and local test network guard.
 - [x] Record implementation checks and independent review at the worktree hashes in [implementation evidence](audits/2026-09-26-public-release-implementation.json). This historical receipt predates the source-permission and identity updates; committed-candidate verification is tracked below.
-- [x] Observe successful CI on a clean hosted runner: [Offline CI](https://github.com/vbabenko97/dota-2-analytics/actions/runs/36248550562) passed on 6ba2c0f. Re-observe on the merge commit.
+- [x] Observe successful CI on a clean hosted runner: [Offline CI](https://github.com/vbabenko97/dota-2-analytics/actions/runs/36248550562) passed on 6ba2c0f, and on the `main` merge commits 8cd4184 ([run](https://github.com/vbabenko97/dota-2-analytics/actions/runs/36377900869)) and fc9a35c ([run](https://github.com/vbabenko97/dota-2-analytics/actions/runs/36398367988)).
 - [x] Stage D's "rejects a deliberately broken test" criterion: not exercised on hosted CI, by owner decision (2026-09-27). Locally, the replay guard failed under both of its named mutations.
 - [x] Guard replay-bound bytes in the suite; see the [completion plan](superpowers/plans/2026-09-27-public-release-completion.md), Task 1.
 
@@ -29,14 +29,18 @@ Owner: Vitalii Babenko. Scope: source-repository retrospective with limited main
   - **History:** revised 2026-09-28. The earlier rule allowed only the receipt and this checklist to change, which contradicted the planned release-docs step. The revision widens what may change to documentation only.
 - [ ] Before tagging: re-run the local-link check over all tracked markdown and record the result as a receipt addendum.
 - [x] Merge the release PR with "Create a merge commit": [#38](https://github.com/vbabenko97/dota-2-analytics/pull/38) merged as 8cd4184, whose tree equals the PR head. Squash or rebase would have stranded receipt-cited SHAs.
-- [ ] Before the flip: update the repository description and topics; require approval for fork pull-request workflows from outside collaborators.
-- [ ] After the flip: enable secret scanning with push protection, Dependabot alerts (no update PRs; `uv.lock` is replay-bound), private vulnerability reporting, and a ruleset on `main` requiring Offline CI.
-- [ ] If a DOI is wanted: enable Zenodo after the flip and before the first GitHub Release.
+- [x] Before the flip: the repository description and topics were updated. GitHub allows the fork pull-request approval policy only on public repositories, so it was set immediately after the flip, to all external contributors.
+- [x] After the flip, confirmed by reading each setting back through the API:
+  - secret scanning with push protection;
+  - Dependabot alerts, with automated security-update PRs disabled (`uv.lock` is replay-bound);
+  - private vulnerability reporting;
+  - the "main protection" ruleset on `main`, which requires the Offline CI `verify` check and blocks deletion and force-pushes.
+- [x] DOI: not wanted for `v0.1.0` (owner decision, 2026-09-28). A later release can get one if Zenodo is enabled first.
 - [x] Verify a committed candidate in a clean full-history checkout; see the [SHA-bound receipt](audits/2026-09-26-committed-candidate-verification.json). This receipt and checklist completion update are local follow-up documentation outside the verified candidate commit.
 - [x] Select the release version: the owner chose `v0.1.0` on 2026-09-28, matching `pyproject.toml`. The tag is applied at release, after the flip.
-- [ ] Explicitly authorize push, visibility change, and publication.
+- [x] Explicitly authorize push, visibility change, and publication: the owner authorized each step, and the repository was made public on 2026-09-28.
 
-No history rewrite, deletion, push, tag, PR, visibility change, or publication is implied. The repository was private during read-only inspection. Redaction or history removal needs a separate impact review and owner decision.
+No history was rewritten. Redaction or history removal needs a separate impact review and owner decision.
 
 ## Verification
 

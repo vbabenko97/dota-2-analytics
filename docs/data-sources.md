@@ -28,7 +28,7 @@ Owner approval records a release decision; it cannot supply missing third-party 
 
 Recorded 2026-09-27 by Vitalii Babenko. If no permission response arrives by 2026-10-11, the owner publishes the full repository history on the terms below. This accepts residual legal risk; it does not establish permission. The owner re-posted the inquiry publicly as [odota/core#2989](https://github.com/odota/core/issues/2989) on 2026-09-28. A reply before then supersedes this decision.
 
-Update 2026-09-28: OpenDota granted permission (see the register above), so the deadline no longer gates publication. Valve and Steam material is still published on the terms below as accepted risk. The owner decides when to publish.
+Update 2026-09-28: OpenDota granted permission (see the register above), so the deadline no longer gates publication. Valve and Steam material is still published on the terms below as accepted risk. The repository was made public on 2026-09-28.
 
 - **Attribution:** match data comes from [OpenDota](https://www.opendota.com). Rules text and the Steam news response are Valve material from [dota2.com](https://www.dota2.com) and [Steam](https://store.steampowered.com). Dota 2, The International and Steam are trademarks of Valve Corporation. This repository is not affiliated with or endorsed by Valve or OpenDota.
 - **Takedown:** a rights holder may request removal through the contact in [SECURITY.md](../SECURITY.md). Removal happens in a new commit, per the [release checklist](release-checklist.md). Earlier public history, forks and clones are not retracted.

@@ -2,6 +2,8 @@ cff-version: 1.2.0
 message: "Please cite the repository and the exact commit and artifact manifest used."
 title: "ti26: Reproducible forecast retrospective"
 type: software
+version: "0.1.0"
+date-released: "2026-09-28"
 authors:
   - family-names: Babenko
     given-names: Vitalii
