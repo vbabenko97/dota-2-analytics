@@ -105,6 +105,15 @@
 - **D6:** default applied in SECURITY.md.
 - **Still open:** D3, D5, D7, and the D6 settings themselves.
 
+**Recorded 2026-09-28:**
+
+- PR #38 merged with a merge commit.
+- **D3:** both analyses approved as they are. Provenance: Google's Gemini app and OpenAI's ChatGPT app, each with Deep Research, on the owner's personal accounts.
+- **D5:** `v0.1.0`.
+- **Change rule after verification:** replaced by a path-scoped rule that widens what may change to documentation only. Frozen paths are unchanged, and a pre-tag link check is added (see the release checklist).
+- **OpenDota inquiry:** re-posted as [odota/core#2989](https://github.com/odota/core/issues/2989).
+- **Still open:** D7 and the D6 settings.
+
 Evidence for D1–D2 (non-authoritative; not legal advice):
 
 - The [YASP data dump](https://academictorrents.com/details/5c5deeb6cfe1c944044367d2e7465fd8bd2f4acf), from OpenDota's predecessor, is licensed CC BY-SA 4.0 and asks for attribution.
@@ -303,4 +312,4 @@ Run in a fresh detached worktree or a full-history clone **outside `/tmp`**, bec
 
 ## Acceptance
 
-The public `main` equals a tree verified by a committed receipt. Hosted CI is green on it. The replay-bound guard is in the suite. Every D-decision is recorded. The tag and the release exist. No frozen or replay-bound byte changed: `git diff 6ba2c0f <tag> -- reports data predictions-from-llms` is empty, and the Task 1 guard passes.
+On the public `main`, every frozen path (see the release checklist) equals the tree verified by a committed receipt. Hosted CI is green on it. The local-link check was re-run and recorded after the last documentation change before the tag. The replay-bound guard is in the suite. Every D-decision is recorded. The tag and the release exist. No frozen or replay-bound byte changed: `git diff 6ba2c0f <tag> -- reports data predictions-from-llms` is empty, and the Task 1 guard passes.
